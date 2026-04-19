@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1776579610378,
+      "tag": "0000_absurd_the_spike",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776579650957,
+      "tag": "0001_marvelous_famine",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776580247123,
+      "tag": "0002_good_tomorrow_man",
+      "breakpoints": true
+    }
+  ]
+}

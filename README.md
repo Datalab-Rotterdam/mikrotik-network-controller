@@ -415,6 +415,25 @@ Install dependencies:
 npm install
 ```
 
+Configure local environment:
+
+```sh
+cp .env.example .env
+```
+
+Start the local PostgreSQL server:
+
+```sh
+docker compose up -d postgres
+```
+
+Generate and run database migrations:
+
+```sh
+npm run db:generate
+npm run db:migrate
+```
+
 Start the development server:
 
 ```sh

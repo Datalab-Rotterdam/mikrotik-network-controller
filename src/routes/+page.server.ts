@@ -1,14 +1,7 @@
-import websockets from "@sourceregistry/sveltekit-websockets/server"
-import discoveryService from "$lib/server/services/discovery.service";
+import { getDashboardSummary } from '$lib/server/repositories/dashboard.repository';
 
-
-export const actions = {
-    default: (event) => {
-        const url = websockets.use(event, (ws) => {
-            discoveryService.on('neighbor', (d) => {
-                ws.send(JSON.stringify(d))
-            })
-        })
-        return {url}
-    }
+export async function load() {
+	return {
+		summary: await getDashboardSummary()
+	};
 }
