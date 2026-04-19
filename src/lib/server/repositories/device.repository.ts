@@ -8,13 +8,21 @@ export async function listDevices() {
 			id: devices.id,
 			name: devices.name,
 			host: devices.host,
+			apiPort: devices.apiPort,
 			platform: devices.platform,
+			adoptionMode: devices.adoptionMode,
 			model: devices.model,
 			identity: devices.identity,
+			serialNumber: devices.serialNumber,
+			architecture: devices.architecture,
+			uptimeSeconds: devices.uptimeSeconds,
 			adoptionState: devices.adoptionState,
 			connectionStatus: devices.connectionStatus,
 			routerOsVersion: devices.routerOsVersion,
-			lastSeenAt: devices.lastSeenAt
+			capabilities: devices.capabilities,
+			tags: devices.tags,
+			lastSeenAt: devices.lastSeenAt,
+			lastSyncAt: devices.lastSyncAt
 		})
 		.from(devices)
 		.orderBy(asc(devices.name));
@@ -99,6 +107,8 @@ export async function listDeviceInterfaces() {
 			deviceId: deviceInterfaces.deviceId,
 			name: deviceInterfaces.name,
 			type: deviceInterfaces.type,
+			macAddress: deviceInterfaces.macAddress,
+			comment: deviceInterfaces.comment,
 			running: deviceInterfaces.running,
 			disabled: deviceInterfaces.disabled
 		})

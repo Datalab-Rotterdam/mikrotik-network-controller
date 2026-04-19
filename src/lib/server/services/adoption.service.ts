@@ -1,4 +1,8 @@
 import { RouterOSClient, type RouterOSInterface } from '@sourceregistry/mikrotik-client/routeros';
+import {
+	SwitchOSClient,
+	decodeSwitchOSHexString
+} from '@sourceregistry/mikrotik-client/switchos';
 import { createAdoptionAttempt, updateAdoptionAttempt } from '$lib/server/repositories/adoption.repository';
 import { recordAuditEvent } from '$lib/server/repositories/audit.repository';
 import {
@@ -10,6 +14,7 @@ import { ensureSiteByName } from '$lib/server/repositories/site.repository';
 import { encryptSecret } from '$lib/server/security/secrets';
 
 type AdoptionProvider = 'real' | 'mock';
+type DevicePlatform = 'routeros' | 'switchos';
 
 export type AdoptDeviceInput = {
 	host: string;
@@ -18,6 +23,7 @@ export type AdoptDeviceInput = {
 	siteName: string;
 	apiPort: number;
 	provider: AdoptionProvider;
+	platform: DevicePlatform;
 	requestedByUserId: string;
 };
 
@@ -29,6 +35,17 @@ type RouterOSInventory = {
 	architecture?: string;
 	uptimeSeconds?: number;
 	interfaces: RouterOSInterface[];
+};
+
+type SwitchOSSystemResponse = {
+	id?: string;
+	ver?: string;
+	version?: string;
+	board?: string;
+	model?: string;
+	dev?: string;
+	sn?: string;
+	serial?: string;
 };
 
 function parseRouterOsMajorVersion(version: string | undefined): number | undefined {
@@ -87,7 +104,39 @@ async function readRealRouterOsInventory(input: AdoptDeviceInput): Promise<Route
 	}
 }
 
+async function readRealSwitchOsInventory(input: AdoptDeviceInput): Promise<RouterOSInventory> {
+	const client = new SwitchOSClient({
+		baseUrl: `http://${input.host}:${input.apiPort}`,
+		username: input.username,
+		password: input.password,
+		timeoutMs: 8_000
+	});
+
+	const system = await client.read<SwitchOSSystemResponse>('/sys.b');
+	const identity = system.id ? decodeSwitchOSHexString(system.id) : input.host;
+
+	return {
+		identity,
+		version: system.ver ?? system.version,
+		model: system.board ?? system.model ?? system.dev,
+		serialNumber: system.sn ?? system.serial,
+		architecture: 'switchos',
+		interfaces: []
+	};
+}
+
 async function readMockRouterOsInventory(input: AdoptDeviceInput): Promise<RouterOSInventory> {
+	if (input.platform === 'switchos') {
+		return {
+			identity: `mock-switch-${input.host.replaceAll('.', '-')}`,
+			version: '2.17',
+			model: 'CSS326-24G-2S+',
+			serialNumber: 'MOCK-SWOS-0001',
+			architecture: 'switchos',
+			interfaces: []
+		};
+	}
+
 	return {
 		identity: `mock-${input.host.replaceAll('.', '-')}`,
 		version: '7.18.2',
@@ -121,6 +170,10 @@ async function readInventory(input: AdoptDeviceInput): Promise<RouterOSInventory
 		return readMockRouterOsInventory(input);
 	}
 
+	if (input.platform === 'switchos') {
+		return readRealSwitchOsInventory(input);
+	}
+
 	return readRealRouterOsInventory(input);
 }
 
@@ -144,7 +197,7 @@ export async function adoptRouterOsDevice(input: AdoptDeviceInput) {
 		const inventory = await readInventory(input);
 		const majorVersion = parseRouterOsMajorVersion(inventory.version);
 
-		if (majorVersion !== undefined && majorVersion < 7) {
+		if (input.platform === 'routeros' && majorVersion !== undefined && majorVersion < 7) {
 			throw new Error(`RouterOS ${inventory.version} is not supported. Minimum supported version is v7.`);
 		}
 
@@ -160,7 +213,7 @@ export async function adoptRouterOsDevice(input: AdoptDeviceInput) {
 		const device = await upsertAdoptedDevice({
 			siteId: site.id,
 			name: inventory.identity,
-			platform: 'routeros',
+			platform: input.platform,
 			adoptionMode: 'read_only',
 			adoptionState: 'inventoried',
 			connectionStatus: 'online',
@@ -172,7 +225,10 @@ export async function adoptRouterOsDevice(input: AdoptDeviceInput) {
 			routerOsVersion: inventory.version,
 			architecture: inventory.architecture,
 			uptimeSeconds: inventory.uptimeSeconds,
-			capabilities: ['routeros-api', input.provider === 'mock' ? 'mock' : 'real-device'],
+			capabilities: [
+				input.platform === 'switchos' ? 'switchos-http' : 'routeros-api',
+				input.provider === 'mock' ? 'mock' : 'real-device'
+			],
 			tags: [],
 			lastSeenAt: now,
 			lastSyncAt: now

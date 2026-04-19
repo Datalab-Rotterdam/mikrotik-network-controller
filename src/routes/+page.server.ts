@@ -1,7 +1,9 @@
-import { getDashboardSummary } from '$lib/server/repositories/dashboard.repository';
+import { redirect } from '@sveltejs/kit';
+import { ensureSiteByName, listSites } from '$lib/server/repositories/site.repository';
 
 export async function load() {
-	return {
-		summary: await getDashboardSummary()
-	};
+	const [firstSite] = await listSites();
+	const site = firstSite ?? (await ensureSiteByName('Default'));
+
+	throw redirect(303, `/manage/${site.id}`);
 }
