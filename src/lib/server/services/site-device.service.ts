@@ -2,8 +2,8 @@ import { listDeviceInterfaces, listDevices } from '$lib/server/repositories/devi
 import discoveryService from '$lib/server/services/discovery.service';
 import { resolveDeviceImage } from '$lib/server/services/device-image-catalog.service';
 
-type DeviceRow = Awaited<ReturnType<typeof listDevices>>[number];
-type DeviceInterfaceRow = Awaited<ReturnType<typeof listDeviceInterfaces>>[number];
+export type DeviceRow = Awaited<ReturnType<typeof listDevices>>[number];
+export type DeviceInterfaceRow = Awaited<ReturnType<typeof listDeviceInterfaces>>[number];
 
 type DiscoveryDevice = {
 	id: string;

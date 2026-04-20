@@ -7,8 +7,12 @@
   import DiscoveryUpdatesWebSocket from "$lib/client/components/DiscoveryUpdatesWebSocket.svelte";
   import {
     discoveredDevices,
+    discoverySocketEvent,
     initializeDiscoveryDeviceSnapshot,
+    processDeviceAdopted,
+    processDiscoveryNeighbor,
   } from "$lib/client/stores/discovery-updates";
+  import { devicesState, setDevicesState, setLoading } from "$lib/client/stores/devices";
   import { get } from "svelte/store";
 
   let { data, form } = $props();
@@ -26,7 +30,81 @@
   const selectedDeviceId = $derived(data.selectedDeviceId);
 
   onMount(() => {
+    setLoading(true);
     initializeDiscoveryDeviceSnapshot(data.discoveredDevices);
+    
+    const devices = data.devices.map((device) => ({
+      id: device.id,
+      type: (device.platform === "switchos" ? "switch" : "router") as "router" | "switch",
+      name: device.identity ?? device.name,
+      application: "Network",
+      status: device.connectionStatus,
+      macAddress: "",
+      model: device.model ?? "",
+      version: device.routerOsVersion ?? "",
+      ipAddress: device.host,
+      uplink: "",
+      parentDevice: "",
+      platform: device.platform,
+      adopted: true,
+      image: data.deviceImages[device.id],
+      interfaces: data.deviceInterfaces[device.id] ?? [],
+      details: {
+        identity: device.identity ?? "",
+        serialNumber: device.serialNumber ?? "",
+        architecture: device.architecture ?? "",
+        uptimeSeconds: device.uptimeSeconds ?? undefined,
+        lastSeenAt: device.lastSeenAt,
+        lastSyncAt: device.lastSyncAt,
+        capabilities: device.capabilities,
+        tags: device.tags,
+      },
+    }));
+
+    const discovered = data.discoveredDevices
+      .filter((device) => device.address)
+      .map((device) => ({
+        id: device.id,
+        identity: device.identity,
+        macAddress: device.macAddress,
+        platform: device.platform,
+        version: device.version,
+        hardware: device.hardware,
+        interfaceName: device.interfaceName,
+        address: device.address,
+      }));
+
+    setDevicesState({
+      devices,
+      interfaces: data.interfaces,
+      deviceInterfaces: data.deviceInterfaces,
+      discoveredDevices: discovered,
+      deviceImages: data.deviceImages,
+    });
+
+    const devicesSubscription = devicesState.subscribe((state) => {
+      if (!state.loading && state.devices.length > 0) {
+        devicesSubscription();
+      }
+    });
+
+    const discoverySubscription = discoverySocketEvent.subscribe((event) => {
+      if (!event) return;
+
+      switch (event.type) {
+        case 'device.adopted':
+          processDeviceAdopted(event.payload);
+          return;
+        case 'discovery.neighbor':
+          processDiscoveryNeighbor(event.payload);
+          return;
+      }
+    });
+
+    return () => {
+      devicesSubscription();
+      discoverySubscription();
+    };
   });
 
   const adoptedHosts = $derived(

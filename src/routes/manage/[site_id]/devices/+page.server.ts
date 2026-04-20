@@ -1,36 +1,15 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { findSiteById } from '$lib/server/repositories/site.repository';
 import { adoptRouterOsDevice } from '$lib/server/services/adoption.service';
 import { loadSiteDeviceState } from '$lib/server/services/site-device.service';
 
-export async function load({ parent, url }) {
-	const { site } = await parent();
-	const host = url.searchParams.get('adopt') ?? url.searchParams.get('host') ?? '';
-	const { devices, interfaces, deviceInterfaces, discoveredDevices, deviceImages } = await loadSiteDeviceState(site.id);
-
-	return {
-		devices,
-		discoveredDevices,
-		deviceInterfaces,
-		selectedDeviceId: url.searchParams.get('device') ?? '',
-		deviceImages,
-		adoptionPanel: {
-			open: url.searchParams.has('adopt') || url.searchParams.has('host'),
-			host,
-			provider: url.searchParams.get('provider') === 'mock' ? 'mock' : 'real',
-			platform: url.searchParams.get('platform') === 'switchos' ? 'switchos' : 'routeros',
-			siteName: site.name
-		}
-	};
-}
-
-export const actions = {
+export const actions: Actions = {
 	adopt: async ({ request, locals, params }) => {
 		if (!locals.user) {
 			throw redirect(303, '/manage/account/login');
 		}
 
-		const site = await findSiteById(params.site_id);
+		const site = await findSiteById(params.site_id as string);
 
 		if (!site) {
 			throw redirect(303, '/');
@@ -122,3 +101,24 @@ export const actions = {
 		}
 	}
 };
+
+export async function load({ parent, url }) {
+	const { site } = await parent();
+	const host = url.searchParams.get('adopt') ?? url.searchParams.get('host') ?? '';
+	const { devices, interfaces, deviceInterfaces, discoveredDevices, deviceImages } = await loadSiteDeviceState(site.id);
+
+	return {
+		devices,
+		discoveredDevices,
+		deviceInterfaces,
+		selectedDeviceId: url.searchParams.get('device') ?? '',
+		deviceImages,
+		adoptionPanel: {
+			open: url.searchParams.has('adopt') || url.searchParams.has('host'),
+			host,
+			provider: url.searchParams.get('provider') === 'mock' ? 'mock' : 'real',
+			platform: url.searchParams.get('platform') === 'switchos' ? 'switchos' : 'routeros',
+			siteName: site.name
+		}
+	};
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { loadSiteDeviceState } from './site-device.service.js';
+import { loadSiteDeviceState } from '$lib/server/services/site-device.service.js';
 
-describe('site-device.service', () => {
+describe('site-devices.service', () => {
 	it('loads site-scoped adopted devices and filters discovered devices by adopted host', async () => {
 		const mockedDevices: any[] = [
 			{

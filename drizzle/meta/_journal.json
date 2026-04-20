@@ -29,6 +29,13 @@
       "when": 1776639746437,
       "tag": "0003_reflective_jane_foster",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776668269373,
+      "tag": "0004_lethal_supernaut",
+      "breakpoints": true
     }
   ]
 }

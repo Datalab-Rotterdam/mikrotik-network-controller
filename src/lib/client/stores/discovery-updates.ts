@@ -1,4 +1,4 @@
-import { get, writable } from 'svelte/store';
+import { get, writable, type Writable } from 'svelte/store';
 
 export type DiscoveryDevice = {
 	id: string;
@@ -42,9 +42,9 @@ export type DeviceAdoptedMessage = {
 export type DiscoveryWebSocketMessage = SnapshotMessage | NeighborMessage | DeviceAdoptedMessage;
 
 export const discoverySocketEvent = writable<DiscoveryWebSocketMessage | null>(null);
-export const discoveredDevices = writable<DiscoveryDevice[]>([]);
+export const discoveredDevices: Writable<DiscoveryDevice[]> = writable([]);
 
-export function setDiscoveredDevices(devices: DiscoveryDevice[]) {
+export function setDiscoveredDevices(devices: DiscoveryDevice[]): void {
 	discoveredDevices.set(
 		devices.filter((device) => device.address).map((device) => ({ ...device }))
 	);
@@ -55,14 +55,16 @@ export function processDiscoveryWebSocketMessage(message: unknown): void {
 		return;
 	}
 
-	const payload = (message as DiscoveryWebSocketMessage).payload;
 	const event = message as DiscoveryWebSocketMessage;
+	const payload = event.payload;
 
 	discoverySocketEvent.set(event);
 
 	switch (event.type) {
 		case 'snapshot':
-			setDiscoveredDevices(payload.discoveredDevices);
+			if ('discoveredDevices' in payload) {
+				setDiscoveredDevices(payload.discoveredDevices);
+			}
 			return;
 		case 'discovery.neighbor':
 			discoveredDevices.update((devices) => {
@@ -80,6 +82,21 @@ export function processDiscoveryWebSocketMessage(message: unknown): void {
 		default:
 			return;
 	}
+}
+
+export function processDeviceAdopted(payload: DeviceAdoptedPayload): void {
+	discoveredDevices.update((devices) =>
+		devices.filter((device) => device.address !== payload.host && device.id !== payload.deviceId)
+	);
+}
+
+export function processDiscoveryNeighbor(device: DiscoveryDevice): void {
+	discoveredDevices.update((devices) => {
+		const filtered = devices.filter(
+			(d) => d.id !== device.id && d.address !== device.address
+		);
+		return [...filtered, device];
+	});
 }
 
 export function initializeDiscoveryDeviceSnapshot(devices: DiscoveryDevice[]) {
