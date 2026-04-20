@@ -1,3 +1,4 @@
+import '$lib/server/websockets.server';
 import { redirect, type Handle } from '@sveltejs/kit';
 import { hasAnyUsers, resolveUserFromCookies } from '$lib/server/services/auth.service';
 

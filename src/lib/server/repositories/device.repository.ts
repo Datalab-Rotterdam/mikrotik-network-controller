@@ -2,8 +2,8 @@ import { asc, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { deviceCredentials, deviceInterfaces, devices } from '$lib/server/db/schema';
 
-export async function listDevices() {
-	return db
+export async function listDevices(siteId?: string) {
+	const query = db
 		.select({
 			id: devices.id,
 			name: devices.name,
@@ -24,8 +24,13 @@ export async function listDevices() {
 			lastSeenAt: devices.lastSeenAt,
 			lastSyncAt: devices.lastSyncAt
 		})
-		.from(devices)
-		.orderBy(asc(devices.name));
+		.from(devices);
+
+	if (siteId) {
+		query.where(eq(devices.siteId, siteId));
+	}
+
+	return query.orderBy(asc(devices.name));
 }
 
 export async function upsertAdoptedDevice(input: typeof devices.$inferInsert) {
@@ -100,8 +105,8 @@ export async function replaceReadOnlyCredential(input: {
 	});
 }
 
-export async function listDeviceInterfaces() {
-	return db
+export async function listDeviceInterfaces(siteId?: string) {
+	const query = db
 		.select({
 			id: deviceInterfaces.id,
 			deviceId: deviceInterfaces.deviceId,
@@ -113,5 +118,11 @@ export async function listDeviceInterfaces() {
 			disabled: deviceInterfaces.disabled
 		})
 		.from(deviceInterfaces)
-		.orderBy(asc(deviceInterfaces.name));
+		.leftJoin(devices, eq(deviceInterfaces.deviceId, devices.id));
+
+	if (siteId) {
+		query.where(eq(devices.siteId, siteId));
+	}
+
+	return query.orderBy(asc(deviceInterfaces.name));
 }

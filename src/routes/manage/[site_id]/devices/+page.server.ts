@@ -1,45 +1,19 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { listDeviceInterfaces, listDevices } from '$lib/server/repositories/device.repository';
 import { findSiteById } from '$lib/server/repositories/site.repository';
 import { adoptRouterOsDevice } from '$lib/server/services/adoption.service';
-import { resolveDeviceImage } from '$lib/server/services/device-image-catalog.service';
-import discoveryService from '$lib/server/services/discovery.service';
+import { loadSiteDeviceState } from '$lib/server/services/site-device.service';
 
 export async function load({ parent, url }) {
 	const { site } = await parent();
 	const host = url.searchParams.get('adopt') ?? url.searchParams.get('host') ?? '';
-	const devices = await listDevices();
-	const interfaces = await listDeviceInterfaces();
-	const deviceInterfaces = interfaces.reduce<Record<string, typeof interfaces>>((groups, networkInterface) => {
-		groups[networkInterface.deviceId] = [...(groups[networkInterface.deviceId] ?? []), networkInterface];
-		return groups;
-	}, {});
-	const discoveredDevices = discoveryService.list().map((device) => ({
-		id: device.id,
-		identity: device.identity,
-		macAddress: device.macAddress,
-		platform: device.platform,
-		version: device.version,
-		hardware: device.hardware,
-		interfaceName: device.interfaceName,
-		address: device.address
-	}));
+	const { devices, interfaces, deviceInterfaces, discoveredDevices, deviceImages } = await loadSiteDeviceState(site.id);
 
 	return {
 		devices,
 		discoveredDevices,
 		deviceInterfaces,
 		selectedDeviceId: url.searchParams.get('device') ?? '',
-		deviceImages: Object.fromEntries([
-			...devices.map((device) => [
-				device.id,
-				resolveDeviceImage(device.model ?? device.identity ?? device.name, device.platform)
-			]),
-			...discoveredDevices.map((device) => [
-				device.id,
-				resolveDeviceImage(device.hardware ?? device.identity ?? device.platform, device.platform ?? 'router')
-			])
-		]),
+		deviceImages,
 		adoptionPanel: {
 			open: url.searchParams.has('adopt') || url.searchParams.has('host'),
 			host,

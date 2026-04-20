@@ -3,6 +3,7 @@ import {
 	SwitchOSClient,
 	decodeSwitchOSHexString
 } from '@sourceregistry/mikrotik-client/switchos';
+import { EventEmitter } from 'node:events';
 import { createAdoptionAttempt, updateAdoptionAttempt } from '$lib/server/repositories/adoption.repository';
 import { recordAuditEvent } from '$lib/server/repositories/audit.repository';
 import {
@@ -12,6 +13,8 @@ import {
 } from '$lib/server/repositories/device.repository';
 import { ensureSiteByName } from '$lib/server/repositories/site.repository';
 import { encryptSecret } from '$lib/server/security/secrets';
+
+export const adoptionEvents = new EventEmitter();
 
 type AdoptionProvider = 'real' | 'mock';
 type DevicePlatform = 'routeros' | 'switchos';
@@ -264,6 +267,16 @@ export async function adoptRouterOsDevice(input: AdoptDeviceInput) {
 				steps: ['created', 'validating_credentials', 'syncing_inventory', 'succeeded'],
 				interfaceCount: inventory.interfaces.length
 			}
+		});
+
+		adoptionEvents.emit('device.adopted', {
+			host: device.host,
+			deviceId: device.id,
+			siteId: site.id,
+			siteName: site.name,
+			identity: device.identity ?? inventory.identity,
+			platform: device.platform,
+			timestamp: new Date().toISOString()
 		});
 
 		await recordAuditEvent({
