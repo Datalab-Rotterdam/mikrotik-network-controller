@@ -1,4 +1,5 @@
 import { ServiceManager } from '@sourceregistry/sveltekit-service-manager/server';
+import '$lib/server/services/devices.service';
 
 const { endpoint, access } = ServiceManager.Base();
 

@@ -1,10 +1,15 @@
-import { RouterOSClient } from '@sourceregistry/mikrotik-client/routeros';
-import { getDeviceById, getDeviceCredentials, listDevices, updateDeviceLastSeen } from '$lib/server/repositories/telemetry.repository';
+import {RouterOSClient} from '@sourceregistry/mikrotik-client/routeros';
+import {
+    getDeviceById,
+    getDeviceCredentials,
+    listDevices,
+    updateDeviceLastSeen
+} from '$lib/server/repositories/telemetry.repository';
+import {decryptSecret} from '$lib/server/security/secrets';
 
 export default {
     async list() {
-        const devices = await listDevices();
-        return devices;
+        return listDevices();
     },
 
     async get(id: string) {
@@ -56,7 +61,7 @@ export default {
             host: device.host,
             port: device.apiPort,
             username: restCredential.username,
-            password: restCredential.secretEncrypted
+            password: decryptSecret(restCredential.secretEncrypted)
         });
 
         try {

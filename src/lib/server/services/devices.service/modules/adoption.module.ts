@@ -1,11 +1,45 @@
 import { type AckInput, type DeviceRecord, type EnrollInput } from '$lib/server/services/devices.service/shared';
+import { Service } from '@sourceregistry/sveltekit-service-manager';
 import { getDeviceByHost, updateDeviceLastSeen } from '$lib/server/repositories/telemetry.repository';
+import { replaceCredential, updateDeviceState, upsertAdoptedDevice } from '$lib/server/repositories/device.repository';
+import { encryptSecret } from '$lib/server/security/secrets';
+import { createAdoptCredentialsTask, createPrepareBootstrapTask } from '../tasks';
 
-function nowIso(): string {
-    return new Date().toISOString();
-}
 
 export default {
+    async adoptWithCredentials(input: {
+        host: string;
+        username: string;
+        password: string;
+        siteName: string;
+        siteId: string | null;
+        apiPort: number;
+        provider: 'real' | 'mock';
+        platform: 'routeros' | 'switchos';
+        requestedByUserId: string;
+    }) {
+        const task = await Service('scheduler').schedule(createAdoptCredentialsTask(input));
+
+        return {
+            ok: true,
+            jobId: task.id
+        };
+    },
+    async prepareBootstrap(input: {
+        siteId: string;
+        requestedByUserId: string;
+        controllerBaseUrl: string;
+        managementCidrs?: string;
+        bootstrapToken?: string;
+        wwwSslCertificateName?: string;
+    }) {
+        const task = await Service('scheduler').schedule(createPrepareBootstrapTask(input));
+
+        return {
+            ok: true,
+            jobId: task.id
+        };
+    },
     async enroll(input: EnrollInput) {
         if (!input.serial || !input.model || !input.identity) {
             throw new Error('serial, model and identity are required');
@@ -13,34 +47,52 @@ export default {
 
         const existing = await getDeviceByHost(input.serial);
 
-        const record: DeviceRecord = {
-            id: existing?.id ?? '',
+        const stored = await upsertAdoptedDevice({
             siteId: existing?.siteId ?? null,
             name: input.identity,
-            platform: 'routeros' as const,
-            adoptionMode: 'read_only' as const,
+            platform: 'routeros',
+            adoptionMode: existing?.adoptionMode ?? 'read_only',
             adoptionState: existing?.adoptionState ?? 'discovered',
-            connectionStatus: 'online' as const,
+            connectionStatus: 'online',
             host: input.serial,
-            apiPort: 8728,
-            sshPort: 22,
+            apiPort: existing?.apiPort ?? 8728,
+            sshPort: existing?.sshPort ?? 22,
             identity: input.identity,
             model: input.model,
             serialNumber: input.serial,
             routerOsVersion: input.version ?? null,
-            architecture: null,
-            uptimeSeconds: null,
+            architecture: existing?.architecture ?? null,
+            uptimeSeconds: existing?.uptimeSeconds ?? null,
             capabilities: existing?.capabilities ?? [],
             tags: existing?.tags ?? [],
-            lastSeenAt: nowIso(),
-            lastSyncAt: existing?.lastSyncAt ? new Date(existing.lastSyncAt).toISOString() : null,
-            createdAt: existing?.createdAt ? new Date(existing.createdAt).toISOString() : nowIso(),
-            updatedAt: nowIso()
-        };
+            lastSeenAt: new Date(),
+            lastSyncAt: existing?.lastSyncAt ? new Date(existing.lastSyncAt) : null
+        });
 
-        if (existing) {
-            await updateDeviceLastSeen(existing.id);
-        }
+        const record: DeviceRecord = {
+            id: stored.id,
+            siteId: stored.siteId,
+            name: stored.name,
+            platform: stored.platform,
+            adoptionMode: stored.adoptionMode,
+            adoptionState: stored.adoptionState,
+            connectionStatus: stored.connectionStatus,
+            host: stored.host,
+            apiPort: stored.apiPort,
+            sshPort: stored.sshPort,
+            identity: stored.identity,
+            model: stored.model,
+            serialNumber: stored.serialNumber,
+            routerOsVersion: stored.routerOsVersion,
+            architecture: stored.architecture,
+            uptimeSeconds: stored.uptimeSeconds,
+            capabilities: stored.capabilities,
+            tags: stored.tags,
+            lastSeenAt: stored.lastSeenAt?.toISOString() ?? null,
+            lastSyncAt: stored.lastSyncAt?.toISOString() ?? null,
+            createdAt: stored.createdAt.toISOString(),
+            updatedAt: stored.updatedAt.toISOString()
+        };
 
         if (record.adoptionState === 'inventoried' || record.adoptionState === 'fully_managed') {
             return {
@@ -49,9 +101,7 @@ export default {
             };
         }
 
-        return {
-            status: 'pending' as const
-        };
+        return { status: 'pending' as const };
     },
     async getControllerPublicKey() {
         const key = process.env.CONTROLLER_SSH_PUBLIC_KEY;
@@ -68,9 +118,29 @@ export default {
             throw new Error(`Unknown device: ${input.serial}`);
         }
 
+        await replaceCredential({
+            deviceId: device.id,
+            purpose: 'read_only',
+            username: input.restUser,
+            secretEncrypted: encryptSecret(input.restPassword)
+        });
+
+        await replaceCredential({
+            deviceId: device.id,
+            purpose: 'write',
+            username: input.managedUser,
+            secretEncrypted: encryptSecret('ssh-key:controller')
+        });
+
+        await updateDeviceState(device.id, {
+            adoptionMode: 'managed',
+            adoptionState: 'fully_managed',
+            connectionStatus: 'online'
+        });
+
         return {
             ok: true,
-            state: device.adoptionState
+            state: 'fully_managed' as const
         };
     },
     async adopt(serial: string) {
@@ -80,12 +150,16 @@ export default {
             throw new Error(`Unknown device: ${serial}`);
         }
 
+        await updateDeviceState(device.id, {
+            adoptionState: 'inventoried',
+            connectionStatus: 'online'
+        });
         await updateDeviceLastSeen(device.id);
 
         return {
             ok: true,
             serial,
-            state: device.adoptionState
+            state: 'inventoried' as const
         };
     }
 };

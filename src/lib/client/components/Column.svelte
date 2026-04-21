@@ -44,8 +44,8 @@
 		pull
 	}: Props = $props();
 
-	export const type = 'Column';
-	export const props = {
+	const columnType = 'Column';
+	const columnProps: ColumnProps = $derived({
 		name,
 		xs,
 		sm,
@@ -56,18 +56,25 @@
 		order,
 		push,
 		pull
-	};
+	});
+	export { columnType as type, columnProps as props };
+
+	const className = $derived(
+		[
+			'column-layout-column',
+			order === -9999 ? 'order-first' : '',
+			order === 9999 ? 'order-last' : '',
+			order !== undefined && order !== -9999 && order !== 9999 ? `order-${order}` : '',
+			push !== undefined ? `push-${push}` : '',
+			pull !== undefined ? `pull-${pull}` : ''
+		]
+			.filter(Boolean)
+			.join(' ')
+	);
 </script>
 
 {#if children}
-	<div
-		class="column-layout-column"
-		class:order-first={order === -9999}
-		class:order-last={order === 9999}
-		class:order-{order}={{order !== undefined && order !== -9999 && order !== 9999}}
-		class:push-{push}={{push !== undefined}}
-		class:pull-{pull}={{pull !== undefined}}
-	>
+	<div class={className}>
 		{@render children()}
 	</div>
 {/if}

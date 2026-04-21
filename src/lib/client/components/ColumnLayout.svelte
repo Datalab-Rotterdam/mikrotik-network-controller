@@ -32,8 +32,6 @@
 		wrap = false
 	}: Props = $props();
 
-	let columnElements: ColumnProps[] = [];
-
 	function getColumns() {
 		if (!children) return [];
 		const nodes = Array.from(children() as any);
@@ -42,7 +40,7 @@
 			.map((node: any) => node.props);
 	}
 
-	$: columnElements = getColumns();
+	let columnElements: ColumnProps[] = $derived(getColumns());
 </script>
 
 <div
@@ -58,7 +56,7 @@
 	class:column-layout-align-stretch={align === 'stretch'}
 >
 	{#if children}
-		{#render children()}
+		{@render children()}
 	{/if}
 </div>
 

@@ -36,6 +36,13 @@
       "when": 1776668269373,
       "tag": "0004_lethal_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1776802866487,
+      "tag": "0005_serious_clint_barton",
+      "breakpoints": true
     }
   ]
 }

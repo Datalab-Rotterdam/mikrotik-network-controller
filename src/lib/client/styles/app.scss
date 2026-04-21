@@ -1,143 +1,149 @@
+@use "sass:map";
+@use "sass:math";
+
 :root {
-	--color-brand: #0e0e10;
-	--color-brand-muted: #707372;
-	--color-brand-light: #c8c8c7;
-	--color-surface: #ffffff;
-	--color-page: #f3f4f4;
-	--color-line: #dedfde;
-	--color-text: #171717;
-	--color-muted: #686c6b;
-	--color-danger: #8a1f1f;
-	--color-link: #0d6fd6;
-	--shadow-panel: 0 16px 48px rgba(14, 14, 16, 0.08);
-	font-family:
-		Manrope, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-		sans-serif;
-	color: var(--color-text);
-	background: var(--color-page);
+  --color-brand: #0e0e10;
+  --color-brand-muted: #707372;
+  --color-brand-light: #c8c8c7;
+  --color-surface: #ffffff;
+  --color-page: #f3f4f4;
+  --color-line: #dedfde;
+  --color-text: #171717;
+  --color-muted: #686c6b;
+  --color-danger: #8a1f1f;
+  --color-link: #0d6fd6;
+  --shadow-panel: 0 16px 48px rgba(14, 14, 16, 0.08);
+  font-family: Manrope, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+  sans-serif;
+  color: var(--color-text);
+  background: var(--color-page);
 }
 
 * {
-	box-sizing: border-box;
+  box-sizing: border-box;
 }
 
 body {
-	margin: 0;
-	min-width: 320px;
-	min-height: 100vh;
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
 }
 
 button,
 input,
 select {
-	font: inherit;
+  font: inherit;
 }
 
 a {
-	color: inherit;
-	text-decoration: none;
+  color: inherit;
+  text-decoration: none;
 }
 
 $sizes: (
-	'xs': 0,
-	'sm': 576px,
-	'md': 768px,
-	'lg': 992px,
-	'xl': 1200px,
-	'xxl': 1400px
+        'xs': 0,
+        'sm': 576px,
+        'md': 768px,
+        'lg': 992px,
+        'xl': 1200px,
+        'xxl': 1400px
 );
 
 @mixin respond($size) {
-	$breakpoint: map-get($sizes, $size);
-	@if $breakpoint {
-		@media (min-width: $breakpoint) {
-			@content;
-		}
-	}
+  $breakpoint: map.get($sizes, $size);
+  @if $breakpoint != null {
+    @media (min-width: $breakpoint) {
+      @content;
+    }
+  }
 }
 
 @mixin respond-max($size) {
-	$breakpoint: map-get($sizes, $size);
-	@if $breakpoint {
-		@media (max-width: ($breakpoint - 1px)) {
-			@content;
-		}
-	}
+  $breakpoint: map.get($sizes, $size);
+  @if $breakpoint != null {
+    @if $breakpoint == 0 {
+      @content;
+    } @else {
+      @media (max-width: ($breakpoint - 1px)) {
+        @content;
+      }
+    }
+  }
 }
 
-$d-flex {
-	display: flex;
+.d-flex {
+  display: flex;
 }
 
-$d-grid {
-	display: grid;
+.d-grid {
+  display: grid;
 }
 
 @mixin make-col($size, $columns: 12) {
-	flex: 0 0 percentage($size / $columns);
-	max-width: percentage($size / $columns);
+  flex: 0 0 math.percentage(math.div($size, $columns));
+  max-width: math.percentage(math.div($size, $columns));
 }
 
 @mixin push($size, $columns: 12) {
-	margin-left: percentage($size / $columns);
+  margin-left: math.percentage(math.div($size, $columns));
 }
 
 @mixin pull($size, $columns: 12) {
-	margin-right: percentage($size / $columns);
+  margin-right: math.percentage(math.div($size, $columns));
 }
 
-$d-none {
-	display: none;
+.d-none {
+  display: none;
 }
 
 @for $i from 1 through 12 {
-	.d-#{$i} {
-		@include make-col($i);
-	}
+  .d-#{$i} {
+    @include make-col($i);
+  }
 }
 
 .order-first {
-	order: -9999;
+  order: -9999;
 }
 
 .order-last {
-	order: 9999;
+  order: 9999;
 }
 
 @for $i from 1 through 12 {
-	.order-#{$i} {
-		order: $i;
-	}
+  .order-#{$i} {
+    order: $i;
+  }
 }
 
 @for $i from 1 through 11 {
-	.push-#{$i} {
-		@include push($i);
-	}
+  .push-#{$i} {
+    @include push($i);
+  }
 }
 
 @for $i from 1 through 11 {
-	.pull-#{$i} {
-		@include pull($i);
-	}
+  .pull-#{$i} {
+    @include pull($i);
+  }
 }
 
 @each $size, $breakpoint in $sizes {
-	.d-#{$size}-none {
-		@include respond-max($size) {
-			display: none !important;
-		}
-	}
+  .d-#{$size}-none {
+    @include respond-max($size) {
+      display: none !important;
+    }
+  }
 
-	.d-#{$size}-flex {
-		@include respond($size) {
-			display: flex !important;
-		}
-	}
+  .d-#{$size}-flex {
+    @include respond($size) {
+      display: flex !important;
+    }
+  }
 
-	.d-#{$size}-grid {
-		@include respond($size) {
-			display: grid !important;
-		}
-	}
+  .d-#{$size}-grid {
+    @include respond($size) {
+      display: grid !important;
+    }
+  }
 }

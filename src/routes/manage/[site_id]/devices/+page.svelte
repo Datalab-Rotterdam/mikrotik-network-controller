@@ -4,7 +4,6 @@
   import Form from "$lib/client/components/Form.svelte";
   import Input from "$lib/client/components/Input.svelte";
   import SidePanel from "$lib/client/components/SidePanel.svelte";
-  import DiscoveryUpdatesWebSocket from "$lib/client/components/DiscoveryUpdatesWebSocket.svelte";
   import {
     discoveredDevices,
     discoverySocketEvent,
@@ -13,12 +12,20 @@
     processDiscoveryNeighbor,
   } from "$lib/client/stores/discovery-updates";
   import { devicesState, setDevicesState, setLoading } from "$lib/client/stores/devices";
+  import {
+    formatJobStatus,
+    getCurrentStep,
+    getJobsForDevice,
+    isRunningJob,
+    jobsState,
+  } from "$lib/client/stores/jobs";
   import { get } from "svelte/store";
 
   let { data, form } = $props();
   const basePath = $derived(`/manage/${data.site.id}`);
   const adoptionPanelOpen = $derived(
-    data.adoptionPanel.open || Boolean(form?.message),
+    data.adoptionPanel.open ||
+      (form?.action === "adopt" && Boolean(form?.message)),
   );
   const panelHost = $derived(form?.host ?? data.adoptionPanel.host);
   const panelProvider = $derived(form?.provider ?? data.adoptionPanel.provider);
@@ -27,6 +34,23 @@
     form?.apiPort ?? (panelPlatform === "switchos" ? 80 : 8728),
   );
   const panelSiteName = $derived(form?.siteName ?? data.adoptionPanel.siteName);
+  const panelDiscovery = $derived({
+    identity: form?.discoveryIdentity ?? data.adoptionPanel.discovery.identity,
+    macAddress: form?.discoveryMacAddress ?? data.adoptionPanel.discovery.macAddress,
+    version: form?.discoveryVersion ?? data.adoptionPanel.discovery.version,
+    hardware: form?.discoveryHardware ?? data.adoptionPanel.discovery.hardware,
+    interfaceName:
+      form?.discoveryInterfaceName ?? data.adoptionPanel.discovery.interfaceName,
+  });
+  const panelHasDiscoveryContext = $derived(
+    Boolean(
+      panelDiscovery.identity ||
+        panelDiscovery.macAddress ||
+        panelDiscovery.version ||
+        panelDiscovery.hardware ||
+        panelDiscovery.interfaceName,
+    ),
+  );
   const selectedDeviceId = $derived(data.selectedDeviceId);
 
   onMount(() => {
@@ -187,6 +211,14 @@
     Boolean(selectedDevice) && !adoptionPanelOpen,
   );
   const anyPanelOpen = $derived(adoptionPanelOpen || detailsPanelOpen);
+  const selectedDeviceJobs = $derived(
+    selectedDevice
+      ? getJobsForDevice($jobsState.jobs, selectedDevice.id).slice(0, 5)
+      : [],
+  );
+  const selectedDeviceRunningJobs = $derived(
+    selectedDeviceJobs.filter((job) => isRunningJob(job)),
+  );
 
   function deviceHref(deviceId: string) {
     return `${basePath}/devices?device=${encodeURIComponent(deviceId)}`;
@@ -194,6 +226,30 @@
 
   function platformParam(platform: string | undefined) {
     return platform === "switchos" ? "switchos" : "routeros";
+  }
+
+  function adoptHref(device: {
+    ipAddress: string;
+    platform?: string;
+    name?: string;
+    macAddress?: string;
+    version?: string;
+    model?: string;
+    uplink?: string;
+  }) {
+    const params = new URLSearchParams({
+      adopt: device.ipAddress,
+      provider: "real",
+      platform: platformParam(device.platform),
+    });
+
+    if (device.name) params.set("identity", device.name);
+    if (device.macAddress) params.set("mac", device.macAddress);
+    if (device.version) params.set("version", device.version);
+    if (device.model) params.set("hardware", device.model);
+    if (device.uplink) params.set("interface", device.uplink);
+
+    return `${basePath}/devices?${params.toString()}`;
   }
 
   function openDevice(event: MouseEvent, deviceId: string) {
@@ -243,10 +299,24 @@
       timeStyle: "short",
     }).format(new Date(value));
   }
+
+  function confirmRemove(event: SubmitEvent) {
+    if (!selectedDevice) {
+      event.preventDefault();
+      return;
+    }
+
+    const confirmed = confirm(
+      `Factory reset ${selectedDevice.name} and remove it from the controller? This will erase the device configuration and reboot it.`,
+    );
+
+    if (!confirmed) {
+      event.preventDefault();
+    }
+  }
 </script>
 
 <section class="devices-page" class:with-panel={anyPanelOpen}>
-  <DiscoveryUpdatesWebSocket />
   <div class="devices-toolbar">
     <div class="toolbar-left">
       <input
@@ -323,7 +393,7 @@
                 {:else}
                   <a
                     class="status-action"
-                    href={`${basePath}/devices?adopt=${encodeURIComponent(device.ipAddress)}&provider=real&platform=${platformParam(device.platform)}`}
+                    href={adoptHref(device)}
                   >
                     Click to Adopt
                   </a>
@@ -372,13 +442,81 @@
   <SidePanel
     open={adoptionPanelOpen}
     title="Adopt device"
-    description="Enter RouterOS credentials to adopt this device."
+    description="Enter credentials or prepare a bootstrap task."
     closeHref={`${basePath}/devices`}
   >
     <Form action="?/adopt">
       {#if form?.message}
         <div class={form?.success ? "status-success" : "error-message"}>
           {form.message}
+          {#if form?.jobId}
+            <a class="message-link" href={`${basePath}/jobs?job=${form.jobId}`}
+              >View task</a
+            >
+          {/if}
+        </div>
+      {/if}
+
+      <input type="hidden" name="mode" value="credentials" />
+      <input
+        type="hidden"
+        name="discoveryIdentity"
+        value={panelDiscovery.identity}
+      />
+      <input
+        type="hidden"
+        name="discoveryMacAddress"
+        value={panelDiscovery.macAddress}
+      />
+      <input
+        type="hidden"
+        name="discoveryVersion"
+        value={panelDiscovery.version}
+      />
+      <input
+        type="hidden"
+        name="discoveryHardware"
+        value={panelDiscovery.hardware}
+      />
+      <input
+        type="hidden"
+        name="discoveryInterfaceName"
+        value={panelDiscovery.interfaceName}
+      />
+
+      {#if panelHasDiscoveryContext}
+        <div class="discovery-context">
+          <strong>MNDP discovery</strong>
+          {#if panelDiscovery.identity}
+            <div class="info-row">
+              <span>Identity</span>
+              <strong>{panelDiscovery.identity}</strong>
+            </div>
+          {/if}
+          {#if panelDiscovery.hardware}
+            <div class="info-row">
+              <span>Hardware</span>
+              <strong>{panelDiscovery.hardware}</strong>
+            </div>
+          {/if}
+          {#if panelDiscovery.version}
+            <div class="info-row">
+              <span>Version</span>
+              <strong>{panelDiscovery.version}</strong>
+            </div>
+          {/if}
+          {#if panelDiscovery.macAddress}
+            <div class="info-row">
+              <span>MAC Address</span>
+              <strong>{panelDiscovery.macAddress}</strong>
+            </div>
+          {/if}
+          {#if panelDiscovery.interfaceName}
+            <div class="info-row">
+              <span>Interface</span>
+              <strong>{panelDiscovery.interfaceName}</strong>
+            </div>
+          {/if}
         </div>
       {/if}
 
@@ -441,6 +579,25 @@
       </details>
 
       <button class="adopt-submit" type="submit">Adopt</button>
+    </Form>
+
+    <Form action="?/adopt" compact ariaLabel="Prepare bootstrap">
+      <input type="hidden" name="mode" value="bootstrap" />
+      <input type="hidden" name="siteName" value={panelSiteName} />
+      <details class="advanced-settings">
+        <summary>Bootstrap fallback</summary>
+        <div class="advanced-fields">
+          <Input
+            label="Management CIDRs"
+            name="managementCidrs"
+            placeholder="10.10.0.0/16,100.64.0.0/10"
+            value={form?.managementCidrs ?? ""}
+          />
+          <button class="secondary-submit" type="submit">
+            Prepare Bootstrap Task
+          </button>
+        </div>
+      </details>
     </Form>
   </SidePanel>
 
@@ -534,6 +691,89 @@
           {/if}
         </div>
 
+        {#if selectedDevice.adopted && selectedDeviceJobs.length}
+          <div class="details-card">
+            <div class="card-heading">
+              <strong>Tasks</strong>
+              <a class="card-link" href={`${basePath}/jobs`}>View all</a>
+            </div>
+            {#each selectedDeviceJobs as job}
+              {@const currentStep = getCurrentStep(job)}
+              <a class="task-block" href={`${basePath}/jobs?job=${job.id}`}>
+                <div class="task-title">
+                  <strong>{job.type}</strong>
+                  <span class:active={isRunningJob(job)}>{formatJobStatus(job.status)}</span>
+                </div>
+                <div class="task-progress" aria-label={`${job.progress}% complete`}>
+                  <span style={`width: ${job.progress}%`}></span>
+                </div>
+                <div class="task-meta">
+                  <span>{currentStep?.name ?? "No steps"}</span>
+                  <span>{job.progress}%</span>
+                </div>
+              </a>
+            {/each}
+            {#if selectedDeviceRunningJobs.length}
+              <p class="muted">{selectedDeviceRunningJobs.length} task{selectedDeviceRunningJobs.length === 1 ? "" : "s"} running now.</p>
+            {/if}
+          </div>
+        {/if}
+
+        {#if selectedDevice.adopted}
+          <div class="details-card">
+            <div class="card-heading">
+              <strong>Provisioning</strong>
+              <a class="card-link" href={`${basePath}/jobs`}>Tasks</a>
+            </div>
+            {#if form?.action === "provision" && form?.message}
+              <div class={form?.success ? "status-success" : "error-message"}>
+                {form.message}
+                {#if form?.jobId}
+                  <a class="message-link" href={`${basePath}/jobs?job=${form.jobId}`}
+                    >View task</a
+                  >
+                {/if}
+              </div>
+            {/if}
+            <form
+              class="remove-form"
+              method="POST"
+              action="?/provision"
+              aria-label={`Provision ${selectedDevice.name}`}
+            >
+              <input type="hidden" name="deviceId" value={selectedDevice.id} />
+              <button class="adopt-submit" type="submit">
+                Provision
+              </button>
+            </form>
+          </div>
+        {/if}
+
+        {#if selectedDevice.adopted}
+          <div class="details-card danger-card">
+            <div class="card-heading">
+              <strong>Remove device</strong>
+            </div>
+            {#if form?.action === "remove" && form?.message}
+              <div class={form?.success ? "status-success" : "error-message"}>
+                {form.message}
+              </div>
+            {/if}
+            <form
+              class="remove-form"
+              method="POST"
+              action="?/remove"
+              aria-label={`Remove ${selectedDevice.name}`}
+              onsubmit={confirmRemove}
+            >
+              <input type="hidden" name="deviceId" value={selectedDevice.id} />
+              <button class="remove-submit" type="submit">
+                Reset & Remove
+              </button>
+            </form>
+          </div>
+        {/if}
+
         {#if selectedDevice.adopted}
           <div class="details-card">
             <div class="card-heading">
@@ -576,7 +816,7 @@
         {:else}
           <a
             class="adopt-submit detail-action"
-            href={`${basePath}/devices?adopt=${encodeURIComponent(selectedDevice.ipAddress)}&provider=real&platform=${platformParam(selectedDevice.platform)}`}
+            href={adoptHref(selectedDevice)}
           >
             Adopt
           </a>
@@ -783,6 +1023,20 @@
     background: #fbfdff;
   }
 
+  .discovery-context {
+    display: grid;
+    gap: 8px;
+    border: 1px solid #e5ebef;
+    border-radius: 6px;
+    padding: 12px;
+    background: #fbfdff;
+  }
+
+  .discovery-context > strong {
+    color: #323a40;
+    font-size: 13px;
+  }
+
   .advanced-settings summary {
     min-height: 38px;
     padding: 10px 12px;
@@ -832,6 +1086,28 @@
     background: var(--color-brand);
     font-weight: 750;
     cursor: pointer;
+  }
+
+  .secondary-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    border: 1px solid #dce4e9;
+    border-radius: 6px;
+    padding: 0 14px;
+    color: #30373d;
+    background: var(--color-surface);
+    font-weight: 750;
+    cursor: pointer;
+  }
+
+  .message-link {
+    display: block;
+    margin-top: 6px;
+    color: inherit;
+    font-weight: 800;
+    text-decoration: underline;
   }
 
   .error-message {
@@ -911,6 +1187,34 @@
     background: #fbfdff;
   }
 
+  .danger-card {
+    border: 1px solid #f1c7c7;
+    background: #fff8f8;
+  }
+
+  .remove-form {
+    display: grid;
+    gap: 10px;
+  }
+
+  .remove-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    border: 1px solid var(--color-danger);
+    border-radius: 6px;
+    padding: 0 14px;
+    color: var(--color-surface);
+    background: var(--color-danger);
+    font-weight: 750;
+    cursor: pointer;
+  }
+
+  .remove-submit:hover {
+    filter: brightness(0.96);
+  }
+
   .info-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, auto);
@@ -940,6 +1244,74 @@
   .card-heading span,
   .interface-title span {
     color: #9aa3aa;
+    font-size: 12px;
+  }
+
+  .card-link {
+    color: var(--color-link);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .task-block {
+    display: grid;
+    gap: 8px;
+    border-top: 1px solid #eef1f3;
+    padding-top: 12px;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .task-block:first-of-type {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .task-title,
+  .task-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .task-title strong {
+    min-width: 0;
+    color: #30373d;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .task-title span {
+    color: #8a949c;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .task-title span.active {
+    color: var(--color-link);
+  }
+
+  .task-progress {
+    height: 5px;
+    border-radius: 999px;
+    background: #e8edf1;
+    overflow: hidden;
+  }
+
+  .task-progress span {
+    display: block;
+    height: 100%;
+    min-width: 3px;
+    border-radius: inherit;
+    background: var(--color-link);
+  }
+
+  .task-meta {
+    color: #8a949c;
     font-size: 12px;
   }
 

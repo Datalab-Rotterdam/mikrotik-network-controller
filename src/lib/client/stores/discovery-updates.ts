@@ -29,6 +29,13 @@ export type SnapshotMessage = {
 	};
 };
 
+export type DiscoverySnapshotMessage = {
+	type: 'discovery.snapshot';
+	payload: {
+		discoveredDevices: DiscoveryDevice[];
+	};
+};
+
 export type NeighborMessage = {
 	type: 'discovery.neighbor';
 	payload: DiscoveryDevice;
@@ -39,7 +46,7 @@ export type DeviceAdoptedMessage = {
 	payload: DeviceAdoptedPayload;
 };
 
-export type DiscoveryWebSocketMessage = SnapshotMessage | NeighborMessage | DeviceAdoptedMessage;
+export type DiscoveryWebSocketMessage = SnapshotMessage | DiscoverySnapshotMessage | NeighborMessage | DeviceAdoptedMessage;
 
 export const discoverySocketEvent = writable<DiscoveryWebSocketMessage | null>(null);
 export const discoveredDevices: Writable<DiscoveryDevice[]> = writable([]);
@@ -62,6 +69,7 @@ export function processDiscoveryWebSocketMessage(message: unknown): void {
 
 	switch (event.type) {
 		case 'snapshot':
+		case 'discovery.snapshot':
 			if ('discoveredDevices' in payload) {
 				setDiscoveredDevices(payload.discoveredDevices);
 			}

@@ -1,6 +1,7 @@
 import {Router, type Service, ServiceManager, Action} from "@sourceregistry/sveltekit-service-manager";
+import "$lib/server/services/scheduler.service";
 
-import {adoption, telemetry, provisioning, credentials} from "./modules";
+import {adoption, telemetry, provisioning, credentials, removal} from "./modules";
 
 const router = Router();
 
@@ -47,12 +48,14 @@ router.GET("/[serial]/stats", async ({params}) => {
 
 export const service = {
     name: "devices",
+    dependsOn: ["scheduler"],
     route: router,
     local: {
         adoption,
         telemetry,
         provisioning,
-        credentials
+        credentials,
+        removal
     }
 } satisfies Service<"devices">;
 
