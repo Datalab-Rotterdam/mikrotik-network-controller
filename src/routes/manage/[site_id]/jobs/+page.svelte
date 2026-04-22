@@ -8,6 +8,7 @@
 		jobsState,
 		setJobsSnapshot
 	} from '$lib/client/stores/jobs';
+	import type { JobStatus } from '$lib/shared/action-events';
 
 	let { data } = $props();
 
@@ -33,6 +34,27 @@
 
 	function stepScript(step: { result: Record<string, unknown> }) {
 		return typeof step.result.script === 'string' ? step.result.script : '';
+	}
+
+	function getJobStatusTone(status: JobStatus) {
+		switch (status) {
+			case 'succeeded':
+				return 'success';
+			case 'failed':
+			case 'revert_failed':
+				return 'danger';
+			case 'rolling_back':
+			case 'needs_attention':
+				return 'warning';
+			case 'running':
+				return 'running';
+			case 'cancelled':
+			case 'reverted':
+				return 'muted';
+			case 'queued':
+			default:
+				return 'queued';
+		}
 	}
 </script>
 
@@ -66,7 +88,7 @@
 								<span>{job.deviceId ?? 'Site task'}</span>
 							</td>
 							<td>
-								<span class:running={isRunningJob(job)} class="status-pill">{formatJobStatus(job.status)}</span>
+								<span class={`status-pill status-${getJobStatusTone(job.status)}`}>{formatJobStatus(job.status)}</span>
 							</td>
 							<td>
 								<div class="progress-cell">
@@ -98,7 +120,7 @@
 				<div class="detail-summary">
 					<div>
 						<span>Status</span>
-						<strong>{formatJobStatus(selectedJob.status)}</strong>
+						<strong class={`status-value status-${getJobStatusTone(selectedJob.status)}`}>{formatJobStatus(selectedJob.status)}</strong>
 					</div>
 					<div>
 						<span>Progress</span>
@@ -236,10 +258,46 @@
 		background: #fbfdff;
 	}
 
-	.status-pill.running {
+	.status-pill.status-running,
+	.status-value.status-running {
 		border-color: #b9daf8;
 		color: var(--color-link);
 		background: #eef6ff;
+	}
+
+	.status-pill.status-success,
+	.status-value.status-success {
+		border-color: #b7dfc2;
+		color: #237a3b;
+		background: #effaf2;
+	}
+
+	.status-pill.status-danger,
+	.status-value.status-danger {
+		border-color: #efb8b8;
+		color: var(--color-danger);
+		background: #fff2f2;
+	}
+
+	.status-pill.status-warning,
+	.status-value.status-warning {
+		border-color: #e8d391;
+		color: #7a5b12;
+		background: #fff8df;
+	}
+
+	.status-pill.status-muted,
+	.status-value.status-muted {
+		border-color: #d7dde2;
+		color: #606b74;
+		background: #f4f6f8;
+	}
+
+	.status-pill.status-queued,
+	.status-value.status-queued {
+		border-color: #dfe7ed;
+		color: #5f7180;
+		background: #f7fbff;
 	}
 
 	.progress-cell {
@@ -310,6 +368,12 @@
 		color: #7c858d;
 		font-weight: 500;
 		text-align: right;
+	}
+
+	.detail-summary .status-value {
+		border: 1px solid #e2e8ec;
+		border-radius: 4px;
+		padding: 2px 8px;
 	}
 
 	.job-error {

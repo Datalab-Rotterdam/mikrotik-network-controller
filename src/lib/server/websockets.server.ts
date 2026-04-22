@@ -2,6 +2,7 @@ import { websockets } from '@sourceregistry/sveltekit-websockets/server';
 import discoveryService from '$lib/server/services/discovery.service';
 import { listDevices } from '$lib/server/repositories/device.repository';
 import { adoptionEvents } from '$lib/server/services/adoption.service';
+import { deviceEvents } from '$lib/server/services/device-events.service';
 import {
 	getJobWithSteps,
 	listRecentJobsBySite
@@ -13,6 +14,8 @@ import type {
 	ActionEvent,
 	ActionJob,
 	ActionJobStep,
+	DeviceRemovedEvent,
+	DeviceUpdatedEvent,
 	DiscoverySnapshotEvent,
 	JobSnapshotEvent,
 	JobUpdatedEvent
@@ -158,7 +161,11 @@ function broadcastAction(message: ActionEvent): void {
 				return !message.payload.siteId || message.payload.siteId === siteId;
 			}
 
-			if (message.type === 'device.adopted') {
+			if (
+				message.type === 'device.adopted' ||
+				message.type === 'device.updated' ||
+				message.type === 'device.removed'
+			) {
 				return message.payload.siteId === siteId;
 			}
 
@@ -240,6 +247,20 @@ function handleDeviceAdopted(payload: DeviceAdoptedPayload): void {
 	});
 }
 
+function handleDeviceUpdated(payload: DeviceUpdatedEvent['payload']): void {
+	broadcastAction({
+		type: 'device.updated',
+		payload
+	});
+}
+
+function handleDeviceRemoved(payload: DeviceRemovedEvent['payload']): void {
+	broadcastAction({
+		type: 'device.removed',
+		payload
+	});
+}
+
 async function handleSchedulerEvent(detail: { jobId: string }): Promise<void> {
 	const job = await getJobWithSteps(detail.jobId);
 	if (!job) {
@@ -275,6 +296,8 @@ discoveryService.on('neighbor', (neighbor) => {
 	});
 });
 adoptionEvents.on('device.adopted', handleDeviceAdopted);
+deviceEvents.on('device.updated', handleDeviceUpdated);
+deviceEvents.on('device.removed', handleDeviceRemoved);
 
 for (const eventName of [
 	'job:queued',

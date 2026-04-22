@@ -6,6 +6,7 @@ import {
     updateDeviceLastSeen
 } from '$lib/server/repositories/telemetry.repository';
 import {decryptSecret} from '$lib/server/security/secrets';
+import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
 
 export default {
     async list() {
@@ -71,6 +72,7 @@ export default {
             ]);
 
             await updateDeviceLastSeen(device.id);
+            await emitDeviceUpdated(device.id, 'telemetry');
 
             return {
                 id: device.id,

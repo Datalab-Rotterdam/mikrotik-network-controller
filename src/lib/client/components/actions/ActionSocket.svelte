@@ -20,7 +20,9 @@
 		'job.updated',
 		'discovery.snapshot',
 		'discovery.neighbor',
-		'device.adopted'
+		'device.adopted',
+		'device.updated',
+		'device.removed'
 	]);
 	const bus = createActionBus();
 	setContext(ACTION_SOCKET_CONTEXT, bus);

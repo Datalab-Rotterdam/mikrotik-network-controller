@@ -4,14 +4,12 @@
   import Form from "$lib/client/components/Form.svelte";
   import Input from "$lib/client/components/Input.svelte";
   import SidePanel from "$lib/client/components/SidePanel.svelte";
+  import DevicePortLayout from "$lib/client/components/DevicePortLayout.svelte";
   import {
     discoveredDevices,
-    discoverySocketEvent,
     initializeDiscoveryDeviceSnapshot,
-    processDeviceAdopted,
-    processDiscoveryNeighbor,
   } from "$lib/client/stores/discovery-updates";
-  import { devicesState, setDevicesState, setLoading } from "$lib/client/stores/devices";
+  import { setDevicesState, setLoading } from "$lib/client/stores/devices";
   import {
     formatJobStatus,
     getCurrentStep,
@@ -19,7 +17,6 @@
     isRunningJob,
     jobsState,
   } from "$lib/client/stores/jobs";
-  import { get } from "svelte/store";
 
   let { data, form } = $props();
   const basePath = $derived(`/manage/${data.site.id}`);
@@ -71,6 +68,8 @@
       parentDevice: "",
       platform: device.platform,
       adopted: true,
+      adoptionMode: device.adoptionMode,
+      adoptionState: device.adoptionState,
       image: data.deviceImages[device.id],
       interfaces: data.deviceInterfaces[device.id] ?? [],
       details: {
@@ -106,37 +105,15 @@
       deviceImages: data.deviceImages,
     });
 
-    const devicesSubscription = devicesState.subscribe((state) => {
-      if (!state.loading && state.devices.length > 0) {
-        devicesSubscription();
-      }
-    });
-
-    const discoverySubscription = discoverySocketEvent.subscribe((event) => {
-      if (!event) return;
-
-      switch (event.type) {
-        case 'device.adopted':
-          processDeviceAdopted(event.payload);
-          return;
-        case 'discovery.neighbor':
-          processDiscoveryNeighbor(event.payload);
-          return;
-      }
-    });
-
-    return () => {
-      devicesSubscription();
-      discoverySubscription();
-    };
+    return undefined;
   });
 
   const adoptedHosts = $derived(
     new Set(data.devices.map((device) => device.host)),
   );
   const runtimeDiscoveredDevices = $derived(
-    get(discoveredDevices).length
-      ? get(discoveredDevices)
+    $discoveredDevices.length
+      ? $discoveredDevices
       : data.discoveredDevices,
   );
   const discoveredRows = $derived(
@@ -156,6 +133,8 @@
         parentDevice: "",
         platform: device.platform ?? "routeros",
         adopted: false,
+        adoptionMode: "read_only",
+        adoptionState: "discovered",
         image: data.deviceImages[device.id],
         interfaces: [],
         details: {
@@ -186,6 +165,8 @@
       parentDevice: "",
       platform: device.platform,
       adopted: true,
+      adoptionMode: device.adoptionMode,
+      adoptionState: device.adoptionState,
       image: data.deviceImages[device.id],
       interfaces: data.deviceInterfaces[device.id] ?? [],
       details: {
@@ -218,6 +199,13 @@
   );
   const selectedDeviceRunningJobs = $derived(
     selectedDeviceJobs.filter((job) => isRunningJob(job)),
+  );
+  const selectedDeviceProvisioned = $derived(
+    Boolean(
+      selectedDevice?.adopted &&
+        (selectedDevice.adoptionState === "fully_managed" ||
+          selectedDevice.adoptionMode === "managed"),
+    ),
   );
 
   function deviceHref(deviceId: string) {
@@ -532,7 +520,6 @@
         name="password"
         type="password"
         autocomplete="current-password"
-        required
       />
 
       <details class="advanced-settings">
@@ -553,6 +540,12 @@
             required
           />
           <Input label="Site" name="siteName" value={panelSiteName} required />
+          <Input
+            label="Management CIDRs"
+            name="managementCidrs"
+            placeholder="10.10.0.0/16,100.64.0.0/10"
+            value={form?.managementCidrs ?? ""}
+          />
           <label class="field">
             <span>Device OS</span>
             <select name="platform">
@@ -642,6 +635,18 @@
           <img src={selectedDevice.image.src} alt="" width="112" height="76" />
           <h3>{selectedDevice.name}</h3>
           <p>{selectedDevice.model || "MikroTik device"}</p>
+          {#if selectedDevice.adopted}
+            <a
+              class="open-device-page"
+              href={`${basePath}/devices/${selectedDevice.id}`}
+              aria-label={`Open ${selectedDevice.name} full device page`}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path fill="currentColor" d="M5 5h7v2H7v10h10v-5h2v7H5V5Zm9 0h5v5h-2V8.4l-6.3 6.3-1.4-1.4L15.6 7H14V5Z" />
+              </svg>
+              Open full page
+            </a>
+          {/if}
         </div>
 
         <div class="details-card">
@@ -719,7 +724,7 @@
           </div>
         {/if}
 
-        {#if selectedDevice.adopted}
+        {#if selectedDevice.adopted && !selectedDeviceProvisioned}
           <div class="details-card">
             <div class="card-heading">
               <strong>Provisioning</strong>
@@ -780,38 +785,7 @@
               <strong>Interfaces</strong>
               <span>{selectedDevice.interfaces.length}</span>
             </div>
-            {#if selectedDevice.interfaces.length}
-              {#each selectedDevice.interfaces as networkInterface}
-                <div class="interface-block">
-                  <div class="interface-title">
-                    <strong>{networkInterface.name}</strong>
-                    <span class:online={networkInterface.running}>
-                      {networkInterface.disabled
-                        ? "Disabled"
-                        : networkInterface.running
-                          ? "Running"
-                          : "Inactive"}
-                    </span>
-                  </div>
-                  <div class="info-row">
-                    <span>Type</span>
-                    <strong>{networkInterface.type || "-"}</strong>
-                  </div>
-                  <div class="info-row">
-                    <span>MAC Address</span>
-                    <strong>{networkInterface.macAddress || "-"}</strong>
-                  </div>
-                  {#if networkInterface.comment}
-                    <div class="info-row">
-                      <span>Comment</span>
-                      <strong>{networkInterface.comment}</strong>
-                    </div>
-                  {/if}
-                </div>
-              {/each}
-            {:else}
-              <p class="muted">No interfaces collected yet.</p>
-            {/if}
+            <DevicePortLayout model={selectedDevice.model || selectedDevice.name} interfaces={selectedDevice.interfaces} variant="compact" />
           </div>
         {:else}
           <a
@@ -1179,6 +1153,26 @@
     font-size: 13px;
   }
 
+  .open-device-page {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    border: 1px solid #dce4e9;
+    border-radius: 5px;
+    padding: 0 10px;
+    color: var(--color-link);
+    background: var(--color-surface);
+    font-size: 12px;
+    font-weight: 750;
+    text-decoration: none;
+  }
+
+  .open-device-page:hover {
+    border-color: var(--color-link);
+    background: #eef6ff;
+  }
+
   .details-card {
     display: grid;
     gap: 14px;
@@ -1232,8 +1226,7 @@
     overflow-wrap: anywhere;
   }
 
-  .card-heading,
-  .interface-title {
+  .card-heading {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1241,8 +1234,7 @@
     color: #30373d;
   }
 
-  .card-heading span,
-  .interface-title span {
+  .card-heading span {
     color: #9aa3aa;
     font-size: 12px;
   }
@@ -1313,22 +1305,6 @@
   .task-meta {
     color: #8a949c;
     font-size: 12px;
-  }
-
-  .interface-title span.online {
-    color: #1f9d55;
-  }
-
-  .interface-block {
-    display: grid;
-    gap: 11px;
-    border-top: 1px solid #eef1f3;
-    padding-top: 14px;
-  }
-
-  .interface-block:first-of-type {
-    border-top: 0;
-    padding-top: 0;
   }
 
   .muted {

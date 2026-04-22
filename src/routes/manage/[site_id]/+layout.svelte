@@ -1,11 +1,15 @@
 <script lang="ts">
 	import AccountMenu from '$lib/client/components/AccountMenu.svelte';
 	import ActionSocket from '$lib/client/components/actions/ActionSocket.svelte';
+	import LiveDataInvalidator from '$lib/client/components/actions/LiveDataInvalidator.svelte';
 	import SiteSwitcher from '$lib/client/components/SiteSwitcher.svelte';
 	import favicon from '$lib/assets/favicon.svg';
 
 	let { children, data } = $props();
 	const basePath = $derived(`/manage/${data.site.id}`);
+	const isTerminalToolFrame = $derived(
+		data.pathname.startsWith(`${basePath}/devices/`) && data.pathname.endsWith('/terminal')
+	);
 
 	const navItems = $derived([
 		{ href: basePath, label: 'Dashboard', icon: 'M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-11h6V4h-6v5Z' },
@@ -16,10 +20,19 @@
 		{ href: `${basePath}/syslog`, label: 'Syslog', group: 'management', icon: 'M5 3h14v18H5V3Zm3 4h8V5H8v2Zm0 4h8V9H8v2Zm0 4h6v-2H8v2Zm0 4h8v-2H8v2Z' },
 		{ href: `${basePath}/settings`, label: 'Settings', icon: 'M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2h-4l-.4 3a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5A9 9 0 0 0 4.5 12c0 .5 0 1 .1 1.5l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6 1.5l.4 3h4l.4-3a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z' }
 	]);
+
+	function isNavActive(href: string) {
+		return data.pathname === href || (href !== basePath && data.pathname.startsWith(`${href}/`));
+	}
 </script>
 
-{#if data.user}
+{#if data.user && isTerminalToolFrame}
+	<div class="tool-frame">
+		{@render children()}
+	</div>
+{:else if data.user}
 	<ActionSocket siteId={data.site.id}>
+		<LiveDataInvalidator siteId={data.site.id} />
 		<div class="app-shell">
 			<aside class="sidebar-rail">
 				<a class="rail-logo" href={basePath} aria-label={data.site.name}>
@@ -36,7 +49,7 @@
 								href={item.href}
 								aria-label={item.label}
 								title={item.label}
-								aria-current={data.pathname === item.href ? 'page' : undefined}
+								aria-current={isNavActive(item.href) ? 'page' : undefined}
 							>
 								<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
 									<path fill="currentColor" d={item.icon} />
@@ -49,7 +62,7 @@
 								href={item.href}
 								aria-label={item.label}
 								title={item.label}
-								aria-current={data.pathname === item.href ? 'page' : undefined}
+								aria-current={isNavActive(item.href) ? 'page' : undefined}
 							>
 								<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
 									<path fill="currentColor" d={item.icon} />
@@ -76,10 +89,18 @@
 {/if}
 
 <style>
+	.tool-frame {
+		min-width: 320px;
+		min-height: 100vh;
+		padding: 10px;
+		background: #0b1117;
+	}
+
 	.app-shell {
 		display: grid;
 		grid-template-columns: 50px minmax(0, 1fr);
-		min-height: 100vh;
+		height: 100vh;
+		overflow: hidden;
 	}
 
 	.sidebar-rail {
@@ -142,7 +163,11 @@
 	}
 
 	.main {
+		display: grid;
+		grid-template-rows: auto minmax(0, 1fr);
 		min-width: 0;
+		min-height: 0;
+		overflow: hidden;
 		background: var(--color-page);
 	}
 
@@ -160,6 +185,8 @@
 	}
 
 	.content {
+		min-height: 0;
+		overflow-y: auto;
 		padding: 18px 14px;
 	}
 

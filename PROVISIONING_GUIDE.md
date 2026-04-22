@@ -22,19 +22,44 @@ These are used during the initial device enrollment:
 
 ## Provisioning Flow
 
-### 1. Bootstrap Phase
+### 1. Controller-Driven Managed Adoption
+
+When MNDP discovers a RouterOS device and the operator knows initial RouterOS API credentials, the controller can perform managed adoption without pasting a script on the device:
+
+1. **Validation**: Controller validates host, RouterOS platform, real API provider, API port, and optional management CIDRs.
+2. **Inventory**: Controller logs in with the initial credentials and syncs device inventory.
+3. **Controller credential preparation**: Controller creates `.data/controller_ssh` and `.data/controller_ssh.pub` if missing.
+4. **Managed credential setup**: Controller creates:
+   - `controller-rest-group` with API/REST/read/write policy
+   - `controller-rest` with a generated password
+   - `mt-managed` with SSH trust for the controller public key
+5. **Service setup**: Controller enables SSH, HTTPS, API, and API-SSL, applies management CIDR restrictions when supplied, and disables plain HTTP.
+6. **Credential storage**: Controller stores only generated controller credentials and discards the initial password.
+7. **Provisioning**: Controller marks the device fully managed and schedules the provisioning task automatically.
+
+RouterOS API remains enabled in this path because the current controller telemetry/provisioning client uses RouterOS API. Disable API only after the controller has a true REST transport for daily operations.
+
+### 2. Bootstrap Script Fallback
 
 The bootstrap script (see `bootstrap-config.routeros`) handles:
 
-1. **Enrollment**: Device sends enrollment request with serial, model, identity, version
-2. **Approval**: Operator approves device via SvelteKit UI
-3. **Key Exchange**: Device fetches controller SSH public key
-4. **User Creation**: Bootstrap creates:
+1. **Controller credential preparation**: The controller creates `.data/controller_ssh` and `.data/controller_ssh.pub` if they do not already exist.
+2. **Enrollment**: Device sends enrollment request with serial, model, identity, version
+3. **Approval**: Operator approves device via SvelteKit UI
+4. **Key Exchange**: Device fetches controller SSH public key
+5. **User Creation**: Bootstrap creates:
    - `mt-managed` SSH user (trust anchor, full permissions)
    - `controller-rest` REST user (operational, limited permissions)
-5. **Acknowledgment**: Device sends credentials back to controller
+6. **Acknowledgment**: Device sends REST credentials and managed SSH username back to controller
 
-### 2. Managed Phase
+The SSH key pair is generated through `@sourceregistry/node-openssl` and the public key is served in OpenSSH format for RouterOS import. Configure alternative paths with:
+
+```bash
+CONTROLLER_SSH_PRIVATE_KEY=/secure/path/controller_ssh
+CONTROLLER_SSH_PUBLIC_KEY=/secure/path/controller_ssh.pub
+```
+
+### 3. Managed Phase
 
 After bootstrap, use these internal service methods:
 
@@ -53,7 +78,7 @@ import devicesService from '$lib/server/services/devices.service';
 await devicesService.local.provisioning.provision('device-serial-number');
 ```
 
-### 3. Credential Rotation
+### 4. Credential Rotation
 
 For security, periodically rotate REST credentials:
 
@@ -65,10 +90,24 @@ await devicesService.local.credentials.rotateRestSecret('device-serial-number');
 ```
 
 This:
-1. Connects via SSH (using `mt-managed` user)
-2. Updates the `controller-rest` user password
-3. Updates the database with new credentials
-4. Updates device lastSeenAt timestamp
+1. Ensures the controller SSH key pair exists
+2. Connects via SSH (using `mt-managed` user)
+3. Updates the `controller-rest` user password
+4. Updates the database with new credentials
+5. Updates device lastSeenAt timestamp
+
+## Lab Router
+
+The available non-production test router can be adopted with:
+
+```text
+Host: 192.168.1.156
+Username: admin
+Password: admin
+Platform: RouterOS
+```
+
+Use this only for local test runs. Do not reuse these credentials for production devices.
 
 ## Database Schema
 

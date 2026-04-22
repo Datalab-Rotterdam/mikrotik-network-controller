@@ -13,6 +13,7 @@ import {
 } from '$lib/server/repositories/device.repository';
 import { ensureSiteByName } from '$lib/server/repositories/site.repository';
 import { encryptSecret } from '$lib/server/security/secrets';
+import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
 
 export const adoptionEvents = new EventEmitter();
 
@@ -188,13 +189,13 @@ export function assertSupportedAdoptionInventory(input: AdoptDeviceInput, invent
 	}
 }
 
-export async function createCredentialAdoptionAttempt(input: AdoptDeviceInput) {
+export async function createCredentialAdoptionAttempt(input: AdoptDeviceInput, mode: 'read_only' | 'managed' = 'read_only') {
 	const site = await ensureSiteByName(input.siteName || 'Default');
 	const attempt = await createAdoptionAttempt({
 		siteId: site.id,
 		requestedByUserId: input.requestedByUserId,
 		status: 'validating_credentials',
-		mode: 'read_only',
+		mode,
 		host: input.host,
 		username: input.username,
 		startedAt: new Date(),
@@ -260,6 +261,7 @@ export async function upsertAdoptionInventory(input: AdoptDeviceInput, siteId: s
 				disabled: toBoolean(networkInterface.disabled)
 			}))
 	);
+	await emitDeviceUpdated(device.id, 'interfaces');
 
 	return device;
 }
@@ -277,7 +279,10 @@ export async function finishCredentialAdoption(input: AdoptDeviceInput, context:
 	device: Awaited<ReturnType<typeof upsertAdoptionInventory>>;
 	site: Awaited<ReturnType<typeof ensureSiteByName>>;
 	inventory: RouterOSInventory;
+	mode?: 'read_only' | 'managed';
 }): Promise<void> {
+	const mode = context.mode ?? 'read_only';
+
 	await updateAdoptionAttempt(context.attemptId, {
 		deviceId: context.device.id,
 		status: 'succeeded',
@@ -302,8 +307,8 @@ export async function finishCredentialAdoption(input: AdoptDeviceInput, context:
 	await recordAuditEvent({
 		actorUserId: input.requestedByUserId,
 		targetDeviceId: context.device.id,
-		action: 'device.adopted.read_only',
-		message: `${context.inventory.identity} adopted in read-only mode`,
+		action: mode === 'managed' ? 'device.adopted.managed' : 'device.adopted.read_only',
+		message: `${context.inventory.identity} adopted in ${mode === 'managed' ? 'managed' : 'read-only'} mode`,
 		metadata: {
 			host: input.host,
 			site: context.site.name,

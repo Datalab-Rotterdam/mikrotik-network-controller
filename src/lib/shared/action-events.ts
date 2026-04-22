@@ -80,6 +80,28 @@ export type ActionDeviceAdoptedPayload = {
 	timestamp: string;
 };
 
+export type DeviceUpdateReason =
+	| 'adoption'
+	| 'enrollment'
+	| 'provisioning'
+	| 'telemetry'
+	| 'interfaces'
+	| 'credentials'
+	| 'removal';
+
+export type ActionDeviceUpdatedPayload = {
+	siteId: string | null;
+	deviceId: string;
+	reason: DeviceUpdateReason;
+	timestamp: string;
+};
+
+export type ActionDeviceRemovedPayload = {
+	siteId: string | null;
+	deviceId: string;
+	timestamp: string;
+};
+
 export type ActionEventMap = App.ActionEvents;
 export type ActionEventType = keyof ActionEventMap;
 export type ActionEvent = ActionEventMap[ActionEventType];
@@ -88,3 +110,5 @@ export type JobUpdatedEvent = ActionEventMap['job.updated'];
 export type DiscoverySnapshotEvent = ActionEventMap['discovery.snapshot'];
 export type DiscoveryNeighborEvent = ActionEventMap['discovery.neighbor'];
 export type DeviceAdoptedEvent = ActionEventMap['device.adopted'];
+export type DeviceUpdatedEvent = ActionEventMap['device.updated'];
+export type DeviceRemovedEvent = ActionEventMap['device.removed'];

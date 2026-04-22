@@ -4,6 +4,8 @@ import type {DevicesService} from "$lib/server/services/devices.service";
 import type {SchedulerService} from "$lib/server/services/scheduler.service";
 import type {
 	ActionDeviceAdoptedPayload,
+	ActionDeviceRemovedPayload,
+	ActionDeviceUpdatedPayload,
 	ActionDiscoveryDevice,
 	ActionJob
 } from "$lib/shared/action-events";
@@ -53,6 +55,14 @@ declare global {
             'device.adopted': {
                 type: 'device.adopted';
                 payload: ActionDeviceAdoptedPayload;
+            };
+            'device.updated': {
+                type: 'device.updated';
+                payload: ActionDeviceUpdatedPayload;
+            };
+            'device.removed': {
+                type: 'device.removed';
+                payload: ActionDeviceRemovedPayload;
             };
         }
 

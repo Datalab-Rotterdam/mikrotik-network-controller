@@ -3,11 +3,32 @@ import { Service } from '@sourceregistry/sveltekit-service-manager';
 import { getDeviceByHost, updateDeviceLastSeen } from '$lib/server/repositories/telemetry.repository';
 import { replaceCredential, updateDeviceState, upsertAdoptedDevice } from '$lib/server/repositories/device.repository';
 import { encryptSecret } from '$lib/server/security/secrets';
-import { createAdoptCredentialsTask, createPrepareBootstrapTask } from '../tasks';
+import { getControllerSshPublicKey } from '$lib/server/security/controller-ssh-keys';
+import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
+import { createAdoptCredentialsTask, createManagedAdoptCredentialsTask, createPrepareBootstrapTask } from '../tasks';
 
 
 export default {
     async adoptWithCredentials(input: {
+        host: string;
+        username: string;
+        password: string;
+        siteName: string;
+        siteId: string | null;
+        apiPort: number;
+        provider: 'real' | 'mock';
+        platform: 'routeros' | 'switchos';
+        requestedByUserId: string;
+        managementCidrs?: string;
+    }) {
+        const task = await Service('scheduler').schedule(createManagedAdoptCredentialsTask(input));
+
+        return {
+            ok: true,
+            jobId: task.id
+        };
+    },
+    async adoptReadOnlyWithCredentials(input: {
         host: string;
         username: string;
         password: string;
@@ -68,6 +89,7 @@ export default {
             lastSeenAt: new Date(),
             lastSyncAt: existing?.lastSyncAt ? new Date(existing.lastSyncAt) : null
         });
+        await emitDeviceUpdated(stored.id, 'enrollment');
 
         const record: DeviceRecord = {
             id: stored.id,
@@ -104,12 +126,7 @@ export default {
         return { status: 'pending' as const };
     },
     async getControllerPublicKey() {
-        const key = process.env.CONTROLLER_SSH_PUBLIC_KEY;
-        if (!key) {
-            throw new Error('CONTROLLER_SSH_PUBLIC_KEY is not configured');
-        }
-
-        return key;
+        return getControllerSshPublicKey();
     },
     async ack(input: AckInput) {
         const device = await getDeviceByHost(input.serial);
@@ -137,6 +154,7 @@ export default {
             adoptionState: 'fully_managed',
             connectionStatus: 'online'
         });
+        await emitDeviceUpdated(device.id, 'adoption');
 
         return {
             ok: true,
@@ -155,6 +173,7 @@ export default {
             connectionStatus: 'online'
         });
         await updateDeviceLastSeen(device.id);
+        await emitDeviceUpdated(device.id, 'adoption');
 
         return {
             ok: true,

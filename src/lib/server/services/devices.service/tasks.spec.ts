@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
 	updateDeviceLastSeen: vi.fn(),
 	deleteDevice: vi.fn(),
 	replaceCredential: vi.fn(),
+	updateDeviceState: vi.fn(),
+	emitDeviceUpdated: vi.fn(),
+	emitDeviceRemoved: vi.fn(),
 	recordAuditEvent: vi.fn(),
 	updateJob: vi.fn(),
 	createCredentialAdoptionAttempt: vi.fn(),
@@ -17,6 +20,12 @@ const mocks = vi.hoisted(() => ({
 	storeAdoptionReadOnlyCredential: vi.fn(),
 	finishCredentialAdoption: vi.fn(),
 	failCredentialAdoption: vi.fn(),
+	ensureControllerSshKeyPair: vi.fn(),
+	getControllerSshPrivateKeyPath: vi.fn(),
+	schedulerSchedule: vi.fn(),
+	routerOsLogin: vi.fn(),
+	routerOsExecute: vi.fn(),
+	routerOsPrint: vi.fn(),
 	routerOsIdentitySet: vi.fn(),
 	routerOsResourceGet: vi.fn(),
 	routerOsClose: vi.fn(),
@@ -31,7 +40,13 @@ vi.mock('$lib/server/repositories/telemetry.repository', () => ({
 
 vi.mock('$lib/server/repositories/device.repository', () => ({
 	deleteDevice: mocks.deleteDevice,
-	replaceCredential: mocks.replaceCredential
+	replaceCredential: mocks.replaceCredential,
+	updateDeviceState: mocks.updateDeviceState
+}));
+
+vi.mock('$lib/server/services/device-events.service', () => ({
+	emitDeviceUpdated: mocks.emitDeviceUpdated,
+	emitDeviceRemoved: mocks.emitDeviceRemoved
 }));
 
 vi.mock('$lib/server/repositories/audit.repository', () => ({
@@ -45,6 +60,17 @@ vi.mock('$lib/server/repositories/job.repository', () => ({
 vi.mock('$lib/server/security/secrets', () => ({
 	decryptSecret: (value: string) => value,
 	encryptSecret: (value: string) => value
+}));
+
+vi.mock('$lib/server/security/controller-ssh-keys', () => ({
+	ensureControllerSshKeyPair: mocks.ensureControllerSshKeyPair,
+	getControllerSshPrivateKeyPath: mocks.getControllerSshPrivateKeyPath
+}));
+
+vi.mock('@sourceregistry/sveltekit-service-manager', () => ({
+	Service: vi.fn(() => ({
+		schedule: mocks.schedulerSchedule
+	}))
 }));
 
 vi.mock('$lib/server/services/adoption.service', () => ({
@@ -69,6 +95,9 @@ vi.mock('@sourceregistry/mikrotik-client/routeros', () => ({
 					get: mocks.routerOsResourceGet
 				}
 			},
+			login: mocks.routerOsLogin,
+			execute: mocks.routerOsExecute,
+			print: mocks.routerOsPrint,
 			close: mocks.routerOsClose
 		};
 	}),
@@ -81,8 +110,10 @@ vi.mock('@sourceregistry/mikrotik-client/routeros', () => ({
 
 const {
 	createAdoptCredentialsTask,
+	createManagedAdoptCredentialsTask,
 	createPrepareBootstrapTask,
 	createProvisionDeviceTask,
+	createRotateRestSecretTask,
 	createRemoveDeviceTask
 } = await import('./tasks');
 
@@ -170,10 +201,17 @@ function makeReadOnlyCredential() {
 
 beforeEach(() => {
 	vi.clearAllMocks();
-	process.env.CONTROLLER_SSH_PRIVATE_KEY = '/tmp/controller-key';
 	mocks.getDeviceById.mockResolvedValue(makeDevice());
 	mocks.getDeviceCredentials.mockResolvedValue([makeWriteCredential()]);
+	mocks.schedulerSchedule.mockResolvedValue({ id: 'job-provision-1' });
+	mocks.ensureControllerSshKeyPair.mockResolvedValue({
+		privateKeyPath: '/tmp/controller-key',
+		publicKeyPath: '/tmp/controller-key.pub',
+		publicKey: 'ssh-rsa AAAATEST controller@test'
+	});
+	mocks.getControllerSshPrivateKeyPath.mockResolvedValue('/tmp/controller-key');
 	mocks.updateJob.mockResolvedValue({});
+	mocks.updateDeviceState.mockResolvedValue({});
 	mocks.createCredentialAdoptionAttempt.mockResolvedValue({
 		site: { id: 'site-1', name: 'Default' },
 		attempt: { id: 'attempt-1' }
@@ -186,6 +224,16 @@ beforeEach(() => {
 	});
 	mocks.upsertAdoptionInventory.mockResolvedValue(makeDevice());
 	mocks.routerOsIdentitySet.mockResolvedValue(undefined);
+	mocks.routerOsLogin.mockResolvedValue(undefined);
+	mocks.routerOsExecute.mockResolvedValue({ records: [], traps: [], tag: 'tag-1' });
+	mocks.routerOsPrint.mockImplementation((path: string, options?: { queries?: string[] }) => {
+		if (path === '/ip/service') {
+			const name = options?.queries?.[0]?.replace('?name=', '') ?? 'service';
+			return Promise.resolve([{ '.id': `*${name}`, name }]);
+		}
+
+		return Promise.resolve([]);
+	});
 	mocks.routerOsResourceGet.mockResolvedValue({ version: '7.18.2' });
 	mocks.routerOsClose.mockResolvedValue(undefined);
 	mocks.sshExecute.mockResolvedValue({
@@ -247,15 +295,15 @@ describe('createRemoveDeviceTask', () => {
 		expect(mocks.deleteDevice).not.toHaveBeenCalled();
 	});
 
-	it('fails validation when the controller private key is missing', async () => {
-		delete process.env.CONTROLLER_SSH_PRIVATE_KEY;
+	it('fails validation when controller SSH key material cannot be prepared', async () => {
+		mocks.getControllerSshPrivateKeyPath.mockRejectedValue(new Error('openssl unavailable'));
 		const task = createRemoveDeviceTask({
 			deviceId: 'device-1',
 			siteId: 'site-1',
 			requestedByUserId: 'user-1'
 		});
 
-		await expect(task.steps[0].execute(context)).rejects.toThrow('CONTROLLER_SSH_PRIVATE_KEY');
+		await expect(task.steps[0].execute(context)).rejects.toThrow('openssl unavailable');
 		expect(mocks.deleteDevice).not.toHaveBeenCalled();
 	});
 
@@ -367,6 +415,211 @@ describe('createAdoptCredentialsTask', () => {
 	});
 });
 
+describe('createManagedAdoptCredentialsTask', () => {
+	it('fails validation when management CIDRs are invalid', async () => {
+		const payload = {
+			host: '192.0.2.1',
+			username: 'admin',
+			siteName: 'Default',
+			apiPort: 8728,
+			provider: 'real' as const,
+			platform: 'routeros' as const,
+			requestedByUserId: 'user-1',
+			siteId: 'site-1',
+			managementCidrs: 'not-a-cidr'
+		};
+		const task = createManagedAdoptCredentialsTask({
+			...payload,
+			password: 'secret'
+		});
+
+		await expect(task.steps[0].execute(makeStepContext(payload))).rejects.toThrow(
+			'Invalid management CIDR'
+		);
+		expect(mocks.createCredentialAdoptionAttempt).not.toHaveBeenCalled();
+	});
+
+	it('requires RouterOS real API credentials', async () => {
+		const payload = {
+			host: '192.0.2.1',
+			username: 'admin',
+			siteName: 'Default',
+			apiPort: 8728,
+			provider: 'mock' as const,
+			platform: 'routeros' as const,
+			requestedByUserId: 'user-1',
+			siteId: 'site-1'
+		};
+		const task = createManagedAdoptCredentialsTask({
+			...payload,
+			password: 'secret'
+		});
+
+		await expect(task.steps[0].execute(makeStepContext(payload))).rejects.toThrow(
+			'real RouterOS API provider'
+		);
+	});
+
+	it('allows blank initial passwords for factory-default RouterOS adoption', async () => {
+		const payload = {
+			host: '192.0.2.1',
+			username: 'admin',
+			siteName: 'Default',
+			apiPort: 8728,
+			provider: 'real' as const,
+			platform: 'routeros' as const,
+			requestedByUserId: 'user-1',
+			siteId: 'site-1'
+		};
+		const task = createManagedAdoptCredentialsTask({
+			...payload,
+			password: ''
+		});
+
+		await expect(task.steps[0].execute(makeStepContext(payload))).resolves.toEqual(
+			expect.objectContaining({
+				message: 'Managed adoption request is valid'
+			})
+		);
+	});
+
+	it('installs managed credentials, stores generated secrets, and schedules provisioning', async () => {
+		const payload = {
+			host: '192.0.2.1',
+			username: 'admin',
+			siteName: 'Default',
+			apiPort: 8728,
+			provider: 'real' as const,
+			platform: 'routeros' as const,
+			requestedByUserId: 'user-1',
+			siteId: 'site-1',
+			managementCidrs: '10.0.0.0/8,100.64.0.0/10'
+		};
+		const managedContext = makeStepContext(payload);
+		const task = createManagedAdoptCredentialsTask({
+			...payload,
+			password: 'admin'
+		});
+
+		await task.steps[0].execute(managedContext);
+		await task.steps[1].execute(managedContext);
+		await task.steps[2].execute(managedContext);
+		await task.steps[3].execute(managedContext);
+		const provision = await task.steps[4].execute(managedContext);
+
+		expect(mocks.createCredentialAdoptionAttempt).toHaveBeenCalledWith(
+			expect.objectContaining({ host: '192.0.2.1' }),
+			'managed'
+		);
+		expect(mocks.routerOsExecute).toHaveBeenCalledWith('/user/group/add', {
+			attributes: expect.objectContaining({
+				name: 'controller-rest-group',
+				policy: expect.stringContaining('api')
+			})
+		});
+		expect(mocks.routerOsExecute).toHaveBeenCalledWith('/file/add', {
+			attributes: {
+				name: 'controller-managed.pub',
+				contents: 'ssh-rsa AAAATEST controller@test'
+			}
+		});
+		expect(mocks.routerOsExecute).toHaveBeenCalledWith('/user/add', {
+			attributes: expect.objectContaining({
+				name: 'mt-managed',
+				group: 'full',
+				password: expect.any(String)
+			})
+		});
+		expect(mocks.routerOsExecute).toHaveBeenCalledWith('/user/ssh-keys/import', {
+			attributes: {
+				user: 'mt-managed',
+				'public-key-file': 'controller-managed.pub'
+			}
+		});
+		expect(mocks.routerOsExecute).toHaveBeenCalledWith('/ip/service/set', {
+			attributes: expect.objectContaining({
+				'.id': '*api',
+				disabled: false,
+				address: '10.0.0.0/8,100.64.0.0/10'
+			})
+		});
+		expect(mocks.replaceCredential).toHaveBeenCalledWith(
+			expect.objectContaining({
+				deviceId: 'device-1',
+				purpose: 'read_only',
+				username: 'controller-rest'
+			})
+		);
+		expect(mocks.replaceCredential).toHaveBeenCalledWith({
+			deviceId: 'device-1',
+			purpose: 'write',
+			username: 'mt-managed',
+			secretEncrypted: 'ssh-key:controller'
+		});
+		expect(mocks.updateDeviceState).toHaveBeenCalledWith('device-1', {
+			adoptionMode: 'managed',
+			adoptionState: 'fully_managed',
+			connectionStatus: 'online'
+		});
+		expect(mocks.schedulerSchedule).toHaveBeenCalledWith(
+			expect.objectContaining({
+				name: 'devices.provision',
+				deviceId: 'device-1'
+			})
+		);
+		expect(mocks.finishCredentialAdoption).toHaveBeenCalledWith(
+			expect.objectContaining({ host: '192.0.2.1' }),
+			expect.objectContaining({
+				attemptId: 'attempt-1',
+				mode: 'managed'
+			})
+		);
+		expect(provision).toEqual(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					provisioningJobId: 'job-provision-1'
+				})
+			})
+		);
+		expect(mocks.replaceCredential).not.toHaveBeenCalledWith(
+			expect.objectContaining({
+				username: 'admin',
+				secretEncrypted: 'admin'
+			})
+		);
+	});
+
+	it('records adoption failure when router-side managed setup fails', async () => {
+		mocks.routerOsExecute.mockRejectedValueOnce(new Error('not enough permissions'));
+		const payload = {
+			host: '192.0.2.1',
+			username: 'admin',
+			siteName: 'Default',
+			apiPort: 8728,
+			provider: 'real' as const,
+			platform: 'routeros' as const,
+			requestedByUserId: 'user-1',
+			siteId: 'site-1'
+		};
+		const managedContext = makeStepContext(payload);
+		const task = createManagedAdoptCredentialsTask({
+			...payload,
+			password: 'admin'
+		});
+
+		await task.steps[0].execute(managedContext);
+		await task.steps[1].execute(managedContext);
+		await expect(task.steps[2].execute(managedContext)).rejects.toThrow('not enough permissions');
+
+		expect(mocks.failCredentialAdoption).toHaveBeenCalledWith(
+			expect.objectContaining({ host: '192.0.2.1' }),
+			'attempt-1',
+			expect.any(Error)
+		);
+		expect(mocks.schedulerSchedule).not.toHaveBeenCalled();
+	});
+});
+
 describe('createPrepareBootstrapTask', () => {
 	it('generates a RouterOS bootstrap script as a task result', async () => {
 		const payload = {
@@ -392,7 +645,8 @@ describe('createPrepareBootstrapTask', () => {
 				data: expect.objectContaining({
 					enrollUrl: 'https://controller.example.test/api/v1/services/devices/enroll',
 					publicKeyUrl: 'https://controller.example.test/api/v1/services/devices/bootstrap/controller.pub',
-					ackUrl: 'https://controller.example.test/api/v1/services/devices/bootstrap/ack'
+					ackUrl: 'https://controller.example.test/api/v1/services/devices/bootstrap/ack',
+					publicKeyPath: '/tmp/controller-key.pub'
 				})
 			})
 		);
@@ -403,5 +657,18 @@ describe('createPrepareBootstrapTask', () => {
 				})
 			})
 		);
+	});
+});
+
+describe('createRotateRestSecretTask', () => {
+	it('uses prepared controller SSH key material for rotation', async () => {
+		mocks.getDeviceCredentials.mockResolvedValue([makeReadOnlyCredential(), makeWriteCredential()]);
+		const task = createRotateRestSecretTask('device-1');
+
+		await task.steps[0].execute(makeStepContext({ deviceId: 'device-1' }));
+		await task.steps[1].execute(makeStepContext({ deviceId: 'device-1' }));
+
+		expect(mocks.getControllerSshPrivateKeyPath).toHaveBeenCalled();
+		expect(mocks.sshExecute).toHaveBeenCalledWith(expect.stringContaining('/user set'));
 	});
 });

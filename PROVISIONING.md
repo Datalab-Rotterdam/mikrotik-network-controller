@@ -4,7 +4,32 @@ This document explains what script you need to run on your MikroTik router to en
 
 ## Quick Start
 
-If your router is **brand new** and accessible via WinBox/SSH, run this minimal script:
+For managed provisioning, the preferred flow is controller-driven adoption from an MNDP-discovered RouterOS device:
+
+1. Open the discovered router from the Devices page.
+2. Enter the initial RouterOS API credentials, for example the factory or lab credentials.
+3. Optionally set Management CIDRs in Advanced settings.
+4. Click Adopt.
+
+The controller uses those credentials once to create its managed access, stores only generated controller credentials, and automatically schedules provisioning. The initial password is not stored.
+
+The script-based bootstrap flow is still available as a fallback. Both managed flows create the credentials the controller needs:
+
+- a generated controller SSH key pair in `.data/controller_ssh` and `.data/controller_ssh.pub`
+- an `mt-managed` RouterOS user that trusts the controller public key
+- a random `controller-rest` REST password that is acknowledged back to the controller
+
+For the fallback script flow, prepare the bootstrap script from the device adoption panel, approve the discovered device, then run the generated RouterOS script on the router. The `/bootstrap/controller.pub` endpoint generates the controller key pair automatically if it does not exist yet.
+
+For a local lab router, the current test target is:
+
+```text
+Host: 192.168.1.156
+Username: admin
+Password: admin
+```
+
+If your router is **brand new** and accessible via WinBox/SSH, this older minimal script enables basic read-only adoption:
 
 ```routeros
 /ip service
@@ -22,7 +47,7 @@ add chain=input protocol=tcp dst-port=22 action=accept
 
 ## What This Script Does
 
-The provisioning script enables:
+The legacy provisioning script enables:
 
 1. **API Service** - Allows the controller to connect via RouterOS API (port 8728)
 2. **SSH** - For remote command-line access (port 22)
@@ -73,10 +98,17 @@ The controller can generate customized scripts based on your needs:
 
 ## After Running the Script
 
-1. The router will log: `Provisioning complete`
-2. API service will be available on port 8728
-3. You can now adopt the router in the controller UI
-4. Use credentials: `controller` / `controller-password` (or your custom password)
+For bootstrap provisioning:
+
+1. The router enrolls with the controller and waits until approved.
+2. The router fetches the controller SSH public key and imports it for `mt-managed`.
+3. The router creates or updates `controller-rest` with a generated password.
+4. The router posts the REST username/password and managed SSH username back to the controller.
+5. The controller stores the credentials encrypted and can provision or rotate REST credentials later.
+
+For controller-driven MNDP adoption, these same managed credentials are installed directly over RouterOS API and the provisioning task is queued automatically after credential setup succeeds.
+
+For the legacy script, API service is available on port 8728 and you can adopt with `controller` / `controller-password` unless customized.
 
 ## Troubleshooting
 
@@ -84,6 +116,7 @@ The controller can generate customized scripts based on your needs:
 - Check firewall: `/ip firewall filter print`
 - Verify API service: `/ip service print`
 - Ensure no conflicting firewall rules
+- Controller-driven MNDP adoption requires API/API-SSL to be reachable before adoption starts
 
 **User authentication failed?**
 - Verify user exists: `/user print`
@@ -95,10 +128,11 @@ The controller can generate customized scripts based on your needs:
 
 ## Security Recommendations
 
-1. Change the default `controller` password
-2. Restrict firewall rules to specific controller IP
-3. Use API-SSL (port 8729) for encrypted connections
-4. Consider using specific interface bindings
+1. Keep `.data/controller_ssh` private and do not commit it.
+2. Set a strong `CONTROLLER_SECRET` before storing production credentials.
+3. Restrict management CIDRs to the controller network.
+4. Use HTTPS/REST for day-to-day controller traffic and SSH only for credential rotation/recovery.
+5. Rotate REST credentials after initial adoption.
 
 ## Customizing the Script
 
