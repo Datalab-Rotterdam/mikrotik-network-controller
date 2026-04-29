@@ -43,6 +43,48 @@
       "when": 1776802866487,
       "tag": "0005_serious_clint_barton",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777368226705,
+      "tag": "0006_even_mercury",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777369037191,
+      "tag": "0007_famous_blindfold",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777377734132,
+      "tag": "0008_bright_nehzno",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777378914256,
+      "tag": "0009_huge_butterfly",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777403217572,
+      "tag": "0010_quick_genesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777403593962,
+      "tag": "0011_material_spitfire",
+      "breakpoints": true
     }
   ]
 }

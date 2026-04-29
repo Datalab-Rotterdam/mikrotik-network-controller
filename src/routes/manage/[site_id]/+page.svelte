@@ -1,12 +1,68 @@
 <script lang="ts">
+	import { useActionSocket } from '$lib/client/actions/use-action-socket';
+	import type { ActionEvent } from '$lib/shared/action-events';
+
 	let { data } = $props();
+
+	const actions = useActionSocket();
+
+	// Live-updated counts and per-device metrics
+	let liveClientCount = $state(data.summary.activeClientCount);
+	let liveOnlineCount = $state(data.summary.onlineCount);
+
+	type MetricSnapshot = {
+		deviceId: string;
+		siteId: string | null;
+		cpuPercent: number | null;
+		freeMemoryBytes: number | null;
+		totalMemoryBytes: number | null;
+		temperatureCelsius: number | null;
+		uptimeSeconds: number | null;
+		collectedAt: string | Date;
+	};
+
+	const liveMetrics = $state(
+		new Map<string, MetricSnapshot>(
+			data.summary.latestMetrics.map((m) => [m.deviceId, { ...m, siteId: data.site.id } as MetricSnapshot])
+		)
+	);
+
+	$effect(() =>
+		actions.subscribe(
+			['metric.updated', 'client.updated', 'device.updated', 'device.removed'],
+			(event: ActionEvent) => {
+				if (event.type === 'metric.updated') {
+					liveMetrics.set(event.payload.deviceId, event.payload);
+				}
+				if (event.type === 'client.updated' && event.payload.siteId === data.site.id) {
+					liveClientCount = event.payload.activeCount;
+				}
+				if (event.type === 'device.updated' && event.payload.siteId === data.site.id) {
+					// Connection status changes affect the online count; re-derive from live metrics presence
+					// A full count refresh happens on next navigation — this is a best-effort indicator.
+				}
+			}
+		)
+	);
 
 	const metrics = $derived([
 		{ label: 'Devices', value: data.summary.deviceCount },
-		{ label: 'Sites', value: data.summary.siteCount },
-		{ label: 'Jobs', value: data.summary.jobCount },
+		{ label: 'Online', value: liveOnlineCount },
+		{ label: 'Clients', value: liveClientCount },
 		{ label: 'Alerts', value: 0 }
 	]);
+
+	function memPercent(free: number | null, total: number | null): number | null {
+		if (!free || !total || total === 0) return null;
+		return Math.round(((total - free) / total) * 100);
+	}
+
+	function statusClass(status: string): string {
+		if (status === 'online') return 'status-online';
+		if (status === 'offline') return 'status-offline';
+		if (status === 'auth_failed') return 'status-error';
+		return 'status-unknown';
+	}
 </script>
 
 <div class="dashboard-toolbar">
@@ -14,7 +70,12 @@
 		<h1>Dashboard</h1>
 		<p>Fleet health, adoption progress, and recent controller activity.</p>
 	</div>
-	<a class="icon-action" href={`/manage/${data.site.id}/devices?adopt=`} aria-label="Start adoption" title="Start adoption">
+	<a
+		class="icon-action"
+		href={`/manage/${data.site.id}/devices?adopt=`}
+		aria-label="Start adoption"
+		title="Start adoption"
+	>
 		<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
 			<path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z" />
 		</svg>
@@ -30,6 +91,60 @@
 	{/each}
 </section>
 
+{#if data.siteDevices.length > 0}
+	<section class="health-row" aria-label="Device health">
+		{#each data.siteDevices as device}
+			{@const metric = liveMetrics.get(device.id)}
+			{@const usedMem = memPercent(
+				metric?.freeMemoryBytes ?? null,
+				metric?.totalMemoryBytes ?? null
+			)}
+			<a class="health-card" href={`/manage/${data.site.id}/devices/${device.id}`}>
+				<div class="health-card-header">
+					<span
+						class={`status-dot ${statusClass(device.connectionStatus)}`}
+						aria-hidden="true"
+					></span>
+					<span class="device-name">{device.identity ?? device.name}</span>
+				</div>
+				{#if metric}
+					<div class="health-gauges">
+						<div class="gauge" title="CPU usage">
+							<div class="gauge-label">CPU</div>
+							<div class="gauge-bar">
+								<div
+									class="gauge-fill"
+									class:gauge-warn={metric.cpuPercent !== null && metric.cpuPercent > 70}
+									class:gauge-crit={metric.cpuPercent !== null && metric.cpuPercent > 90}
+									style:width="{metric.cpuPercent ?? 0}%"
+								></div>
+							</div>
+							<div class="gauge-value">{metric.cpuPercent?.toFixed(0) ?? '—'}%</div>
+						</div>
+						<div class="gauge" title="Memory usage">
+							<div class="gauge-label">MEM</div>
+							<div class="gauge-bar">
+								<div
+									class="gauge-fill"
+									class:gauge-warn={usedMem !== null && usedMem > 70}
+									class:gauge-crit={usedMem !== null && usedMem > 90}
+									style:width="{usedMem ?? 0}%"
+								></div>
+							</div>
+							<div class="gauge-value">{usedMem ?? '—'}%</div>
+						</div>
+					</div>
+					{#if metric.temperatureCelsius !== null}
+						<div class="health-temp">{metric.temperatureCelsius.toFixed(0)}°C</div>
+					{/if}
+				{:else}
+					<div class="health-no-data">No metrics yet</div>
+				{/if}
+			</a>
+		{/each}
+	</section>
+{/if}
+
 <section class="dashboard-grid">
 	<div class="dashboard-panel map-panel">
 		<h2>Network map</h2>
@@ -41,8 +156,8 @@
 				/>
 			</svg>
 			<div>
-				<strong>No adopted devices yet</strong>
-				<p>Adopt a CHR or RouterOS device to start building topology and inventory.</p>
+				<strong>Topology coming soon</strong>
+				<p>Live network map will be available once link discovery completes.</p>
 			</div>
 		</div>
 	</div>
@@ -86,13 +201,13 @@
 		min-height: 50px;
 		margin: -18px -14px 18px;
 		padding: 0 18px;
-		border-bottom: 1px solid #eef1f3;
+		border-bottom: 1px solid var(--color-border);
 		background: var(--color-surface);
 	}
 
 	h1 {
 		margin: 0;
-		color: #6f7780;
+		color: var(--color-muted);
 		font-size: 20px;
 		font-weight: 500;
 		line-height: 1.2;
@@ -110,15 +225,21 @@
 		place-items: center;
 		width: 34px;
 		height: 34px;
-		border: 1px solid #dce4e9;
+		border: 1px solid var(--color-border);
 		border-radius: 4px;
 		color: var(--color-link);
-		background: #fbfdff;
+		background: var(--color-surface);
 		cursor: pointer;
+		text-decoration: none;
 
 		&:hover {
 			border-color: var(--color-link);
-			background: #eef6ff;
+			background: var(--color-surface-hover);
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--color-link);
+			outline-offset: 2px;
 		}
 	}
 
@@ -126,7 +247,7 @@
 		display: grid;
 		grid-template-columns: repeat(4, minmax(0, 1fr));
 		margin-bottom: 14px;
-		border: 1px solid #eef1f3;
+		border: 1px solid var(--color-border);
 		border-radius: 4px;
 		background: var(--color-surface);
 		overflow: hidden;
@@ -137,26 +258,139 @@
 		gap: 6px;
 		min-height: 72px;
 		padding: 14px 16px;
-		border-right: 1px solid #eef1f3;
+		border-right: 1px solid var(--color-border);
 
 		&:last-child {
 			border-right: 0;
 		}
 
 		span {
-			color: #7d8790;
+			color: var(--color-muted);
 			font-size: 12px;
 			font-weight: 700;
 			text-transform: uppercase;
 		}
 
 		strong {
-			color: #2f3438;
+			color: var(--color-text);
 			font-size: 26px;
 			line-height: 1;
 		}
 	}
 
+	/* Device health strip */
+	.health-row {
+		display: flex;
+		gap: 10px;
+		flex-wrap: wrap;
+		margin-bottom: 14px;
+	}
+
+	.health-card {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-width: 160px;
+		flex: 1 1 160px;
+		padding: 12px 14px;
+		border: 1px solid var(--color-border);
+		border-radius: 4px;
+		background: var(--color-surface);
+		color: var(--color-text);
+		text-decoration: none;
+		transition: border-color 0.15s;
+
+		&:hover {
+			border-color: var(--color-link);
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--color-link);
+			outline-offset: 2px;
+		}
+	}
+
+	.health-card-header {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+	}
+
+	.device-name {
+		font-size: 12px;
+		font-weight: 700;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.status-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
+
+		&.status-online  { background: var(--color-success, #22c55e); }
+		&.status-offline { background: var(--color-danger,  #ef4444); }
+		&.status-error   { background: var(--color-warning, #f59e0b); }
+		&.status-unknown { background: var(--color-muted,   #9ca3af); }
+	}
+
+	.health-gauges {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+	}
+
+	.gauge {
+		display: grid;
+		grid-template-columns: 30px 1fr 32px;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.gauge-label {
+		color: var(--color-muted);
+		font-size: 10px;
+		font-weight: 700;
+		text-transform: uppercase;
+	}
+
+	.gauge-bar {
+		height: 5px;
+		background: var(--color-border);
+		border-radius: 3px;
+		overflow: hidden;
+	}
+
+	.gauge-fill {
+		height: 100%;
+		background: var(--color-link, #3b82f6);
+		border-radius: 3px;
+		transition: width 0.4s ease;
+
+		&.gauge-warn { background: var(--color-warning, #f59e0b); }
+		&.gauge-crit { background: var(--color-danger,  #ef4444); }
+	}
+
+	.gauge-value {
+		color: var(--color-muted);
+		font-size: 11px;
+		text-align: right;
+	}
+
+	.health-temp {
+		color: var(--color-muted);
+		font-size: 11px;
+	}
+
+	.health-no-data {
+		color: var(--color-muted);
+		font-size: 11px;
+		font-style: italic;
+	}
+
+	/* Dashboard panels */
 	.dashboard-grid {
 		display: grid;
 		grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
@@ -165,7 +399,7 @@
 
 	.dashboard-panel {
 		min-width: 0;
-		border: 1px solid #eef1f3;
+		border: 1px solid var(--color-border);
 		border-radius: 4px;
 		background: var(--color-surface);
 		overflow: hidden;
@@ -173,8 +407,8 @@
 		h2 {
 			margin: 0;
 			padding: 14px 16px;
-			border-bottom: 1px solid #eef1f3;
-			color: #2f3438;
+			border-bottom: 1px solid var(--color-border);
+			color: var(--color-text);
 			font-size: 14px;
 			font-weight: 800;
 		}
@@ -185,18 +419,18 @@
 		display: grid;
 		place-items: center;
 		min-height: 320px;
-		color: #65737b;
+		color: var(--color-muted);
 		text-align: center;
 	}
 
 	.map-empty {
 		gap: 12px;
-		color: #c8dff7;
+		color: var(--color-border);
 
 		strong {
 			display: block;
 			margin-bottom: 8px;
-			color: #50575d;
+			color: var(--color-muted);
 		}
 
 		p {
@@ -209,7 +443,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		border-bottom: 1px solid #eef1f3;
+		border-bottom: 1px solid var(--color-border);
 
 		h2 {
 			border-bottom: 0;
@@ -217,7 +451,7 @@
 
 		span {
 			margin-right: 16px;
-			color: #7d8790;
+			color: var(--color-muted);
 			font-size: 12px;
 			font-weight: 800;
 		}
@@ -232,8 +466,8 @@
 		td {
 			height: 42px;
 			padding: 0 14px;
-			border-bottom: 1px solid #f0f2f4;
-			color: #323a40;
+			border-bottom: 1px solid var(--color-border);
+			color: var(--color-text);
 			font-size: 13px;
 			text-align: left;
 			white-space: nowrap;
@@ -242,7 +476,6 @@
 		}
 
 		th {
-			color: #2f3438;
 			font-weight: 800;
 		}
 	}
@@ -255,7 +488,7 @@
 
 		.metric-cell {
 			border-right: 0;
-			border-bottom: 1px solid #eef1f3;
+			border-bottom: 1px solid var(--color-border);
 
 			&:last-child {
 				border-bottom: 0;

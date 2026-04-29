@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { RouterOSClient, RouterOSSshClient } from '@sourceregistry/mikrotik-client/routeros';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
+import { runExportBackup } from '$lib/server/services/backup.service';
 import type { TaskDefinition } from '$lib/server/services/scheduler.service/types';
 import { getDeviceById, getDeviceCredentials, updateDeviceLastSeen } from '$lib/server/repositories/telemetry.repository';
 import { deleteDevice, replaceCredential, updateDeviceState } from '$lib/server/repositories/device.repository';
@@ -22,6 +23,69 @@ import {
 	upsertAdoptionInventory
 } from '$lib/server/services/adoption.service';
 import { generateBootstrapScript } from '$lib/server/services/router-provisioning.service';
+import { deployConfig, type DeployVariableValues } from '$lib/server/services/config-deploy.service';
+import { createDeployment } from '$lib/server/repositories/templates.repository';
+
+export function createBackupDeviceTask(deviceId: string, siteId?: string): TaskDefinition<{ deviceId: string }> {
+	return {
+		name: 'devices.backup',
+		deviceId,
+		siteId: siteId ?? null,
+		payload: { deviceId },
+		failurePolicy: 'stop',
+		steps: [
+			{
+				name: 'Export running configuration',
+				async execute({ jobId }) {
+					const backupId = await runExportBackup(deviceId, jobId);
+					return { message: 'Export backup saved', data: { backupId } };
+				}
+			}
+		]
+	};
+}
+
+export function createConfigDeployTask(input: {
+	deviceId: string;
+	templateId: string;
+	variableValues: DeployVariableValues;
+	siteId?: string;
+}): TaskDefinition<{ deviceId: string; templateId: string; variableValues: DeployVariableValues }> {
+	const { deviceId, templateId, variableValues, siteId } = input;
+
+	return {
+		name: 'config.deploy',
+		deviceId,
+		siteId: siteId ?? null,
+		payload: { deviceId, templateId, variableValues },
+		failurePolicy: 'stop',
+		steps: [
+			{
+				name: 'Render & validate template',
+				async execute() {
+					const result = await deployConfig({
+						templateId,
+						deviceId,
+						variableValues,
+						mode: 'apply'
+					});
+
+					if (result.mode === 'dry-run') {
+						throw new Error('Expected apply mode result');
+					}
+
+					return {
+						message: `Config deployed to device via ${result.steps.length} steps`,
+						data: {
+							deploymentId: result.deploymentId,
+							steps: result.steps
+						}
+					};
+				}
+			}
+		]
+	};
+}
 
 const MANAGED_USER = 'mt-managed';
 const REST_GROUP = 'controller-rest-group';
@@ -240,7 +304,6 @@ export function createAdoptCredentialsTask(input: AdoptDeviceInput & { siteId: s
 	username: string;
 	siteName: string;
 	apiPort: number;
-	provider: 'real' | 'mock';
 	platform: 'routeros' | 'switchos';
 	requestedByUserId: string;
 	siteId: string | null;
@@ -265,7 +328,6 @@ export function createAdoptCredentialsTask(input: AdoptDeviceInput & { siteId: s
 			username: input.username,
 			siteName: input.siteName,
 			apiPort: input.apiPort,
-			provider: input.provider,
 			platform: input.platform,
 			requestedByUserId: input.requestedByUserId,
 			siteId: input.siteId
@@ -285,10 +347,6 @@ export function createAdoptCredentialsTask(input: AdoptDeviceInput & { siteId: s
 						throw new Error('Unknown device platform');
 					}
 
-					if (input.provider !== 'real' && input.provider !== 'mock') {
-						throw new Error('Unknown adoption provider');
-					}
-
 					const created = await createCredentialAdoptionAttempt(input);
 					attempt = created.attempt;
 					site = created.site;
@@ -297,8 +355,7 @@ export function createAdoptCredentialsTask(input: AdoptDeviceInput & { siteId: s
 						message: 'Adoption request is valid',
 						data: {
 							host: input.host,
-							platform: input.platform,
-							provider: input.provider
+							platform: input.platform
 						}
 					};
 				}
@@ -336,7 +393,7 @@ export function createAdoptCredentialsTask(input: AdoptDeviceInput & { siteId: s
 							throw new Error('Credential validation did not complete');
 						}
 
-						await markCredentialAdoptionSyncing(attempt.id, input.provider);
+						await markCredentialAdoptionSyncing(attempt.id);
 						device = await upsertAdoptionInventory(input, site.id, inventory);
 						await updateJob(context.jobId, { deviceId: device.id });
 
@@ -500,7 +557,6 @@ export function createManagedAdoptCredentialsTask(input: AdoptDeviceInput & {
 	username: string;
 	siteName: string;
 	apiPort: number;
-	provider: 'real' | 'mock';
 	platform: 'routeros' | 'switchos';
 	requestedByUserId: string;
 	siteId: string | null;
@@ -529,7 +585,6 @@ export function createManagedAdoptCredentialsTask(input: AdoptDeviceInput & {
 			username: input.username,
 			siteName: input.siteName,
 			apiPort: input.apiPort,
-			provider: input.provider,
 			platform: input.platform,
 			requestedByUserId: input.requestedByUserId,
 			siteId: input.siteId,
@@ -548,10 +603,6 @@ export function createManagedAdoptCredentialsTask(input: AdoptDeviceInput & {
 
 					if (input.platform !== 'routeros') {
 						throw new Error('Managed adoption requires a RouterOS device');
-					}
-
-					if (input.provider !== 'real') {
-						throw new Error('Managed adoption requires the real RouterOS API provider');
 					}
 
 					managementCidrs = normalizeManagementCidrs(input.managementCidrs);
@@ -580,7 +631,7 @@ export function createManagedAdoptCredentialsTask(input: AdoptDeviceInput & {
 
 						inventory = await readAdoptionInventory(input);
 						assertSupportedAdoptionInventory(input, inventory);
-						await markCredentialAdoptionSyncing(attempt.id, input.provider);
+						await markCredentialAdoptionSyncing(attempt.id);
 						device = await upsertAdoptionInventory(input, site.id, inventory);
 						await updateJob(context.jobId, { deviceId: device.id });
 

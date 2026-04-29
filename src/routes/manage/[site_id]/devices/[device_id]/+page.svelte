@@ -8,11 +8,13 @@
     jobsState,
     setJobsSnapshot,
   } from "$lib/client/stores/jobs";
+  import { enhance } from "$app/forms";
   import DevicePortLayout from "$lib/client/components/DevicePortLayout.svelte";
   import TabLayout from "$lib/client/components/TabLayout.svelte";
+  import TrafficSparkline from "$lib/client/components/TrafficSparkline.svelte";
   import type { JobStatus } from "$lib/shared/action-events";
 
-  type DeviceTab = "overview" | "activity" | "advanced";
+  type DeviceTab = "overview" | "activity" | "backups" | "advanced";
   type TabItem<T extends string = string> = {
     id: T;
     label: string;
@@ -43,6 +45,11 @@
       id: "activity",
       label: "Activity",
       icon: "M5 19h14v2H5v-2Zm1-8h3v6H6v-6Zm5-8h3v14h-3V3Zm5 5h3v9h-3V8Z",
+    },
+    {
+      id: "backups",
+      label: "Backups",
+      icon: "M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2Zm1 14.93V17h-2v-.07A6 6 0 0 1 6.07 11H7v2h-.93A4 4 0 0 0 11 16.93V16h2v.93A4 4 0 0 0 16.93 13H17v-2h.93A6 6 0 0 1 13 16.93ZM12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z",
     },
     {
       id: "advanced",
@@ -335,6 +342,70 @@
           </table>
         </div>
       </section>
+
+      {#if Object.keys(data.ifaceTraffic).length > 0}
+        <section class="content-section">
+          <div class="section-heading">
+            <h2>Traffic</h2>
+            <span>Last hour · <span class="legend-rx-label">↓ RX</span> <span class="legend-tx-label">↑ TX</span></span>
+          </div>
+          <div class="traffic-grid">
+            {#each Object.entries(data.ifaceTraffic) as [name, samples]}
+              <div class="traffic-card">
+                <div class="traffic-card-name">{name}</div>
+                <TrafficSparkline {samples} width={180} height={44} />
+              </div>
+            {/each}
+          </div>
+        </section>
+      {/if}
+      {#if data.device.platform === "routeros"}
+        <section class="content-section">
+          <div class="section-heading">
+            <h2>Firmware</h2>
+            {#if data.firmware?.checkedAt}
+              <span>Checked {formatDate(data.firmware.checkedAt)}</span>
+            {:else}
+              <span>Not checked yet</span>
+            {/if}
+          </div>
+          <div class="info-grid">
+            <div class="info-row">
+              <span>Installed version</span>
+              <strong>{data.firmware?.currentVersion ?? data.device.routerOsVersion ?? "—"}</strong>
+            </div>
+            <div class="info-row">
+              <span>Latest ({data.firmware?.channel ?? "stable"})</span>
+              <strong>{data.firmware?.latestVersion ?? "—"}</strong>
+            </div>
+            <div class="info-row">
+              <span>Status</span>
+              <strong>
+                {#if !data.firmware}
+                  <span class="status-pill">Unknown</span>
+                {:else if data.firmware.updateAvailable}
+                  <span class="status-pill status-warning">Update available</span>
+                {:else}
+                  <span class="status-pill status-success">Up to date</span>
+                {/if}
+              </strong>
+            </div>
+          </div>
+          <div class="fw-detail-actions">
+            <form method="POST" action="?/firmwareCheck" use:enhance>
+              <button type="submit" class="action-link">Check for updates</button>
+            </form>
+            {#if data.firmware?.updateAvailable}
+              <form method="POST" action="?/firmwareUpgrade" use:enhance>
+                <button type="submit" class="action-link action-link-warning"
+                  onclick={(e) => { if (!confirm(`Upgrade to ${data.firmware?.latestVersion}? Device will reboot.`)) e.preventDefault(); }}>
+                  Upgrade to {data.firmware.latestVersion}
+                </button>
+              </form>
+            {/if}
+          </div>
+        </section>
+      {/if}
     {:else if activeTab === "activity"}
       <section class="content-section">
         <div class="section-heading">
@@ -362,6 +433,41 @@
           </div>
         {:else}
           <div class="empty-state">No jobs have run for this device yet.</div>
+        {/if}
+      </section>
+    {:else if activeTab === "backups"}
+      <section class="content-section">
+        <div class="section-heading">
+          <h2>Backups</h2>
+          <form method="POST" action="?/backup" use:enhance>
+            <button type="submit" class="action-link">+ Run backup now</button>
+          </form>
+        </div>
+        {#if data.backups.length === 0}
+          <div class="empty-state">No backups yet. Click "Run backup now" to create one.</div>
+        {:else}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Kind</th>
+                  <th>Size</th>
+                  <th>Checksum</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each data.backups as backup}
+                  <tr>
+                    <td>{formatDate(backup.collectedAt)}</td>
+                    <td>{backup.kind}</td>
+                    <td>{backup.sizeBytes ? `${(backup.sizeBytes / 1024).toFixed(1)} KB` : '—'}</td>
+                    <td class="mono-cell">{backup.sha256 ? backup.sha256.slice(0, 12) + '…' : '—'}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
         {/if}
       </section>
     {:else if activeTab === "advanced"}
@@ -839,6 +945,46 @@
     background: #fff8f8;
   }
 
+  .mono-cell {
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    color: #8a949c;
+  }
+
+  .action-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    border: 1px solid var(--color-brand);
+    border-radius: 4px;
+    padding: 0 10px;
+    color: var(--color-brand);
+    background: transparent;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+
+    &:hover {
+      background: color-mix(in srgb, var(--color-brand) 8%, transparent);
+    }
+  }
+
+  .action-link-warning {
+    border-color: var(--color-warning, #d97706);
+    color: var(--color-warning, #d97706);
+
+    &:hover {
+      background: color-mix(in srgb, var(--color-warning, #d97706) 8%, transparent);
+    }
+  }
+
+  .fw-detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   .empty-state {
     display: grid;
     place-items: center;
@@ -904,5 +1050,39 @@
     .hero-facts div:last-child {
       border-bottom: 0;
     }
+  }
+
+  .traffic-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .traffic-card {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-surface);
+  }
+
+  .traffic-card-name {
+    color: var(--color-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .legend-rx-label {
+    color: var(--color-link, #3b82f6);
+    font-weight: 600;
+  }
+
+  .legend-tx-label {
+    color: var(--color-success, #22c55e);
+    font-weight: 600;
   }
 </style>

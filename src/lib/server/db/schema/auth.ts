@@ -102,3 +102,23 @@ export const userSessionsRelations = relations(userSessions, ({ one }) => ({
 		references: [users.id]
 	})
 }));
+
+export const apiKeys = pgTable(
+	'api_keys',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		name: varchar('name', { length: 120 }).notNull(),
+		keyHash: varchar('key_hash', { length: 64 }).notNull(),
+		lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+		expiresAt: timestamp('expires_at', { withTimezone: true }),
+		createdAt
+	},
+	(table) => [uniqueIndex('api_keys_hash_unique').on(table.keyHash)]
+);
+
+export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
+	user: one(users, { fields: [apiKeys.userId], references: [users.id] })
+}));

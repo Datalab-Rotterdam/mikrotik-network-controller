@@ -7,7 +7,12 @@ import type {
 	ActionDeviceRemovedPayload,
 	ActionDeviceUpdatedPayload,
 	ActionDiscoveryDevice,
-	ActionJob
+	ActionJob,
+	AlertFiredPayload,
+	AlertResolvedPayload,
+	ClientUpdatedPayload,
+	DeviceMetricPayload,
+	TopologyUpdatedPayload
 } from "$lib/shared/action-events";
 
 declare global {
@@ -63,6 +68,26 @@ declare global {
             'device.removed': {
                 type: 'device.removed';
                 payload: ActionDeviceRemovedPayload;
+            };
+            'metric.updated': {
+                type: 'metric.updated';
+                payload: DeviceMetricPayload;
+            };
+            'client.updated': {
+                type: 'client.updated';
+                payload: ClientUpdatedPayload;
+            };
+            'alert.fired': {
+                type: 'alert.fired';
+                payload: AlertFiredPayload;
+            };
+            'alert.resolved': {
+                type: 'alert.resolved';
+                payload: AlertResolvedPayload;
+            };
+            'topology.updated': {
+                type: 'topology.updated';
+                payload: TopologyUpdatedPayload;
             };
         }
 

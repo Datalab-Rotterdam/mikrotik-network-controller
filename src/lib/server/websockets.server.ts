@@ -3,10 +3,14 @@ import discoveryService from '$lib/server/services/discovery.service';
 import { listDevices } from '$lib/server/repositories/device.repository';
 import { adoptionEvents } from '$lib/server/services/adoption.service';
 import { deviceEvents } from '$lib/server/services/device-events.service';
+import { monitoringEvents } from '$lib/server/services/monitoring-events.service';
+import { alertEvaluatorEvents } from '$lib/server/services/alert-evaluator.service';
 import {
 	getJobWithSteps,
 	listRecentJobsBySite
 } from '$lib/server/repositories/job.repository';
+import { getLatestDeviceMetric } from '$lib/server/repositories/metrics.repository';
+import { getActiveClientCountBySite } from '$lib/server/repositories/clients.repository';
 import {
 	schedulerEvents
 } from '$lib/server/services/scheduler.service';
@@ -14,11 +18,16 @@ import type {
 	ActionEvent,
 	ActionJob,
 	ActionJobStep,
+	AlertFiredEvent,
+	AlertResolvedEvent,
+	ClientUpdatedEvent,
 	DeviceRemovedEvent,
 	DeviceUpdatedEvent,
 	DiscoverySnapshotEvent,
 	JobSnapshotEvent,
-	JobUpdatedEvent
+	JobUpdatedEvent,
+	MetricUpdatedEvent,
+	TopologyUpdatedEvent
 } from '$lib/shared/action-events';
 
 type DiscoveryDevice = {
@@ -169,6 +178,18 @@ function broadcastAction(message: ActionEvent): void {
 				return message.payload.siteId === siteId;
 			}
 
+			if (message.type === 'metric.updated' || message.type === 'client.updated') {
+				return !message.payload.siteId || message.payload.siteId === siteId;
+			}
+
+			if (message.type === 'alert.fired' || message.type === 'alert.resolved') {
+				return message.payload.siteId === siteId;
+			}
+
+			if (message.type === 'topology.updated') {
+				return message.payload.siteId === siteId;
+			}
+
 			return true;
 		}
 	});
@@ -261,6 +282,46 @@ function handleDeviceRemoved(payload: DeviceRemovedEvent['payload']): void {
 	});
 }
 
+async function handleMetricUpdated(detail: {
+	deviceId: string;
+	siteId: string | null;
+	collectedAt: Date;
+}): Promise<void> {
+	const metric = await getLatestDeviceMetric(detail.deviceId);
+	if (!metric) return;
+
+	const event: MetricUpdatedEvent = {
+		type: 'metric.updated',
+		payload: {
+			deviceId: detail.deviceId,
+			siteId: detail.siteId,
+			cpuPercent: metric.cpuPercent,
+			freeMemoryBytes: metric.freeMemoryBytes,
+			totalMemoryBytes: metric.totalMemoryBytes,
+			temperatureCelsius: metric.temperatureCelsius,
+			uptimeSeconds: metric.uptimeSeconds,
+			collectedAt: detail.collectedAt.toISOString()
+		}
+	};
+
+	broadcastAction(event);
+}
+
+async function handleClientUpdated(detail: { siteId: string | null }): Promise<void> {
+	if (!detail.siteId) return;
+
+	const activeCount = await getActiveClientCountBySite(detail.siteId);
+	const event: ClientUpdatedEvent = {
+		type: 'client.updated',
+		payload: {
+			siteId: detail.siteId,
+			activeCount
+		}
+	};
+
+	broadcastAction(event);
+}
+
 async function handleSchedulerEvent(detail: { jobId: string }): Promise<void> {
 	const job = await getJobWithSteps(detail.jobId);
 	if (!job) {
@@ -298,6 +359,55 @@ discoveryService.on('neighbor', (neighbor) => {
 adoptionEvents.on('device.adopted', handleDeviceAdopted);
 deviceEvents.on('device.updated', handleDeviceUpdated);
 deviceEvents.on('device.removed', handleDeviceRemoved);
+
+monitoringEvents.on('metric:updated', (detail) => {
+	void handleMetricUpdated(detail).catch(() => {
+		/* ignore broadcast failures */
+	});
+});
+
+monitoringEvents.on('client:updated', (detail) => {
+	void handleClientUpdated(detail).catch(() => {
+		/* ignore broadcast failures */
+	});
+});
+
+alertEvaluatorEvents.on('alert:fired', (detail) => {
+	const event: AlertFiredEvent = {
+		type: 'alert.fired',
+		payload: {
+			eventId: detail.eventId,
+			ruleId: detail.ruleId,
+			siteId: detail.siteId,
+			deviceId: detail.deviceId,
+			severity: detail.severity,
+			message: detail.message
+		}
+	};
+	broadcastAction(event);
+});
+
+monitoringEvents.on('topology:updated', (detail) => {
+	if (!detail.siteId) return;
+	const event: TopologyUpdatedEvent = {
+		type: 'topology.updated',
+		payload: { siteId: detail.siteId }
+	};
+	broadcastAction(event);
+});
+
+alertEvaluatorEvents.on('alert:resolved', (detail) => {
+	const event: AlertResolvedEvent = {
+		type: 'alert.resolved',
+		payload: {
+			eventId: detail.eventId,
+			ruleId: detail.ruleId,
+			siteId: detail.siteId,
+			deviceId: detail.deviceId
+		}
+	};
+	broadcastAction(event);
+});
 
 for (const eventName of [
 	'job:queued',

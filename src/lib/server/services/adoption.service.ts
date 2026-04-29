@@ -17,7 +17,6 @@ import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
 
 export const adoptionEvents = new EventEmitter();
 
-type AdoptionProvider = 'real' | 'mock';
 type DevicePlatform = 'routeros' | 'switchos';
 
 export type AdoptDeviceInput = {
@@ -26,7 +25,6 @@ export type AdoptDeviceInput = {
 	password: string;
 	siteName: string;
 	apiPort: number;
-	provider: AdoptionProvider;
 	platform: DevicePlatform;
 	requestedByUserId: string;
 };
@@ -71,10 +69,6 @@ function parseRouterOsUptimeSeconds(uptime: string | undefined): number | undefi
 	return (((weeks * 7 + days) * 24 + hours) * 60 + minutes) * 60 + seconds;
 }
 
-function toBoolean(value: string | undefined): boolean {
-	return value === 'true' || value === 'yes';
-}
-
 async function readRealRouterOsInventory(input: AdoptDeviceInput): Promise<RouterOSInventory> {
 	const client = new RouterOSClient({
 		host: input.host,
@@ -97,9 +91,9 @@ async function readRealRouterOsInventory(input: AdoptDeviceInput): Promise<Route
 		return {
 			identity: identity?.name ?? input.host,
 			version: resource?.version,
-			model: routerboard?.model ?? resource?.['board-name'] ?? resource?.boardName,
-			serialNumber: routerboard?.['serial-number'],
-			architecture: resource?.architecture,
+			model: routerboard?.model ?? resource?.['board-name'],
+			serialNumber: undefined,
+			architecture: undefined,
 			uptimeSeconds: parseRouterOsUptimeSeconds(resource?.uptime),
 			interfaces
 		};
@@ -129,51 +123,7 @@ async function readRealSwitchOsInventory(input: AdoptDeviceInput): Promise<Route
 	};
 }
 
-async function readMockRouterOsInventory(input: AdoptDeviceInput): Promise<RouterOSInventory> {
-	if (input.platform === 'switchos') {
-		return {
-			identity: `mock-switch-${input.host.replaceAll('.', '-')}`,
-			version: '2.17',
-			model: 'CSS326-24G-2S+',
-			serialNumber: 'MOCK-SWOS-0001',
-			architecture: 'switchos',
-			interfaces: []
-		};
-	}
-
-	return {
-		identity: `mock-${input.host.replaceAll('.', '-')}`,
-		version: '7.18.2',
-		model: 'CHR',
-		serialNumber: 'MOCK-CHR-0001',
-		architecture: 'x86_64',
-		uptimeSeconds: 86340,
-		interfaces: [
-			{
-				'.id': '*1',
-				name: 'ether1',
-				type: 'ether',
-				running: 'true',
-				disabled: 'false',
-				'mac-address': '02:00:00:00:00:01'
-			},
-			{
-				'.id': '*2',
-				name: 'ether2',
-				type: 'ether',
-				running: 'false',
-				disabled: 'false',
-				'mac-address': '02:00:00:00:00:02'
-			}
-		]
-	};
-}
-
 export async function readAdoptionInventory(input: AdoptDeviceInput): Promise<RouterOSInventory> {
-	if (input.provider === 'mock') {
-		return readMockRouterOsInventory(input);
-	}
-
 	if (input.platform === 'switchos') {
 		return readRealSwitchOsInventory(input);
 	}
@@ -200,7 +150,6 @@ export async function createCredentialAdoptionAttempt(input: AdoptDeviceInput, m
 		username: input.username,
 		startedAt: new Date(),
 		progress: {
-			provider: input.provider,
 			steps: ['created', 'validating_credentials']
 		}
 	});
@@ -208,14 +157,10 @@ export async function createCredentialAdoptionAttempt(input: AdoptDeviceInput, m
 	return { site, attempt };
 }
 
-export async function markCredentialAdoptionSyncing(
-	attemptId: string,
-	provider: AdoptionProvider
-): Promise<void> {
+export async function markCredentialAdoptionSyncing(attemptId: string): Promise<void> {
 	await updateAdoptionAttempt(attemptId, {
 		status: 'syncing_inventory',
 		progress: {
-			provider,
 			steps: ['created', 'validating_credentials', 'syncing_inventory']
 		}
 	});
@@ -239,8 +184,7 @@ export async function upsertAdoptionInventory(input: AdoptDeviceInput, siteId: s
 		architecture: inventory.architecture,
 		uptimeSeconds: inventory.uptimeSeconds,
 		capabilities: [
-			input.platform === 'switchos' ? 'switchos-http' : 'routeros-api',
-			input.provider === 'mock' ? 'mock' : 'real-device'
+			input.platform === 'switchos' ? 'switchos-http' : 'routeros-api'
 		],
 		tags: [],
 		lastSeenAt: now,
@@ -255,10 +199,10 @@ export async function upsertAdoptionInventory(input: AdoptDeviceInput, siteId: s
 				routerosId: networkInterface['.id'],
 				name: networkInterface.name ?? 'unknown',
 				type: networkInterface.type,
-				macAddress: networkInterface['mac-address'] ?? networkInterface.macAddress,
-				comment: networkInterface.comment,
-				running: toBoolean(networkInterface.running),
-				disabled: toBoolean(networkInterface.disabled)
+				macAddress: networkInterface['mac-address'],
+				comment: undefined,
+				running: networkInterface.running ?? false,
+				disabled: networkInterface.disabled ?? false
 			}))
 	);
 	await emitDeviceUpdated(device.id, 'interfaces');
@@ -288,7 +232,6 @@ export async function finishCredentialAdoption(input: AdoptDeviceInput, context:
 		status: 'succeeded',
 		finishedAt: new Date(),
 		progress: {
-			provider: input.provider,
 			steps: ['created', 'validating_credentials', 'syncing_inventory', 'succeeded'],
 			interfaceCount: context.inventory.interfaces.length
 		}
@@ -312,7 +255,6 @@ export async function finishCredentialAdoption(input: AdoptDeviceInput, context:
 		metadata: {
 			host: input.host,
 			site: context.site.name,
-			provider: input.provider,
 			routerOsVersion: context.inventory.version
 		}
 	});
@@ -324,7 +266,6 @@ export async function failCredentialAdoption(input: AdoptDeviceInput, attemptId:
 		errorMessage: error instanceof Error ? error.message : 'Unknown adoption error.',
 		finishedAt: new Date(),
 		progress: {
-			provider: input.provider,
 			steps: ['created', 'validating_credentials', 'failed']
 		}
 	});
@@ -335,7 +276,6 @@ export async function failCredentialAdoption(input: AdoptDeviceInput, attemptId:
 		message: `Failed to adopt ${input.host}`,
 		metadata: {
 			host: input.host,
-			provider: input.provider,
 			error: error instanceof Error ? error.message : 'Unknown adoption error.'
 		}
 	});
@@ -347,7 +287,7 @@ export async function adoptRouterOsDevice(input: AdoptDeviceInput) {
 	try {
 		const inventory = await readAdoptionInventory(input);
 		assertSupportedAdoptionInventory(input, inventory);
-		await markCredentialAdoptionSyncing(attempt.id, input.provider);
+		await markCredentialAdoptionSyncing(attempt.id);
 		const device = await upsertAdoptionInventory(input, site.id, inventory);
 		await storeAdoptionReadOnlyCredential(input, device.id);
 		await finishCredentialAdoption(input, { attemptId: attempt.id, device, site, inventory });

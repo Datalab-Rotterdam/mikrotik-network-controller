@@ -1,6 +1,7 @@
 <script lang="ts">
 	import AccountMenu from '$lib/client/components/AccountMenu.svelte';
 	import ActionSocket from '$lib/client/components/actions/ActionSocket.svelte';
+	import AlertBell from '$lib/client/components/actions/AlertBell.svelte';
 	import LiveDataInvalidator from '$lib/client/components/actions/LiveDataInvalidator.svelte';
 	import SiteSwitcher from '$lib/client/components/SiteSwitcher.svelte';
 	import favicon from '$lib/assets/favicon.svg';
@@ -16,9 +17,11 @@
 		{ href: `${basePath}/topology`, label: 'Topology', icon: 'M7 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm10 10a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM7 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm2.6-7.2 4.8 6.4 1.6-1.2-4.8-6.4-1.6 1.2Zm.4 9.2h4v-2h-4v2Z' },
 		{ href: `${basePath}/devices`, label: 'Devices', icon: 'M4 5h14v10H4V5Zm2 2v6h10V7H6Zm-3 11h18v2H3v-2Zm17-9h1v5h-1V9Z' },
 		{ href: `${basePath}/clients`, label: 'Clients', icon: 'M7 9a4 4 0 1 1 8 0 4 4 0 0 1-8 0Zm-3 11c.8-3.3 3.7-5 8-5s7.2 1.7 8 5H4Z' },
+		{ href: `${basePath}/alerts`, label: 'Alerts', icon: 'M12 2a7 7 0 0 1 7 7c0 2.4-.8 4.7-2.2 6.4L18 17H6l1.2-1.6A10 10 0 0 1 5 9a7 7 0 0 1 7-7Zm0 18a2 2 0 0 1-2-2h4a2 2 0 0 1-2 2Z' },
+		{ href: `${basePath}/config/templates`, label: 'Config', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm4 18H6V4h7v5h5v11ZM8 15h8v2H8v-2Zm0-4h8v2H8v-2Zm0-4h5v2H8V7Z' },
 		{ href: `${basePath}/jobs`, label: 'Jobs', group: 'management', icon: 'M5 4h14v4H5V4Zm0 6h14v4H5v-4Zm0 6h14v4H5v-4Zm2-10v1h10V6H7Zm0 6v1h10v-1H7Zm0 6v1h10v-1H7Z' },
 		{ href: `${basePath}/syslog`, label: 'Syslog', group: 'management', icon: 'M5 3h14v18H5V3Zm3 4h8V5H8v2Zm0 4h8V9H8v2Zm0 4h6v-2H8v2Zm0 4h8v-2H8v2Z' },
-		{ href: `${basePath}/settings`, label: 'Settings', icon: 'M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2h-4l-.4 3a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5A9 9 0 0 0 4.5 12c0 .5 0 1 .1 1.5l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6 1.5l.4 3h4l.4-3a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z' }
+		{ href: `${basePath}/settings`, label: 'Settings', icon: 'M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2h-4l-.4 3a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5A9 9 0 0 0 4.5 12c0 .5 0 1 .1 1.5l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z' }
 	]);
 
 	function isNavActive(href: string) {
@@ -71,12 +74,30 @@
 						{/if}
 					{/each}
 				</nav>
-				<div class="rail-footer"></div>
+				<div class="rail-footer">
+						{#if data.user?.roles?.includes('admin')}
+							<div class="rail-separator" aria-hidden="true"></div>
+							<a
+								class="rail-link"
+								href="/manage/admin/users"
+								aria-label="Admin"
+								title="Admin"
+								aria-current={data.pathname.startsWith('/manage/admin') ? 'page' : undefined}
+							>
+								<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+									<path fill="currentColor" d="M12 1a5 5 0 1 0 0 10A5 5 0 0 0 12 1Zm0 12c-5.3 0-8 2.7-8 4v2h16v-2c0-1.3-2.7-4-8-4Zm7-2v-2h-2v2h-2v2h2v2h2v-2h2v-2h-2Z" />
+								</svg>
+							</a>
+						{/if}
+					</div>
 			</aside>
 			<main class="main">
 				<header class="topbar">
 					<SiteSwitcher activeSite={data.site} sites={data.sites} pathname={data.pathname} />
-					<AccountMenu user={data.user} />
+					<div class="topbar-right">
+						<AlertBell alertsHref={`${basePath}/alerts`} initialCount={data.unacknowledgedAlertCount ?? 0} />
+						<AccountMenu user={data.user} />
+					</div>
 				</header>
 				<section class="content">
 					{@render children()}
@@ -158,6 +179,10 @@
 	}
 
 	.rail-footer {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 7px;
 		margin-top: auto;
 		padding: 12px 0;
 	}
@@ -182,6 +207,12 @@
 		padding: 0 18px 0 14px;
 		border-bottom: 1px solid var(--color-line);
 		background: var(--color-surface);
+	}
+
+	.topbar-right {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 	}
 
 	.content {

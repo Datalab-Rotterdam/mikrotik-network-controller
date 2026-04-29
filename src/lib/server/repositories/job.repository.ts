@@ -1,6 +1,6 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
-import { jobSteps, jobs } from '$lib/server/db/schema';
+import { devices, jobSteps, jobs } from '$lib/server/db/schema';
 
 type JobStatus = typeof jobs.$inferSelect.status;
 
@@ -41,10 +41,26 @@ export async function listRecentJobs(limit = 50) {
 }
 
 export async function listRecentJobsBySite(siteId: string, limit = 50) {
+	// Find all device IDs belonging to this site
+	const siteDevices = await db
+		.select({ id: devices.id })
+		.from(devices)
+		.where(eq(devices.siteId, siteId));
+
+	const deviceIdList = siteDevices.map((d) => d.id);
+
+	// Match jobs by siteId, OR jobs with null siteId whose deviceId belongs to the site
+	const whereClause = deviceIdList.length > 0
+		? or(
+				eq(jobs.siteId, siteId),
+				and(isNull(jobs.siteId), inArray(jobs.deviceId, deviceIdList))
+			)
+		: eq(jobs.siteId, siteId);
+
 	return db
 		.select()
 		.from(jobs)
-		.where(eq(jobs.siteId, siteId))
+		.where(whereClause)
 		.orderBy(desc(jobs.createdAt))
 		.limit(limit);
 }

@@ -102,6 +102,42 @@ export type ActionDeviceRemovedPayload = {
 	timestamp: string;
 };
 
+export type DeviceMetricPayload = {
+	deviceId: string;
+	siteId: string | null;
+	cpuPercent: number | null;
+	freeMemoryBytes: number | null;
+	totalMemoryBytes: number | null;
+	temperatureCelsius: number | null;
+	uptimeSeconds: number | null;
+	collectedAt: string;
+};
+
+export type ClientUpdatedPayload = {
+	siteId: string | null;
+	activeCount: number;
+};
+
+export type AlertFiredPayload = {
+	eventId: string;
+	ruleId: string;
+	siteId: string;
+	deviceId: string | null;
+	severity: string;
+	message: string;
+};
+
+export type AlertResolvedPayload = {
+	eventId: string;
+	ruleId: string;
+	siteId: string;
+	deviceId: string | null;
+};
+
+export type TopologyUpdatedPayload = {
+	siteId: string;
+};
+
 export type ActionEventMap = App.ActionEvents;
 export type ActionEventType = keyof ActionEventMap;
 export type ActionEvent = ActionEventMap[ActionEventType];
@@ -112,3 +148,8 @@ export type DiscoveryNeighborEvent = ActionEventMap['discovery.neighbor'];
 export type DeviceAdoptedEvent = ActionEventMap['device.adopted'];
 export type DeviceUpdatedEvent = ActionEventMap['device.updated'];
 export type DeviceRemovedEvent = ActionEventMap['device.removed'];
+export type MetricUpdatedEvent = ActionEventMap['metric.updated'];
+export type ClientUpdatedEvent = ActionEventMap['client.updated'];
+export type AlertFiredEvent = ActionEventMap['alert.fired'];
+export type AlertResolvedEvent = ActionEventMap['alert.resolved'];
+export type TopologyUpdatedEvent = ActionEventMap['topology.updated'];

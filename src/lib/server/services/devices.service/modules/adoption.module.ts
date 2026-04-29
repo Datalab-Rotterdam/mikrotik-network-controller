@@ -16,7 +16,6 @@ export default {
         siteName: string;
         siteId: string | null;
         apiPort: number;
-        provider: 'real' | 'mock';
         platform: 'routeros' | 'switchos';
         requestedByUserId: string;
         managementCidrs?: string;
@@ -35,7 +34,6 @@ export default {
         siteName: string;
         siteId: string | null;
         apiPort: number;
-        provider: 'real' | 'mock';
         platform: 'routeros' | 'switchos';
         requestedByUserId: string;
     }) {

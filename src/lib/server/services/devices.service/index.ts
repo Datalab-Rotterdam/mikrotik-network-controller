@@ -1,7 +1,7 @@
 import {Router, type Service, ServiceManager, Action} from "@sourceregistry/sveltekit-service-manager";
 import "$lib/server/services/scheduler.service";
 
-import {adoption, telemetry, provisioning, credentials, removal} from "./modules";
+import {adoption, telemetry, provisioning, credentials, removal, config} from "./modules";
 
 const router = Router();
 
@@ -55,7 +55,8 @@ export const service = {
         telemetry,
         provisioning,
         credentials,
-        removal
+        removal,
+        config
     }
 } satisfies Service<"devices">;
 

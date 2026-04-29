@@ -22,7 +22,12 @@
 		'discovery.neighbor',
 		'device.adopted',
 		'device.updated',
-		'device.removed'
+		'device.removed',
+		'metric.updated',
+		'client.updated',
+		'alert.fired',
+		'alert.resolved',
+		'topology.updated'
 	]);
 	const bus = createActionBus();
 	setContext(ACTION_SOCKET_CONTEXT, bus);

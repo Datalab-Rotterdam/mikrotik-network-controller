@@ -70,7 +70,6 @@ describe('devices page actions', () => {
 		formData.set('username', 'admin');
 		formData.set('password', 'admin');
 		formData.set('siteName', 'Default');
-		formData.set('provider', 'real');
 		formData.set('platform', 'routeros');
 		formData.set('apiPort', '8728');
 		formData.set('managementCidrs', '10.0.0.0/8,100.64.0.0/10');
@@ -93,7 +92,6 @@ describe('devices page actions', () => {
 			siteName: 'Default',
 			siteId: 'site-1',
 			apiPort: 8728,
-			provider: 'real',
 			platform: 'routeros',
 			requestedByUserId: 'user-1',
 			managementCidrs: '10.0.0.0/8,100.64.0.0/10'
@@ -113,7 +111,6 @@ describe('devices page actions', () => {
 		formData.set('username', 'admin');
 		formData.set('password', '');
 		formData.set('siteName', 'Default');
-		formData.set('provider', 'real');
 		formData.set('platform', 'routeros');
 		formData.set('apiPort', '8728');
 

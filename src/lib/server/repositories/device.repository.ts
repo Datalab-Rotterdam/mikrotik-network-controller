@@ -180,6 +180,23 @@ export async function updateDeviceState(
 		.where(eq(devices.id, deviceId));
 }
 
+export async function updateDeviceTelemetryState(
+	deviceId: string,
+	status: 'online' | 'offline' | 'auth_failed',
+	uptimeSeconds?: number
+): Promise<void> {
+	const now = new Date();
+	await db
+		.update(devices)
+		.set({
+			connectionStatus: status,
+			...(status === 'online' ? { lastSeenAt: now } : {}),
+			...(uptimeSeconds !== undefined ? { uptimeSeconds } : {}),
+			updatedAt: now
+		})
+		.where(eq(devices.id, deviceId));
+}
+
 export async function listDeviceInterfaces(siteId?: string) {
 	const query = db
 		.select({

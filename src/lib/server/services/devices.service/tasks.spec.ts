@@ -342,7 +342,7 @@ describe('createAdoptCredentialsTask', () => {
 			username: '',
 			siteName: 'Default',
 			apiPort: 8728,
-			provider: 'real' as const,
+
 			platform: 'routeros' as const,
 			requestedByUserId: 'user-1',
 			siteId: 'site-1'
@@ -364,7 +364,7 @@ describe('createAdoptCredentialsTask', () => {
 			username: 'admin',
 			siteName: 'Default',
 			apiPort: 70000,
-			provider: 'real' as const,
+
 			platform: 'routeros' as const,
 			requestedByUserId: 'user-1',
 			siteId: 'site-1'
@@ -384,7 +384,7 @@ describe('createAdoptCredentialsTask', () => {
 			username: 'admin',
 			siteName: 'Default',
 			apiPort: 8728,
-			provider: 'real' as const,
+
 			platform: 'routeros' as const,
 			requestedByUserId: 'user-1',
 			siteId: 'site-1'
@@ -422,7 +422,7 @@ describe('createManagedAdoptCredentialsTask', () => {
 			username: 'admin',
 			siteName: 'Default',
 			apiPort: 8728,
-			provider: 'real' as const,
+
 			platform: 'routeros' as const,
 			requestedByUserId: 'user-1',
 			siteId: 'site-1',
@@ -439,34 +439,13 @@ describe('createManagedAdoptCredentialsTask', () => {
 		expect(mocks.createCredentialAdoptionAttempt).not.toHaveBeenCalled();
 	});
 
-	it('requires RouterOS real API credentials', async () => {
-		const payload = {
-			host: '192.0.2.1',
-			username: 'admin',
-			siteName: 'Default',
-			apiPort: 8728,
-			provider: 'mock' as const,
-			platform: 'routeros' as const,
-			requestedByUserId: 'user-1',
-			siteId: 'site-1'
-		};
-		const task = createManagedAdoptCredentialsTask({
-			...payload,
-			password: 'secret'
-		});
-
-		await expect(task.steps[0].execute(makeStepContext(payload))).rejects.toThrow(
-			'real RouterOS API provider'
-		);
-	});
-
 	it('allows blank initial passwords for factory-default RouterOS adoption', async () => {
 		const payload = {
 			host: '192.0.2.1',
 			username: 'admin',
 			siteName: 'Default',
 			apiPort: 8728,
-			provider: 'real' as const,
+
 			platform: 'routeros' as const,
 			requestedByUserId: 'user-1',
 			siteId: 'site-1'
@@ -489,7 +468,7 @@ describe('createManagedAdoptCredentialsTask', () => {
 			username: 'admin',
 			siteName: 'Default',
 			apiPort: 8728,
-			provider: 'real' as const,
+
 			platform: 'routeros' as const,
 			requestedByUserId: 'user-1',
 			siteId: 'site-1',
@@ -596,7 +575,7 @@ describe('createManagedAdoptCredentialsTask', () => {
 			username: 'admin',
 			siteName: 'Default',
 			apiPort: 8728,
-			provider: 'real' as const,
+
 			platform: 'routeros' as const,
 			requestedByUserId: 'user-1',
 			siteId: 'site-1'

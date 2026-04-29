@@ -25,7 +25,6 @@
       (form?.action === "adopt" && Boolean(form?.message)),
   );
   const panelHost = $derived(form?.host ?? data.adoptionPanel.host);
-  const panelProvider = $derived(form?.provider ?? data.adoptionPanel.provider);
   const panelPlatform = $derived(form?.platform ?? data.adoptionPanel.platform);
   const panelApiPort = $derived(
     form?.apiPort ?? (panelPlatform === "switchos" ? 80 : 8728),
@@ -53,7 +52,7 @@
   onMount(() => {
     setLoading(true);
     initializeDiscoveryDeviceSnapshot(data.discoveredDevices);
-    
+
     const devices = data.devices.map((device) => ({
       id: device.id,
       type: (device.platform === "switchos" ? "switch" : "router") as "router" | "switch",
@@ -169,6 +168,7 @@
       adoptionState: device.adoptionState,
       image: data.deviceImages[device.id],
       interfaces: data.deviceInterfaces[device.id] ?? [],
+      firmware: data.firmwareByDeviceId[device.id] ?? null,
       details: {
         identity: device.identity ?? "",
         serialNumber: device.serialNumber ?? "",
@@ -227,7 +227,6 @@
   }) {
     const params = new URLSearchParams({
       adopt: device.ipAddress,
-      provider: "real",
       platform: platformParam(device.platform),
     });
 
@@ -390,7 +389,14 @@
               <td class="col-ip">{device.ipAddress}</td>
               <td class="col-uplink">{device.uplink}</td>
               <td class="col-parent">{device.parentDevice}</td>
-              <td class="col-version">{device.version}</td>
+              <td class="col-version">
+                <span class="version-cell">
+                  {device.version || "—"}
+                  {#if device.firmware?.updateAvailable}
+                    <span class="fw-badge">Update</span>
+                  {/if}
+                </span>
+              </td>
               <td class="col-model">{device.model}</td>
               <td class="col-mac">{device.macAddress}</td>
             </tr>
@@ -557,17 +563,6 @@
               >
             </select>
           </label>
-          <label class="field">
-            <span>Provider</span>
-            <select name="provider">
-              <option value="real" selected={panelProvider !== "mock"}
-                >Real RouterOS API</option
-              >
-              <option value="mock" selected={panelProvider === "mock"}
-                >Mock device</option
-              >
-            </select>
-          </label>
         </div>
       </details>
 
@@ -721,6 +716,59 @@
             {#if selectedDeviceRunningJobs.length}
               <p class="muted">{selectedDeviceRunningJobs.length} task{selectedDeviceRunningJobs.length === 1 ? "" : "s"} running now.</p>
             {/if}
+          </div>
+        {/if}
+
+        {#if selectedDevice.adopted && selectedDevice.platform === "routeros"}
+          {@const fw = selectedDevice.firmware}
+          <div class="details-card">
+            <div class="card-heading">
+              <strong>Firmware</strong>
+              {#if fw?.checkedAt}
+                <span class="card-meta">Checked {formatDate(fw.checkedAt)}</span>
+              {/if}
+            </div>
+            <div class="info-row">
+              <span>Installed</span>
+              <strong>{(fw?.currentVersion ?? selectedDevice.version) || "—"}</strong>
+            </div>
+            {#if fw?.latestVersion}
+              <div class="info-row">
+                <span>Latest ({fw.channel})</span>
+                <strong class:fw-outdated={fw.updateAvailable}>{fw.latestVersion}</strong>
+              </div>
+            {/if}
+            {#if form?.action === "firmwareCheck" && form?.message}
+              <div class={form?.success ? "status-success" : "error-message"}>
+                {form.message}
+                {#if form?.jobId}
+                  <a class="message-link" href={`${basePath}/jobs?job=${form.jobId}`}>View task</a>
+                {/if}
+              </div>
+            {/if}
+            {#if form?.action === "firmwareUpgrade" && form?.message}
+              <div class={form?.success ? "status-success" : "error-message"}>
+                {form.message}
+                {#if form?.jobId}
+                  <a class="message-link" href={`${basePath}/jobs?job=${form.jobId}`}>View task</a>
+                {/if}
+              </div>
+            {/if}
+            <div class="fw-actions">
+              <form method="POST" action="?/firmwareCheck">
+                <input type="hidden" name="deviceId" value={selectedDevice.id} />
+                <button class="secondary-submit" type="submit">Check for updates</button>
+              </form>
+              {#if fw?.updateAvailable}
+                <form method="POST" action="?/firmwareUpgrade">
+                  <input type="hidden" name="deviceId" value={selectedDevice.id} />
+                  <button class="upgrade-submit" type="submit"
+                    onclick={(e) => { if (!confirm(`Upgrade ${selectedDevice.name} to ${fw.latestVersion}? Device will reboot.`)) e.preventDefault(); }}>
+                    Upgrade to {fw.latestVersion}
+                  </button>
+                </form>
+              {/if}
+            </div>
           </div>
         {/if}
 
@@ -1207,6 +1255,63 @@
 
   .remove-submit:hover {
     filter: brightness(0.96);
+  }
+
+  .upgrade-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 36px;
+    border: none;
+    border-radius: 5px;
+    padding: 0 14px;
+    color: #fff;
+    background: var(--color-warning, #d97706);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+
+    &:hover {
+      filter: brightness(1.08);
+    }
+  }
+
+  .fw-actions {
+    display: grid;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .version-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .fw-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    border-radius: 999px;
+    padding: 0 7px;
+    color: #fff;
+    background: var(--color-warning, #d97706);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .fw-outdated {
+    color: var(--color-warning, #d97706);
+    font-weight: 700;
+  }
+
+  .card-meta {
+    color: #8a949c;
+    font-size: 11px;
+    font-weight: 400;
   }
 
   .info-row {
