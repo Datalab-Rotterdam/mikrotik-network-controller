@@ -1,152 +1,131 @@
 @use "sass:map";
 @use "sass:math";
 
-:root {
-  --color-brand: #0e0e10;
-  --color-brand-muted: #707372;
-  --color-brand-light: #c8c8c7;
-  --color-surface: #ffffff;
-  --color-page: #f3f4f4;
-  --color-line: #dedfde;
-  --color-text: #171717;
-  --color-muted: #686c6b;
-  --color-danger: #8a1f1f;
-  --color-success: #1a6b3a;
-  --color-warning: #7a4b00;
-  --color-border: var(--color-line);
-  --color-link: #0d6fd6;
-  --shadow-panel: 0 16px 48px rgba(14, 14, 16, 0.08);
-  font-family: Manrope, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-  sans-serif;
-  color: var(--color-text);
-  background: var(--color-page);
-}
+// — Modular imports
+@use "variables";
+@use "reset";
+@use "typography";
+@use "layout";
+// Remaining utility styles moved into components;
+// Components now manage their own styles.
 
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-button,
-input,
-select {
-  font: inherit;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-$sizes: (
-        'xs': 0,
-        'sm': 576px,
-        'md': 768px,
-        'lg': 992px,
-        'xl': 1200px,
-        'xxl': 1400px
+// — Legacy layout helpers (kept for backwards compatibility)
+$legacy-sizes: (
+    'xs': 0,
+    'sm': 576px,
+    'md': 768px,
+    'lg': 992px,
+    'xl': 1200px,
+    'xxl': 1400px
 );
 
-@mixin respond($size) {
-  $breakpoint: map.get($sizes, $size);
-  @if $breakpoint != null {
-    @media (min-width: $breakpoint) {
-      @content;
-    }
-  }
+// — Global component-agnostic utilities
+.error-message {
+  border: 1px solid var(--color-danger-light);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  color: var(--color-danger);
+  font-size: var(--font-size-small);
+  background: #fde8e8;
 }
 
-@mixin respond-max($size) {
-  $breakpoint: map.get($sizes, $size);
-  @if $breakpoint != null {
-    @if $breakpoint == 0 {
-      @content;
-    } @else {
-      @media (max-width: ($breakpoint - 1px)) {
-        @content;
-      }
-    }
-  }
+.confirmation-message {
+  border: 1px solid var(--color-success-light);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  color: var(--color-success);
+  font-size: var(--font-size-small);
+  background: #f0fdf4;
 }
 
-.d-flex {
-  display: flex;
-}
-
-.d-grid {
+.flash-messages {
   display: grid;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--space-md);
+}
+
+.page-layout {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-lg) 0;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.table-base {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  th {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-muted);
+    font-size: var(--font-size-small);
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 @mixin make-col($size, $columns: 12) {
-  flex: 0 0 math.percentage(math.div($size, $columns));
-  max-width: math.percentage(math.div($size, $columns));
+    flex: 0 0 math.percentage(math.div($size, $columns));
+    max-width: math.percentage(math.div($size, $columns));
 }
 
 @mixin push($size, $columns: 12) {
-  margin-left: math.percentage(math.div($size, $columns));
+    margin-left: math.percentage(math.div($size, $columns));
 }
 
 @mixin pull($size, $columns: 12) {
-  margin-right: math.percentage(math.div($size, $columns));
-}
-
-.d-none {
-  display: none;
-}
-
-@for $i from 1 through 12 {
-  .d-#{$i} {
-    @include make-col($i);
-  }
+    margin-right: math.percentage(math.div($size, $columns));
 }
 
 .order-first {
-  order: -9999;
+    order: -9999;
 }
 
 .order-last {
-  order: 9999;
+    order: 9999;
 }
 
 @for $i from 1 through 12 {
-  .order-#{$i} {
-    order: $i;
-  }
+    .order-#{$i} {
+        order: $i;
+    }
 }
 
 @for $i from 1 through 11 {
-  .push-#{$i} {
-    @include push($i);
-  }
+    .push-#{$i} {
+        @include push($i);
+    }
 }
 
 @for $i from 1 through 11 {
-  .pull-#{$i} {
-    @include pull($i);
-  }
-}
-
-@each $size, $breakpoint in $sizes {
-  .d-#{$size}-none {
-    @include respond-max($size) {
-      display: none !important;
+    .pull-#{$i} {
+        @include pull($i);
     }
-  }
-
-  .d-#{$size}-flex {
-    @include respond($size) {
-      display: flex !important;
-    }
-  }
-
-  .d-#{$size}-grid {
-    @include respond($size) {
-      display: grid !important;
-    }
-  }
 }

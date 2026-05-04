@@ -8,6 +8,7 @@ import type {
 
 export const deviceEvents = new EventEmitter();
 
+
 export async function emitDeviceUpdated(deviceId: string, reason: DeviceUpdateReason): Promise<void> {
 	const device = await getDeviceById(deviceId);
 	if (!device) {
@@ -18,6 +19,7 @@ export async function emitDeviceUpdated(deviceId: string, reason: DeviceUpdateRe
 		siteId: device.siteId,
 		deviceId,
 		reason,
+		connectionStatus: device.connectionStatus,
 		timestamp: new Date().toISOString()
 	};
 

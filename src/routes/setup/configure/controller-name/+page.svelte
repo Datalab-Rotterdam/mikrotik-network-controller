@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import Form from '$lib/client/components/Form.svelte';
-	import Input from '$lib/client/components/Input.svelte';
+	import Form from '$lib/client/components/primitives/Form.svelte';
+	import Input from '$lib/client/components/primitives/Input.svelte';
 
 	const countries = ['Netherlands', 'Belgium', 'Germany', 'United Kingdom', 'United States'];
 	const controllerName = $derived(page.url.searchParams.get('controllerName') ?? 'Default');

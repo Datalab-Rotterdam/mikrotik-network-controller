@@ -10,7 +10,12 @@ const mocks = vi.hoisted(() => ({
 	resolveDeviceImage: vi.fn(),
 	provision: vi.fn(),
 	remove: vi.fn(),
-	websocketUse: vi.fn()
+	websocketUse: vi.fn(),
+	getInterfaceMetricsHistory: vi.fn(),
+	getDeviceBackups: vi.fn(),
+	getFirmwareVersion: vi.fn(),
+	isDeviceTerminalEligible: vi.fn(),
+	scheduleService: vi.fn()
 }));
 
 vi.mock('$lib/server/repositories/device.repository', () => ({
@@ -33,6 +38,37 @@ vi.mock('$lib/server/repositories/job.repository', () => ({
 
 vi.mock('$lib/server/services/device-image-catalog.service', () => ({
 	resolveDeviceImage: mocks.resolveDeviceImage
+}));
+
+vi.mock('$lib/server/repositories/metrics.repository', () => ({
+	getInterfaceMetricsHistory: mocks.getInterfaceMetricsHistory
+}));
+
+vi.mock('$lib/server/services/backup.service', () => ({
+	getDeviceBackups: mocks.getDeviceBackups
+}));
+
+vi.mock('$lib/server/repositories/firmware.repository', () => ({
+	getFirmwareVersion: mocks.getFirmwareVersion
+}));
+
+vi.mock('$lib/server/services/device-terminal.service', () => ({
+	isDeviceTerminalEligible: mocks.isDeviceTerminalEligible
+}));
+
+vi.mock('$lib/server/services/firmware.service', () => ({
+	createFirmwareCheckTask: vi.fn(),
+	createFirmwareUpgradeTask: vi.fn()
+}));
+
+vi.mock('$lib/server/services/devices.service/tasks', () => ({
+	createBackupDeviceTask: vi.fn()
+}));
+
+vi.mock('@sourceregistry/sveltekit-service-manager', () => ({
+	Service: vi.fn(() => ({
+		schedule: mocks.scheduleService
+	}))
 }));
 
 vi.mock('@sourceregistry/sveltekit-websockets/server', () => ({
@@ -162,6 +198,11 @@ beforeEach(() => {
 	mocks.provision.mockResolvedValue({ jobId: 'job-provision-1' });
 	mocks.remove.mockResolvedValue({ jobId: 'job-remove-1' });
 	mocks.websocketUse.mockReturnValue('ws://controller.test/_/connect/terminal-key');
+	mocks.getInterfaceMetricsHistory.mockResolvedValue([]);
+	mocks.getDeviceBackups.mockResolvedValue([]);
+	mocks.getFirmwareVersion.mockResolvedValue(null);
+	mocks.isDeviceTerminalEligible.mockImplementation(({ userRoles }: { userRoles: string[] }) => userRoles.includes('admin') && true);
+	mocks.scheduleService.mockResolvedValue({ id: 'job-1' });
 });
 
 describe('device detail page load', () => {

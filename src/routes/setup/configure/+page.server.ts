@@ -1,5 +1,3 @@
 import { redirect } from '@sveltejs/kit';
 
-export const load = () => {
-	throw redirect(302, '/setup/configure/controller-name');
-};
+export const load = () => redirect(302, '/setup/configure/controller-name');

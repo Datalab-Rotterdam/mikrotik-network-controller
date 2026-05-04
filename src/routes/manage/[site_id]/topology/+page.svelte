@@ -11,9 +11,9 @@
   } from "@xyflow/svelte";
   import { onMount } from "svelte";
   import { invalidate } from "$app/navigation";
-  import SidePanel from "$lib/client/components/SidePanel.svelte";
-  import TopologyDeviceNode from "$lib/client/components/TopologyDeviceNode.svelte";
-  import DiscoveryUpdatesWebSocket from "$lib/client/components/DiscoveryUpdatesWebSocket.svelte";
+  import SidePanel from "$lib/client/components/layout/SidePanel.svelte";
+  import TopologyDeviceNode from "$lib/client/components/ui/TopologyDeviceNode.svelte";
+  import DiscoveryUpdatesWebSocket from "$lib/client/components/ui/DiscoveryUpdatesWebSocket.svelte";
   import { useActionSocket } from "$lib/client/actions/use-action-socket";
   import {
     discoveredDevices,

@@ -1,4 +1,6 @@
 export { adoptRouterOsDevice, adoptionEvents } from './adoption.service';
+export { service as actionbusService } from './actionbus.service';
+export type { ActionBusService } from './actionbus.service';
 export { loadSiteDeviceState } from './site-device.service';
 export type { SiteDeviceState } from './site-device.service';
 export {

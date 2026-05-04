@@ -29,7 +29,13 @@ const mocks = vi.hoisted(() => ({
 	routerOsIdentitySet: vi.fn(),
 	routerOsResourceGet: vi.fn(),
 	routerOsClose: vi.fn(),
-	sshExecute: vi.fn()
+	sshExecute: vi.fn(),
+	replaceDeviceInterfaces: vi.fn(),
+	upsertAdoptedDevice: vi.fn(),
+	replaceReadOnlyCredential: vi.fn(),
+	createAdoptionAttempt: vi.fn(),
+	updateAdoptionAttempt: vi.fn(),
+	ensureSiteByName: vi.fn()
 }));
 
 vi.mock('$lib/server/repositories/telemetry.repository', () => ({
@@ -41,7 +47,19 @@ vi.mock('$lib/server/repositories/telemetry.repository', () => ({
 vi.mock('$lib/server/repositories/device.repository', () => ({
 	deleteDevice: mocks.deleteDevice,
 	replaceCredential: mocks.replaceCredential,
-	updateDeviceState: mocks.updateDeviceState
+	updateDeviceState: mocks.updateDeviceState,
+	replaceDeviceInterfaces: mocks.replaceDeviceInterfaces,
+	upsertAdoptedDevice: mocks.upsertAdoptedDevice,
+	replaceReadOnlyCredential: mocks.replaceReadOnlyCredential
+}));
+
+vi.mock('$lib/server/repositories/adoption.repository', () => ({
+	createAdoptionAttempt: mocks.createAdoptionAttempt,
+	updateAdoptionAttempt: mocks.updateAdoptionAttempt
+}));
+
+vi.mock('$lib/server/repositories/site.repository', () => ({
+	ensureSiteByName: mocks.ensureSiteByName
 }));
 
 vi.mock('$lib/server/services/device-events.service', () => ({
@@ -404,7 +422,7 @@ describe('createAdoptCredentialsTask', () => {
 		expect(mocks.readAdoptionInventory).toHaveBeenCalledWith(
 			expect.objectContaining({ host: '192.0.2.1', username: 'admin' })
 		);
-		expect(mocks.markCredentialAdoptionSyncing).toHaveBeenCalledWith('attempt-1', 'real');
+		expect(mocks.markCredentialAdoptionSyncing).toHaveBeenCalledWith('attempt-1');
 		expect(mocks.upsertAdoptionInventory).toHaveBeenCalled();
 		expect(mocks.updateJob).toHaveBeenCalledWith('job-adopt-1', { deviceId: 'device-1' });
 		expect(mocks.storeAdoptionReadOnlyCredential).toHaveBeenCalledWith(

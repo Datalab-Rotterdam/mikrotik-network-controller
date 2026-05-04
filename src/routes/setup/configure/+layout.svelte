@@ -1,5 +1,5 @@
 <script lang="ts">
-	import SetupSplit from '$lib/client/components/SetupSplit.svelte';
+	import SetupSplit from '$lib/client/components/layout/SetupSplit.svelte';
 
 	let { children } = $props();
 </script>

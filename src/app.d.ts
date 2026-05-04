@@ -2,6 +2,8 @@
 // for information about these interfaces
 import type {DevicesService} from "$lib/server/services/devices.service";
 import type {SchedulerService} from "$lib/server/services/scheduler.service";
+import type {Action} from "@sourceregistry/sveltekit-actionbus";
+import type {ActionBusService} from "$lib/server/services/actionbus.service";
 import type {
 	ActionDeviceAdoptedPayload,
 	ActionDeviceRemovedPayload,
@@ -30,64 +32,34 @@ declare global {
         interface Services {
             devices: DevicesService
             scheduler: SchedulerService
+            actionbus: ActionBusService
         }
 
         interface ActionEvents {
-            'job.snapshot': {
-                type: 'job.snapshot';
-                payload: {
+            'site:${string}': {
+                'job.snapshot': Action<{
                     siteId: string;
                     jobs: ActionJob[];
-                };
-            };
-            'job.updated': {
-                type: 'job.updated';
-                payload: {
+                }>;
+                'job.updated': Action<{
                     siteId: string | null;
                     job: ActionJob;
-                };
+                }>;
+                'device.adopted': Action<ActionDeviceAdoptedPayload>;
+                'device.updated': Action<ActionDeviceUpdatedPayload>;
+                'device.removed': Action<ActionDeviceRemovedPayload>;
+                'metric.updated': Action<DeviceMetricPayload>;
+                'client.updated': Action<ClientUpdatedPayload>;
+                'alert.fired': Action<AlertFiredPayload>;
+                'alert.resolved': Action<AlertResolvedPayload>;
+                'topology.updated': Action<TopologyUpdatedPayload>;
             };
-            'discovery.snapshot': {
-                type: 'discovery.snapshot';
-                payload: {
+            discovery: {
+                'discovery.snapshot': Action<{
                     discoveredDevices: ActionDiscoveryDevice[];
-                };
-            };
-            'discovery.neighbor': {
-                type: 'discovery.neighbor';
-                payload: ActionDiscoveryDevice;
-            };
-            'device.adopted': {
-                type: 'device.adopted';
-                payload: ActionDeviceAdoptedPayload;
-            };
-            'device.updated': {
-                type: 'device.updated';
-                payload: ActionDeviceUpdatedPayload;
-            };
-            'device.removed': {
-                type: 'device.removed';
-                payload: ActionDeviceRemovedPayload;
-            };
-            'metric.updated': {
-                type: 'metric.updated';
-                payload: DeviceMetricPayload;
-            };
-            'client.updated': {
-                type: 'client.updated';
-                payload: ClientUpdatedPayload;
-            };
-            'alert.fired': {
-                type: 'alert.fired';
-                payload: AlertFiredPayload;
-            };
-            'alert.resolved': {
-                type: 'alert.resolved';
-                payload: AlertResolvedPayload;
-            };
-            'topology.updated': {
-                type: 'topology.updated';
-                payload: TopologyUpdatedPayload;
+                }>;
+                'discovery.neighbor': Action<ActionDiscoveryDevice>;
+                'device.adopted': Action<ActionDeviceAdoptedPayload>;
             };
         }
 

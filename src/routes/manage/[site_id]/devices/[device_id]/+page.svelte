@@ -9,9 +9,10 @@
     setJobsSnapshot,
   } from "$lib/client/stores/jobs";
   import { enhance } from "$app/forms";
-  import DevicePortLayout from "$lib/client/components/DevicePortLayout.svelte";
-  import TabLayout from "$lib/client/components/TabLayout.svelte";
-  import TrafficSparkline from "$lib/client/components/TrafficSparkline.svelte";
+  import Button from "$lib/client/components/primitives/Button.svelte";
+  import DevicePortLayout from "$lib/client/components/ui/DevicePortLayout.svelte";
+  import TabLayout from "$lib/client/components/layout/TabLayout.svelte";
+  import TrafficSparkline from "$lib/client/components/ui/TrafficSparkline.svelte";
   import type { JobStatus } from "$lib/shared/action-events";
 
   type DeviceTab = "overview" | "activity" | "backups" | "advanced";
@@ -33,7 +34,8 @@
   );
   const runningJobs = $derived(deviceJobs.filter((job) => isRunningJob(job)));
   const provisioned = $derived(
-    device.adoptionState === "fully_managed" || device.adoptionMode === "managed",
+    device.adoptionState === "fully_managed" ||
+      device.adoptionMode === "managed",
   );
   const tabs: TabItem<DeviceTab>[] = [
     {
@@ -147,9 +149,18 @@
 
   function openTerminalWindow() {
     const width = Math.min(1280, Math.max(960, window.screen.availWidth - 160));
-    const height = Math.min(860, Math.max(640, window.screen.availHeight - 140));
-    const left = Math.max(0, Math.round((window.screen.availWidth - width) / 2));
-    const top = Math.max(0, Math.round((window.screen.availHeight - height) / 2));
+    const height = Math.min(
+      860,
+      Math.max(640, window.screen.availHeight - 140),
+    );
+    const left = Math.max(
+      0,
+      Math.round((window.screen.availWidth - width) / 2),
+    );
+    const top = Math.max(
+      0,
+      Math.round((window.screen.availHeight - height) / 2),
+    );
     const features = [
       "popup=yes",
       "resizable=yes",
@@ -176,9 +187,16 @@
 
 <section class="device-page">
   <div class="device-toolbar">
-    <a class="back-link" href={`${basePath}/devices`} aria-label="Back to devices">
+    <a
+      class="back-link"
+      href={`${basePath}/devices`}
+      aria-label="Back to devices"
+    >
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-        <path fill="currentColor" d="m10.8 5.4 1.4 1.4L8 11h11v2H8l4.2 4.2-1.4 1.4L4.2 12l6.6-6.6Z" />
+        <path
+          fill="currentColor"
+          d="m10.8 5.4 1.4 1.4L8 11h11v2H8l4.2 4.2-1.4 1.4L4.2 12l6.6-6.6Z"
+        />
       </svg>
     </a>
     <div>
@@ -191,7 +209,9 @@
     <div class="hero-product">
       <img src={data.deviceImage.src} alt="" width="132" height="92" />
       <div>
-        <span class={`status-pill status-${device.connectionStatus}`}>{formatLabel(device.connectionStatus)}</span>
+        <span class={`status-pill status-${device.connectionStatus}`}
+          >{formatLabel(device.connectionStatus)}</span
+        >
         <h2>{deviceName}</h2>
         <p>{device.host}:{device.apiPort}</p>
       </div>
@@ -218,7 +238,7 @@
       {#if !provisioned}
         <form method="POST" action="?/provision">
           <input type="hidden" name="deviceId" value={device.id} />
-          <button class="primary-action" type="submit">Provision</button>
+          <Button type="submit">Provision</Button>
         </form>
       {/if}
       <a class="secondary-action" href={`${basePath}/jobs`}>Jobs</a>
@@ -229,12 +249,14 @@
     <div class={form?.success ? "message-success" : "error-message"}>
       {form.message}
       {#if form?.jobId}
-        <a class="message-link" href={`${basePath}/jobs?job=${form.jobId}`}>View task</a>
+        <a class="message-link" href={`${basePath}/jobs?job=${form.jobId}`}
+          >View task</a
+        >
       {/if}
     </div>
   {/if}
 
-  <TabLayout tabs={tabs} activeTab={activeTab} getHref={tabHref} ariaLabel="Device sections">
+  <TabLayout {tabs} {activeTab} getHref={tabHref} ariaLabel="Device sections">
     {#if activeTab === "overview"}
       <section class="content-section">
         <div class="section-heading">
@@ -300,7 +322,11 @@
           <h2>Interfaces</h2>
           <span>{data.interfaces.length}</span>
         </div>
-        <DevicePortLayout model={device.model ?? deviceName} interfaces={data.interfaces} variant="full" />
+        <DevicePortLayout
+          model={device.model ?? deviceName}
+          interfaces={data.interfaces}
+          variant="full"
+        />
         <div class="table-wrap">
           <table>
             <thead>
@@ -318,7 +344,10 @@
                   <tr>
                     <td>{networkInterface.name}</td>
                     <td>
-                      <span class:online={networkInterface.running} class="interface-state">
+                      <span
+                        class:online={networkInterface.running}
+                        class="interface-state"
+                      >
                         {networkInterface.disabled
                           ? "Disabled"
                           : networkInterface.running
@@ -347,7 +376,10 @@
         <section class="content-section">
           <div class="section-heading">
             <h2>Traffic</h2>
-            <span>Last hour · <span class="legend-rx-label">↓ RX</span> <span class="legend-tx-label">↑ TX</span></span>
+            <span
+              >Last hour · <span class="legend-rx-label">↓ RX</span>
+              <span class="legend-tx-label">↑ TX</span></span
+            >
           </div>
           <div class="traffic-grid">
             {#each Object.entries(data.ifaceTraffic) as [name, samples]}
@@ -372,7 +404,11 @@
           <div class="info-grid">
             <div class="info-row">
               <span>Installed version</span>
-              <strong>{data.firmware?.currentVersion ?? data.device.routerOsVersion ?? "—"}</strong>
+              <strong
+                >{data.firmware?.currentVersion ??
+                  data.device.routerOsVersion ??
+                  "—"}</strong
+              >
             </div>
             <div class="info-row">
               <span>Latest ({data.firmware?.channel ?? "stable"})</span>
@@ -384,7 +420,9 @@
                 {#if !data.firmware}
                   <span class="status-pill">Unknown</span>
                 {:else if data.firmware.updateAvailable}
-                  <span class="status-pill status-warning">Update available</span>
+                  <span class="status-pill status-warning"
+                    >Update available</span
+                  >
                 {:else}
                   <span class="status-pill status-success">Up to date</span>
                 {/if}
@@ -393,14 +431,27 @@
           </div>
           <div class="fw-detail-actions">
             <form method="POST" action="?/firmwareCheck" use:enhance>
-              <button type="submit" class="action-link">Check for updates</button>
+              <Button type="submit" size="sm" variant="ghost"
+                >Check for updates</Button
+              >
             </form>
             {#if data.firmware?.updateAvailable}
               <form method="POST" action="?/firmwareUpgrade" use:enhance>
-                <button type="submit" class="action-link action-link-warning"
-                  onclick={(e) => { if (!confirm(`Upgrade to ${data.firmware?.latestVersion}? Device will reboot.`)) e.preventDefault(); }}>
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="warning"
+                  onclick={(e) => {
+                    if (
+                      !confirm(
+                        `Upgrade to ${data.firmware?.latestVersion}? Device will reboot.`,
+                      )
+                    )
+                      e.preventDefault();
+                  }}
+                >
                   Upgrade to {data.firmware.latestVersion}
-                </button>
+                </Button>
               </form>
             {/if}
           </div>
@@ -422,8 +473,14 @@
                   <span>{currentStep?.name ?? "No steps"}</span>
                 </div>
                 <div class="job-progress">
-                  <span class={`status-value status-${getJobStatusTone(job.status)}`}>{formatJobStatus(job.status)}</span>
-                  <div class="progress-bar" aria-label={`${job.progress}% complete`}>
+                  <span
+                    class={`status-value status-${getJobStatusTone(job.status)}`}
+                    >{formatJobStatus(job.status)}</span
+                  >
+                  <div
+                    class="progress-bar"
+                    aria-label={`${job.progress}% complete`}
+                  >
                     <span style={`width: ${job.progress}%`}></span>
                   </div>
                   <small>{job.progress}%</small>
@@ -440,11 +497,15 @@
         <div class="section-heading">
           <h2>Backups</h2>
           <form method="POST" action="?/backup" use:enhance>
-            <button type="submit" class="action-link">+ Run backup now</button>
+            <Button type="submit" size="sm" variant="ghost"
+              >+ Run backup now</Button
+            >
           </form>
         </div>
         {#if data.backups.length === 0}
-          <div class="empty-state">No backups yet. Click "Run backup now" to create one.</div>
+          <div class="empty-state">
+            No backups yet. Click "Run backup now" to create one.
+          </div>
         {:else}
           <div class="table-wrap">
             <table>
@@ -461,8 +522,16 @@
                   <tr>
                     <td>{formatDate(backup.collectedAt)}</td>
                     <td>{backup.kind}</td>
-                    <td>{backup.sizeBytes ? `${(backup.sizeBytes / 1024).toFixed(1)} KB` : '—'}</td>
-                    <td class="mono-cell">{backup.sha256 ? backup.sha256.slice(0, 12) + '…' : '—'}</td>
+                    <td
+                      >{backup.sizeBytes
+                        ? `${(backup.sizeBytes / 1024).toFixed(1)} KB`
+                        : "—"}</td
+                    >
+                    <td class="mono-cell"
+                      >{backup.sha256
+                        ? backup.sha256.slice(0, 12) + "…"
+                        : "—"}</td
+                    >
                   </tr>
                 {/each}
               </tbody>
@@ -487,38 +556,58 @@
             {#if !provisioned}
               <form method="POST" action="?/provision">
                 <input type="hidden" name="deviceId" value={device.id} />
-                <button class="primary-action" type="submit">Provision</button>
+                <Button type="submit">Provision</Button>
               </form>
             {/if}
           </div>
           <div class="advanced-block">
             <strong>Terminal</strong>
-            <p>Open an SSH terminal in a separate linked window for this device.</p>
+            <p>
+              Open an SSH terminal in a separate linked window for this device.
+            </p>
             {#if data.terminalAvailable}
               <button
                 class="secondary-action terminal-link"
                 type="button"
                 onclick={openTerminalWindow}
               >
-                <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
-                  <path fill="currentColor" d="M4 5h16v14H4V5Zm2 2v10h12V7H6Zm1.4 2.4L8.8 8l3.2 3.2-3.2 3.2-1.4-1.4 1.8-1.8-1.8-1.8ZM12 14h4v2h-4v-2Z" />
+                <svg
+                  viewBox="0 0 24 24"
+                  width="17"
+                  height="17"
+                  aria-hidden="true"
+                >
+                  <path
+                    fill="currentColor"
+                    d="M4 5h16v14H4V5Zm2 2v10h12V7H6Zm1.4 2.4L8.8 8l3.2 3.2-3.2 3.2-1.4-1.4 1.8-1.8-1.8-1.8ZM12 14h4v2h-4v-2Z"
+                  />
                 </svg>
                 <span>Open terminal</span>
               </button>
             {:else}
-              <p class="muted">Terminal access is available only to administrators for managed RouterOS devices with SSH trust.</p>
+              <p class="muted">
+                Terminal access is available only to administrators for managed
+                RouterOS devices with SSH trust.
+              </p>
             {/if}
           </div>
           <div class="advanced-block danger-block">
             <strong>Remove device</strong>
-            <p>Factory reset the device and remove it from the controller inventory.</p>
+            <p>
+              Factory reset the device and remove it from the controller
+              inventory.
+            </p>
             {#if device.platform === "routeros"}
               <form method="POST" action="?/remove" onsubmit={confirmRemove}>
                 <input type="hidden" name="deviceId" value={device.id} />
-                <button class="danger-action" type="submit">Reset & Remove</button>
+                <Button variant="danger" size="sm" type="submit"
+                  >Reset & Remove</Button
+                >
               </form>
             {:else}
-              <p class="muted">Only RouterOS devices can be reset and removed.</p>
+              <p class="muted">
+                Only RouterOS devices can be reset and removed.
+              </p>
             {/if}
           </div>
         </div>
@@ -975,7 +1064,11 @@
     color: var(--color-warning, #d97706);
 
     &:hover {
-      background: color-mix(in srgb, var(--color-warning, #d97706) 8%, transparent);
+      background: color-mix(
+        in srgb,
+        var(--color-warning, #d97706) 8%,
+        transparent
+      );
     }
   }
 

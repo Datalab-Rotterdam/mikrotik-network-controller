@@ -1,7 +1,6 @@
 <script lang="ts">
 	import WebSocket from '@sourceregistry/sveltekit-websockets';
 	import { processDiscoveryWebSocketMessage, processDeviceAdopted, processDiscoveryNeighbor } from '$lib/client/stores/discovery-updates';
-	import { devicesState } from '$lib/client/stores/devices';
 
 	function handleMessage(event: MessageEvent<string>) {
 		if (typeof event.data !== 'string') {

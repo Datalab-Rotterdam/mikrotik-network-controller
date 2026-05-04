@@ -1,5 +1,5 @@
 <script lang="ts">
-	import TerminalPane from '$lib/client/components/TerminalPane.svelte';
+	import TerminalPane from '$lib/client/components/ui/TerminalPane.svelte';
 
 	let { data } = $props();
 

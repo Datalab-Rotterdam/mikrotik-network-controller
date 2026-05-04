@@ -1,9 +1,9 @@
 <script lang="ts">
-	import AccountMenu from '$lib/client/components/AccountMenu.svelte';
+	import AccountMenu from '$lib/client/components/ui/AccountMenu.svelte';
 	import ActionSocket from '$lib/client/components/actions/ActionSocket.svelte';
 	import AlertBell from '$lib/client/components/actions/AlertBell.svelte';
 	import LiveDataInvalidator from '$lib/client/components/actions/LiveDataInvalidator.svelte';
-	import SiteSwitcher from '$lib/client/components/SiteSwitcher.svelte';
+	import SiteSwitcher from '$lib/client/components/ui/SiteSwitcher.svelte';
 	import favicon from '$lib/assets/favicon.svg';
 
 	let { children, data } = $props();

@@ -1,15 +1,25 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { onMount } from "svelte";
-  import Form from "$lib/client/components/Form.svelte";
-  import Input from "$lib/client/components/Input.svelte";
-  import SidePanel from "$lib/client/components/SidePanel.svelte";
-  import DevicePortLayout from "$lib/client/components/DevicePortLayout.svelte";
+  import Form from "$lib/client/components/primitives/Form.svelte";
+  import Input from "$lib/client/components/primitives/Input.svelte";
+  import Button from "$lib/client/components/primitives/Button.svelte";
+  import TableSkeleton from "$lib/client/components/primitives/TableSkeleton.svelte";
+  import EmptyState from "$lib/client/components/primitives/EmptyState.svelte";
+  import StatusBadge from "$lib/client/components/primitives/StatusBadge.svelte";
+  import SidePanel from "$lib/client/components/layout/SidePanel.svelte";
+  import DevicePortLayout from "$lib/client/components/ui/DevicePortLayout.svelte";
   import {
     discoveredDevices,
     initializeDiscoveryDeviceSnapshot,
   } from "$lib/client/stores/discovery-updates";
-  import { setDevicesState, setLoading } from "$lib/client/stores/devices";
+  import {
+    devicesState,
+    setDevicesState,
+    removeDevice,
+    processDeviceAdopted,
+    updateDevice,
+  } from "$lib/client/stores/devices";
   import {
     formatJobStatus,
     getCurrentStep,
@@ -17,6 +27,7 @@
     isRunningJob,
     jobsState,
   } from "$lib/client/stores/jobs";
+  import { useActionSocket } from "$lib/client/actions/use-action-socket";
 
   let { data, form } = $props();
   const basePath = $derived(`/manage/${data.site.id}`);
@@ -32,11 +43,13 @@
   const panelSiteName = $derived(form?.siteName ?? data.adoptionPanel.siteName);
   const panelDiscovery = $derived({
     identity: form?.discoveryIdentity ?? data.adoptionPanel.discovery.identity,
-    macAddress: form?.discoveryMacAddress ?? data.adoptionPanel.discovery.macAddress,
+    macAddress:
+      form?.discoveryMacAddress ?? data.adoptionPanel.discovery.macAddress,
     version: form?.discoveryVersion ?? data.adoptionPanel.discovery.version,
     hardware: form?.discoveryHardware ?? data.adoptionPanel.discovery.hardware,
     interfaceName:
-      form?.discoveryInterfaceName ?? data.adoptionPanel.discovery.interfaceName,
+      form?.discoveryInterfaceName ??
+      data.adoptionPanel.discovery.interfaceName,
   });
   const panelHasDiscoveryContext = $derived(
     Boolean(
@@ -50,27 +63,25 @@
   const selectedDeviceId = $derived(data.selectedDeviceId);
 
   onMount(() => {
-    setLoading(true);
     initializeDiscoveryDeviceSnapshot(data.discoveredDevices);
 
     const devices = data.devices.map((device) => ({
       id: device.id,
-      type: (device.platform === "switchos" ? "switch" : "router") as "router" | "switch",
+      type: (device.platform === "switchos" ? "switch" : "router") as
+        | "router"
+        | "switch",
       name: device.identity ?? device.name,
-      application: "Network",
       status: device.connectionStatus,
-      macAddress: "",
       model: device.model ?? "",
       version: device.routerOsVersion ?? "",
       ipAddress: device.host,
-      uplink: "",
-      parentDevice: "",
       platform: device.platform,
       adopted: true,
       adoptionMode: device.adoptionMode,
       adoptionState: device.adoptionState,
       image: data.deviceImages[device.id],
       interfaces: data.deviceInterfaces[device.id] ?? [],
+      macAddress: "",
       details: {
         identity: device.identity ?? "",
         serialNumber: device.serialNumber ?? "",
@@ -111,9 +122,7 @@
     new Set(data.devices.map((device) => device.host)),
   );
   const runtimeDiscoveredDevices = $derived(
-    $discoveredDevices.length
-      ? $discoveredDevices
-      : data.discoveredDevices,
+    $discoveredDevices.length ? $discoveredDevices : data.discoveredDevices,
   );
   const discoveredRows = $derived(
     runtimeDiscoveredDevices
@@ -122,20 +131,18 @@
         id: device.id,
         type: "router",
         name: device.identity ?? "Discovered MikroTik",
-        application: "Network",
         status: "Discovered",
-        macAddress: device.macAddress ?? "",
         model: device.hardware ?? device.platform ?? "",
         version: device.version ?? "",
         ipAddress: device.address ?? "",
-        uplink: device.interfaceName ?? "",
-        parentDevice: "",
         platform: device.platform ?? "routeros",
         adopted: false,
         adoptionMode: "read_only",
         adoptionState: "discovered",
         image: data.deviceImages[device.id],
         interfaces: [],
+        macAddress: device.macAddress ?? "",
+        discoveryInterfaceName: device.interfaceName ?? "",
         details: {
           identity: device.identity ?? "",
           serialNumber: "",
@@ -154,20 +161,17 @@
       id: device.id,
       type: device.platform === "switchos" ? "switch" : "router",
       name: device.identity ?? device.name,
-      application: "Network",
       status: device.connectionStatus,
-      macAddress: "",
       model: device.model ?? "",
       version: device.routerOsVersion ?? "",
       ipAddress: device.host,
-      uplink: "",
-      parentDevice: "",
       platform: device.platform,
       adopted: true,
       adoptionMode: device.adoptionMode,
       adoptionState: device.adoptionState,
       image: data.deviceImages[device.id],
       interfaces: data.deviceInterfaces[device.id] ?? [],
+      macAddress: "",
       firmware: data.firmwareByDeviceId[device.id] ?? null,
       details: {
         identity: device.identity ?? "",
@@ -287,6 +291,52 @@
     }).format(new Date(value));
   }
 
+  // Real-time updates via WebSocket
+  try {
+    const bus = useActionSocket();
+    bus.subscribe(
+      ["device.adopted", "device.removed", "device.updated"],
+      (event) => {
+        if (event.type === "device.adopted") {
+          processDeviceAdopted(event.payload);
+        } else if (event.type === "device.removed") {
+          removeDevice(event.payload.deviceId);
+        } else if (event.type === "device.updated" && event.payload.connectionStatus) {
+          updateDevice(event.payload.deviceId, {
+            status: event.payload.connectionStatus,
+          });
+        }
+      },
+    );
+  } catch {
+    // ActionSocket not available — real-time updates disabled
+  }
+
+  // Normalize status values for StatusBadge
+  type StatusValue =
+    | "online"
+    | "offline"
+    | "auth_failed"
+    | "blocked"
+    | "unknown"
+    | "discovered";
+  function normalizeStatus(status: string): StatusValue {
+    const normalized = status.toLowerCase().replace(/\s+/g, "_");
+    if (
+      [
+        "online",
+        "offline",
+        "auth_failed",
+        "blocked",
+        "unknown",
+        "discovered",
+      ].includes(normalized)
+    ) {
+      return normalized as StatusValue;
+    }
+    return "unknown";
+  }
+
   function confirmRemove(event: SubmitEvent) {
     if (!selectedDevice) {
       event.preventDefault();
@@ -336,27 +386,30 @@
   </div>
 
   <div class="devices-table-wrap">
-    <table class="devices-table">
-      <thead>
-        <tr>
-          <th class="col-state" style="width: 10px;"></th>
-          <th class="col-type" style="width: 64px;">Type</th>
-          <th class="col-name">Name</th>
-          <th class="col-application">Application</th>
-          <th class="col-status">Status</th>
-          <th class="col-ip">IP Address</th>
-          <th class="col-uplink">Uplink</th>
-          <th class="col-parent">Parent Device</th>
-          <th class="col-version">RouterOS</th>
-          <th class="col-model">Model</th>
-          <th class="col-mac">MAC Address</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#if rows.length}
-          {#each rows as device}
+    {#if $devicesState.loading}
+      <TableSkeleton columns={7} rows={6} />
+    {:else if rows.length}
+      <table class="devices-table">
+        <thead>
+          <tr>
+            <th class="col-state" style="width: 10px;"></th>
+            <th class="col-type" style="width: 64px;">Type</th>
+            <th class="col-name">Name</th>
+            <th class="col-status">Status</th>
+            <th class="col-ip">IP Address</th>
+            <th class="col-version">RouterOS</th>
+            <th class="col-model">Model</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#if adoptedRows.length}
+            <tr class="section-header">
+              <td colspan="7">Adopted ({adoptedRows.length})</td>
+            </tr>
+          {/if}
+          {#each adoptedRows as device}
             <tr
-              class="device-row"
+              class="device-row device-row--adopted"
               class:selected={device.id === selectedDeviceId}
               role="button"
               tabindex="0"
@@ -365,7 +418,7 @@
               onkeydown={(event) => openDeviceFromKeyboard(event, device.id)}
             >
               <td class="col-state">
-                <span class:adopted={device.adopted} class="device-dot"></span>
+                <span class:adopted={true} class="device-dot"></span>
               </td>
               <td class="col-type">
                 <span class="device-type">
@@ -373,64 +426,70 @@
                 </span>
               </td>
               <td class="col-name">{device.name}</td>
-              <td class="col-application">{device.application}</td>
               <td class="col-status">
-                {#if device.adopted}
-                  <span class="status-text">{device.status}</span>
-                {:else}
-                  <a
-                    class="status-action"
-                    href={adoptHref(device)}
-                  >
-                    Click to Adopt
-                  </a>
-                {/if}
+                <StatusBadge status={normalizeStatus(device.status)} />
               </td>
               <td class="col-ip">{device.ipAddress}</td>
-              <td class="col-uplink">{device.uplink}</td>
-              <td class="col-parent">{device.parentDevice}</td>
               <td class="col-version">
                 <span class="version-cell">
                   {device.version || "—"}
-                  {#if device.firmware?.updateAvailable}
+                  {#if "firmware" in device && (device as any).firmware?.updateAvailable}
                     <span class="fw-badge">Update</span>
                   {/if}
                 </span>
               </td>
               <td class="col-model">{device.model}</td>
-              <td class="col-mac">{device.macAddress}</td>
             </tr>
           {/each}
-        {:else}
-          <tr>
-            <td colspan="11">
-              <div class="empty-devices">
-                <div>
-                  <div class="empty-devices-icon">
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="48"
-                      height="48"
-                      aria-hidden="true"
-                    >
-                      <path
-                        fill="currentColor"
-                        d="M4 6h11v8H4V6Zm2 2v4h7V8H6Zm11 1h3v7h-3V9ZM3 17h18v2H3v-2Z"
-                      />
-                    </svg>
-                  </div>
-                  <strong>No MikroTik Devices Have Been Adopted</strong>
-                  <p>
-                    If devices are missing, make sure they are online and
-                    reachable from the controller.
-                  </p>
-                </div>
-              </div>
-            </td>
-          </tr>
-        {/if}
-      </tbody>
-    </table>
+          {#if discoveredRows.length}
+            <tr class="section-header">
+              <td colspan="7">Discovered ({discoveredRows.length})</td>
+            </tr>
+          {/if}
+          {#each discoveredRows as device}
+            <tr
+              class="device-row device-row--discovered"
+              class:selected={device.id === selectedDeviceId}
+              role="button"
+              tabindex="0"
+              aria-label={`Adopt ${device.name}`}
+              onclick={(event) => openDevice(event, device.id)}
+              onkeydown={(event) => openDeviceFromKeyboard(event, device.id)}
+            >
+              <td class="col-state">
+                <span class="device-dot"></span>
+              </td>
+              <td class="col-type">
+                <span class="device-type">
+                  <img src={device.image.src} alt="" width="28" height="28" />
+                </span>
+              </td>
+              <td class="col-name">{device.name}</td>
+              <td class="col-status">
+                <a class="adopt-action" href={adoptHref(device)}>
+                  <StatusBadge status="discovered" />
+                </a>
+              </td>
+              <td class="col-ip">{device.ipAddress}</td>
+              <td class="col-version">
+                <span class="version-cell">{device.version || "—"}</span>
+              </td>
+              <td class="col-model">{device.model}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {:else}
+      <EmptyState
+        icon="M4 6h11v8H4V6Zm2 2v4h7V8H6Zm11 1h3v7h-3V9ZM3 17h18v2H3v-2Z"
+        title="No MikroTik Devices Have Been Adopted"
+        description="If devices are missing, make sure they are online and reachable from the controller."
+      >
+        <a class="adopt-link" href={`${basePath}/devices?adopt=`}>
+          <Button variant="primary">Adopt Device</Button>
+        </a>
+      </EmptyState>
+    {/if}
   </div>
 
   <SidePanel
@@ -566,7 +625,7 @@
         </div>
       </details>
 
-      <button class="adopt-submit" type="submit">Adopt</button>
+      <Button type="submit" variant="primary" fullWidth>Adopt</Button>
     </Form>
 
     <Form action="?/adopt" compact ariaLabel="Prepare bootstrap">
@@ -581,9 +640,9 @@
             placeholder="10.10.0.0/16,100.64.0.0/10"
             value={form?.managementCidrs ?? ""}
           />
-          <button class="secondary-submit" type="submit">
-            Prepare Bootstrap Task
-          </button>
+          <Button variant="secondary" type="submit" fullWidth
+            >Prepare Bootstrap Task</Button
+          >
         </div>
       </details>
     </Form>
@@ -596,36 +655,6 @@
       closeHref={`${basePath}/devices`}
     >
       <div class="device-details">
-        <div class="details-tabs" aria-label="Device sections">
-          <span class="active">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M7 3h2v18H7V3Zm8 0h2v18h-2V3ZM3 8h2v8H3V8Zm16 0h2v8h-2V8Z"
-              />
-            </svg>
-            Overview
-          </span>
-          <span>
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M5 19h14v2H5v-2Zm1-8h3v6H6v-6Zm5-8h3v14h-3V3Zm5 5h3v9h-3V8Z"
-              />
-            </svg>
-            Insights
-          </span>
-          <span>
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="m19.4 13.5.1-1.5-.1-1.5 2-1.5-2-3.5-2.4 1a8.8 8.8 0 0 0-2.6-1.5L14 2h-4l-.4 2.5A8.8 8.8 0 0 0 7 6L4.6 5 2.6 8.5l2 1.5-.1 1.5.1 1.5-2 1.5 2 3.5 2.4-1a8.8 8.8 0 0 0 2.6 1.5L10 22h4l.4-2.5A8.8 8.8 0 0 0 17 18l2.4 1 2-3.5-2-1.5ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"
-              />
-            </svg>
-            Settings
-          </span>
-        </div>
-
         <div class="device-hero">
           <img src={selectedDevice.image.src} alt="" width="112" height="76" />
           <h3>{selectedDevice.name}</h3>
@@ -636,8 +665,16 @@
               href={`${basePath}/devices/${selectedDevice.id}`}
               aria-label={`Open ${selectedDevice.name} full device page`}
             >
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                <path fill="currentColor" d="M5 5h7v2H7v10h10v-5h2v7H5V5Zm9 0h5v5h-2V8.4l-6.3 6.3-1.4-1.4L15.6 7H14V5Z" />
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                aria-hidden="true"
+              >
+                <path
+                  fill="currentColor"
+                  d="M5 5h7v2H7v10h10v-5h2v7H5V5Zm9 0h5v5h-2V8.4l-6.3 6.3-1.4-1.4L15.6 7H14V5Z"
+                />
               </svg>
               Open full page
             </a>
@@ -702,9 +739,14 @@
               <a class="task-block" href={`${basePath}/jobs?job=${job.id}`}>
                 <div class="task-title">
                   <strong>{job.type}</strong>
-                  <span class:active={isRunningJob(job)}>{formatJobStatus(job.status)}</span>
+                  <span class:active={isRunningJob(job)}
+                    >{formatJobStatus(job.status)}</span
+                  >
                 </div>
-                <div class="task-progress" aria-label={`${job.progress}% complete`}>
+                <div
+                  class="task-progress"
+                  aria-label={`${job.progress}% complete`}
+                >
                   <span style={`width: ${job.progress}%`}></span>
                 </div>
                 <div class="task-meta">
@@ -714,35 +756,49 @@
               </a>
             {/each}
             {#if selectedDeviceRunningJobs.length}
-              <p class="muted">{selectedDeviceRunningJobs.length} task{selectedDeviceRunningJobs.length === 1 ? "" : "s"} running now.</p>
+              <p class="muted">
+                {selectedDeviceRunningJobs.length} task{selectedDeviceRunningJobs.length ===
+                1
+                  ? ""
+                  : "s"} running now.
+              </p>
             {/if}
           </div>
         {/if}
 
         {#if selectedDevice.adopted && selectedDevice.platform === "routeros"}
-          {@const fw = selectedDevice.firmware}
+          {@const fwData = selectedDevice as any}
+          {@const fw = fwData.firmware}
           <div class="details-card">
             <div class="card-heading">
               <strong>Firmware</strong>
               {#if fw?.checkedAt}
-                <span class="card-meta">Checked {formatDate(fw.checkedAt)}</span>
+                <span class="card-meta">Checked {formatDate(fw.checkedAt)}</span
+                >
               {/if}
             </div>
             <div class="info-row">
               <span>Installed</span>
-              <strong>{(fw?.currentVersion ?? selectedDevice.version) || "—"}</strong>
+              <strong
+                >{(fw?.currentVersion ?? selectedDevice.version) || "—"}</strong
+              >
             </div>
             {#if fw?.latestVersion}
               <div class="info-row">
                 <span>Latest ({fw.channel})</span>
-                <strong class:fw-outdated={fw.updateAvailable}>{fw.latestVersion}</strong>
+                <strong class:fw-outdated={fw.updateAvailable}
+                  >{fw.latestVersion}</strong
+                >
               </div>
             {/if}
             {#if form?.action === "firmwareCheck" && form?.message}
               <div class={form?.success ? "status-success" : "error-message"}>
                 {form.message}
                 {#if form?.jobId}
-                  <a class="message-link" href={`${basePath}/jobs?job=${form.jobId}`}>View task</a>
+                  <a
+                    class="message-link"
+                    href={`${basePath}/jobs?job=${form.jobId}`}>View task</a
+                  >
                 {/if}
               </div>
             {/if}
@@ -750,22 +806,43 @@
               <div class={form?.success ? "status-success" : "error-message"}>
                 {form.message}
                 {#if form?.jobId}
-                  <a class="message-link" href={`${basePath}/jobs?job=${form.jobId}`}>View task</a>
+                  <a
+                    class="message-link"
+                    href={`${basePath}/jobs?job=${form.jobId}`}>View task</a
+                  >
                 {/if}
               </div>
             {/if}
             <div class="fw-actions">
               <form method="POST" action="?/firmwareCheck">
-                <input type="hidden" name="deviceId" value={selectedDevice.id} />
-                <button class="secondary-submit" type="submit">Check for updates</button>
+                <input
+                  type="hidden"
+                  name="deviceId"
+                  value={selectedDevice.id}
+                />
+                <Button variant="secondary" size="sm">Check for updates</Button>
               </form>
               {#if fw?.updateAvailable}
                 <form method="POST" action="?/firmwareUpgrade">
-                  <input type="hidden" name="deviceId" value={selectedDevice.id} />
-                  <button class="upgrade-submit" type="submit"
-                    onclick={(e) => { if (!confirm(`Upgrade ${selectedDevice.name} to ${fw.latestVersion}? Device will reboot.`)) e.preventDefault(); }}>
+                  <input
+                    type="hidden"
+                    name="deviceId"
+                    value={selectedDevice.id}
+                  />
+                  <Button
+                    variant="warning"
+                    fullWidth
+                    onclick={(e) => {
+                      if (
+                        !confirm(
+                          `Upgrade ${selectedDevice.name} to ${fw.latestVersion}? Device will reboot.`,
+                        )
+                      )
+                        e.preventDefault();
+                    }}
+                  >
                     Upgrade to {fw.latestVersion}
-                  </button>
+                  </Button>
                 </form>
               {/if}
             </div>
@@ -782,8 +859,9 @@
               <div class={form?.success ? "status-success" : "error-message"}>
                 {form.message}
                 {#if form?.jobId}
-                  <a class="message-link" href={`${basePath}/jobs?job=${form.jobId}`}
-                    >View task</a
+                  <a
+                    class="message-link"
+                    href={`${basePath}/jobs?job=${form.jobId}`}>View task</a
                   >
                 {/if}
               </div>
@@ -795,9 +873,7 @@
               aria-label={`Provision ${selectedDevice.name}`}
             >
               <input type="hidden" name="deviceId" value={selectedDevice.id} />
-              <button class="adopt-submit" type="submit">
-                Provision
-              </button>
+              <Button variant="primary" fullWidth>Provision</Button>
             </form>
           </div>
         {/if}
@@ -820,9 +896,20 @@
               onsubmit={confirmRemove}
             >
               <input type="hidden" name="deviceId" value={selectedDevice.id} />
-              <button class="remove-submit" type="submit">
+              <Button
+                variant="danger"
+                fullWidth
+                onclick={(e: Event) => {
+                  if (
+                    !confirm(
+                      `Factory reset ${selectedDevice.name} and remove it from the controller? Device will reboot.`,
+                    )
+                  )
+                    e.preventDefault();
+                }}
+              >
                 Reset & Remove
-              </button>
+              </Button>
             </form>
           </div>
         {/if}
@@ -833,7 +920,11 @@
               <strong>Interfaces</strong>
               <span>{selectedDevice.interfaces.length}</span>
             </div>
-            <DevicePortLayout model={selectedDevice.model || selectedDevice.name} interfaces={selectedDevice.interfaces} variant="compact" />
+            <DevicePortLayout
+              model={selectedDevice.model || selectedDevice.name}
+              interfaces={selectedDevice.interfaces}
+              variant="compact"
+            />
           </div>
         {:else}
           <a
@@ -957,19 +1048,57 @@
     font-weight: 800;
   }
 
+  .section-header td {
+    height: 28px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    border-bottom: 0;
+    color: var(--color-muted, #686c6b);
+    font-size: 11px;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--color-page, #f3f4f4);
+  }
+
   .device-row {
     cursor: pointer;
     outline: 0;
   }
 
-  .device-row:hover,
-  .device-row:focus-visible,
-  .device-row.selected {
+  .device-row:focus-visible td {
+    box-shadow: inset 0 0 0 2px rgba(0, 100, 255, 0.16);
+  }
+
+  .device-row--adopted:hover,
+  .device-row--adopted.selected {
     background: #fbfdff;
   }
 
-  .device-row:focus-visible td {
-    box-shadow: inset 0 0 0 2px rgba(0, 100, 255, 0.16);
+  .device-row--discovered {
+    background: var(--color-warning-light, #fef3c7);
+  }
+
+  .device-row--discovered:hover,
+  .device-row--discovered.selected {
+    background: color-mix(
+      in srgb,
+      var(--color-warning-light, #fef3c7) 80%,
+      #fff
+    );
+  }
+
+  .adopt-action {
+    color: inherit;
+    text-decoration: none;
+
+    &:hover {
+      opacity: 0.8;
+    }
+  }
+
+  .adopt-link {
+    text-decoration: none;
   }
 
   .device-type {
@@ -990,53 +1119,11 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: #e5a13a;
+    background: var(--color-warning, #f59e0b);
   }
 
   .device-dot.adopted {
-    background: #36b36a;
-  }
-
-  .empty-devices {
-    display: grid;
-    place-items: center;
-    min-height: 360px;
-    color: #656c72;
-    text-align: center;
-  }
-
-  .empty-devices-icon {
-    display: grid;
-    place-items: center;
-    width: 50px;
-    height: 42px;
-    margin: 0 auto 12px;
-    color: #c8dff7;
-  }
-
-  .empty-devices strong {
-    display: block;
-    margin-bottom: 8px;
-    color: #50575d;
-  }
-
-  .empty-devices p {
-    max-width: 380px;
-    margin: 0;
-    line-height: 1.5;
-  }
-
-  .status-text {
-    color: #323a40;
-  }
-
-  .status-action {
-    color: var(--color-link);
-    font-weight: 500;
-  }
-
-  .status-action:hover {
-    text-decoration: underline;
+    background: var(--color-success, #16a34a);
   }
 
   .advanced-settings {
@@ -1151,28 +1238,8 @@
   .device-details {
     display: grid;
     gap: 16px;
-  }
-
-  .details-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    overflow: hidden;
-    border-radius: 6px;
-    background: #fbfdff;
-  }
-
-  .details-tabs span {
-    display: grid;
-    place-items: center;
-    gap: 5px;
-    min-height: 58px;
-    color: #717b84;
-    font-size: 12px;
-  }
-
-  .details-tabs .active {
-    color: var(--color-link);
-    background: var(--color-surface);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .device-hero {
@@ -1439,7 +1506,7 @@
     }
 
     .devices-table {
-      min-width: 560px;
+      min-width: 480px;
     }
 
     .devices-table th,
@@ -1447,12 +1514,8 @@
       padding: 0 10px;
     }
 
-    .devices-table .col-application,
-    .devices-table .col-uplink,
-    .devices-table .col-parent,
     .devices-table .col-version,
-    .devices-table .col-model,
-    .devices-table .col-mac {
+    .devices-table .col-model {
       display: none;
     }
 
@@ -1480,7 +1543,7 @@
 
   @media (max-width: 520px) {
     .devices-table {
-      min-width: 500px;
+      min-width: 380px;
     }
 
     .devices-table .col-type {
@@ -1497,11 +1560,11 @@
     }
 
     .devices-table .col-status {
-      width: 112px;
+      width: 100px;
     }
 
     .devices-table .col-ip {
-      width: 120px;
+      width: 110px;
     }
   }
 </style>

@@ -1,0 +1,83 @@
+/**
+ * Layout utilities — .container, grid, responsive
+ */
+@use "sass:map";
+@use "sass:math";
+
+$sizes: (
+  'xs': 0,
+  'sm': 576px,
+  'md': 768px,
+  'lg': 992px,
+  'xl': 1200px,
+  'xxl': 1400px
+);
+
+@mixin respond($size) {
+  $breakpoint: map.get($sizes, $size);
+  @if $breakpoint != null {
+    @media (min-width: $breakpoint) {
+      @content;
+    }
+  }
+}
+
+@mixin respond-max($size) {
+  $breakpoint: map.get($sizes, $size);
+  @if $breakpoint != null {
+    @if $breakpoint == 0 {
+      @content;
+    } @else {
+      @media (max-width: ($breakpoint - 1px)) {
+        @content;
+      }
+    }
+  }
+}
+
+// — Flex utilities
+.d-flex {
+  display: flex;
+}
+
+.d-grid {
+  display: grid;
+}
+
+.d-none {
+  display: none;
+}
+
+// — Responsive show/hide
+@each $name, $bp in $sizes {
+  .d-#{$name}-none {
+    @include respond($name) {
+      display: none !important;
+    }
+  }
+
+  .d-#{$name}-flex {
+    @include respond($name) {
+      display: flex !important;
+    }
+  }
+
+  .d-#{$name}-grid {
+    @include respond($name) {
+      display: grid !important;
+    }
+  }
+}
+
+// — Grid columns
+@mixin make-col($size, $columns: 12) {
+  flex: 0 0 math.percentage(math.div($size, $columns));
+  max-width: math.percentage(math.div($size, $columns));
+}
+
+// — Responsive grid columns
+@for $i from 1 through 12 {
+  .col-#{$i} {
+    @include make-col($i);
+  }
+}

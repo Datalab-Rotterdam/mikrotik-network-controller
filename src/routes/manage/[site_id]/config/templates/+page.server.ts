@@ -1,15 +1,13 @@
-import { error, fail, redirect, type Actions } from '@sveltejs/kit';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import {
 	listTemplates,
 	getTemplate,
 	createTemplate,
 	updateTemplate,
 	deleteTemplate,
-	listDeployments
 } from '$lib/server/repositories/templates.repository';
 import { extractPlaceholders, renderTemplate, diffConfigs } from '$lib/server/services/template-renderer.service';
 import type { TemplateVariable } from '$lib/server/services/template-renderer.service';
-import { deployConfig } from '$lib/server/services/config-deploy.service';
 import { listDevices } from '$lib/server/repositories/telemetry.repository';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
 import { createConfigDeployTask } from '$lib/server/services/devices.service/tasks';
@@ -23,7 +21,7 @@ export async function load({ parent, params, depends }) {
 		listDevices(site.id)
 	]);
 
-	const selectedId = params.template_id ?? null;
+	const selectedId = (params as Record<string, string>).template_id ?? null;
 
 	return { templates, selectedId, devices };
 }

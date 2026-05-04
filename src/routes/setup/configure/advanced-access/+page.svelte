@@ -1,6 +1,6 @@
 <script lang="ts">
-	import Form from '$lib/client/components/Form.svelte';
-	import Input from '$lib/client/components/Input.svelte';
+	import Form from '$lib/client/components/primitives/Form.svelte';
+	import Input from '$lib/client/components/primitives/Input.svelte';
 
 	let { data, form } = $props();
 

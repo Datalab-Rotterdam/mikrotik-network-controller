@@ -1,4 +1,6 @@
 import { websockets } from '@sourceregistry/sveltekit-websockets/server';
+import { Service } from '@sourceregistry/sveltekit-service-manager/server';
+import '$lib/server/services/actionbus.service';
 import discoveryService from '$lib/server/services/discovery.service';
 import { listDevices } from '$lib/server/repositories/device.repository';
 import { adoptionEvents } from '$lib/server/services/adoption.service';
@@ -6,8 +8,7 @@ import { deviceEvents } from '$lib/server/services/device-events.service';
 import { monitoringEvents } from '$lib/server/services/monitoring-events.service';
 import { alertEvaluatorEvents } from '$lib/server/services/alert-evaluator.service';
 import {
-	getJobWithSteps,
-	listRecentJobsBySite
+	getJobWithSteps
 } from '$lib/server/repositories/job.repository';
 import { getLatestDeviceMetric } from '$lib/server/repositories/metrics.repository';
 import { getActiveClientCountBySite } from '$lib/server/repositories/clients.repository';
@@ -15,7 +16,6 @@ import {
 	schedulerEvents
 } from '$lib/server/services/scheduler.service';
 import type {
-	ActionEvent,
 	ActionJob,
 	ActionJobStep,
 	AlertFiredEvent,
@@ -23,8 +23,6 @@ import type {
 	ClientUpdatedEvent,
 	DeviceRemovedEvent,
 	DeviceUpdatedEvent,
-	DiscoverySnapshotEvent,
-	JobSnapshotEvent,
 	JobUpdatedEvent,
 	MetricUpdatedEvent,
 	TopologyUpdatedEvent
@@ -71,10 +69,6 @@ type DeviceAdoptedMessage = {
 type DiscoveryWebSocketMessage = DiscoverySnapshotMessage | DiscoveryNeighborMessage | DeviceAdoptedMessage;
 
 const discoveryController = websockets.continuous('/ws/discovery', { useConnectionKeys: false });
-const actionController = websockets.continuous('/ws/controller', {
-	useConnectionKeys: false,
-	requiredParams: ['siteId']
-});
 
 function serializeDate(value: Date | string | null | undefined): string | null {
 	if (!value) {
@@ -154,45 +148,8 @@ function broadcast(message: DiscoveryWebSocketMessage): void {
 	});
 }
 
-function broadcastAction(message: ActionEvent): void {
-	actionController.broadcast(JSON.stringify(message), {
-		filter: (socket) => {
-			if (socket.readyState !== socket.OPEN) {
-				return false;
-			}
-
-			const siteId = socket.params?.siteId;
-			if (message.type === 'job.snapshot') {
-				return message.payload.siteId === siteId;
-			}
-
-			if (message.type === 'job.updated') {
-				return !message.payload.siteId || message.payload.siteId === siteId;
-			}
-
-			if (
-				message.type === 'device.adopted' ||
-				message.type === 'device.updated' ||
-				message.type === 'device.removed'
-			) {
-				return message.payload.siteId === siteId;
-			}
-
-			if (message.type === 'metric.updated' || message.type === 'client.updated') {
-				return !message.payload.siteId || message.payload.siteId === siteId;
-			}
-
-			if (message.type === 'alert.fired' || message.type === 'alert.resolved') {
-				return message.payload.siteId === siteId;
-			}
-
-			if (message.type === 'topology.updated') {
-				return message.payload.siteId === siteId;
-			}
-
-			return true;
-		}
-	});
+function actionbus() {
+	return Service('actionbus');
 }
 
 async function sendSnapshot(socket: { send(data: string): void }): Promise<void> {
@@ -204,35 +161,6 @@ async function sendSnapshot(socket: { send(data: string): void }): Promise<void>
 	};
 
 	socket.send(JSON.stringify(snapshot));
-}
-
-async function sendActionSnapshot(socket: { send(data: string): void; params?: Record<string, string> }): Promise<void> {
-	const siteId = socket.params?.siteId;
-	if (!siteId) {
-		return;
-	}
-
-	const recentJobs = await listRecentJobsBySite(siteId, 50);
-	const hydratedJobs = await Promise.all(recentJobs.map((job) => getJobWithSteps(job.id)));
-	const jobSnapshot: JobSnapshotEvent = {
-		type: 'job.snapshot',
-		payload: {
-			siteId,
-			jobs: hydratedJobs
-				.filter((job): job is NonNullable<Awaited<ReturnType<typeof getJobWithSteps>>> => Boolean(job))
-				.map(serializeJob)
-		}
-	};
-
-	const discoverySnapshot: DiscoverySnapshotEvent = {
-		type: 'discovery.snapshot',
-		payload: {
-			discoveredDevices: await buildDiscoverySnapshot()
-		}
-	};
-
-	socket.send(JSON.stringify(jobSnapshot));
-	socket.send(JSON.stringify(discoverySnapshot));
 }
 
 async function handleNeighbor(device: DiscoveryDevice): Promise<void> {
@@ -249,7 +177,7 @@ async function handleNeighbor(device: DiscoveryDevice): Promise<void> {
 	};
 
 	broadcast(message);
-	broadcastAction({
+	actionbus().publishDiscovery({
 		type: 'discovery.neighbor',
 		payload: device
 	});
@@ -262,21 +190,21 @@ function handleDeviceAdopted(payload: DeviceAdoptedPayload): void {
 	};
 
 	broadcast(message);
-	broadcastAction({
+	actionbus().publishSite(payload.siteId, {
 		type: 'device.adopted',
 		payload
 	});
 }
 
 function handleDeviceUpdated(payload: DeviceUpdatedEvent['payload']): void {
-	broadcastAction({
+	actionbus().publishSite(payload.siteId, {
 		type: 'device.updated',
 		payload
 	});
 }
 
 function handleDeviceRemoved(payload: DeviceRemovedEvent['payload']): void {
-	broadcastAction({
+	actionbus().publishSite(payload.siteId, {
 		type: 'device.removed',
 		payload
 	});
@@ -304,7 +232,7 @@ async function handleMetricUpdated(detail: {
 		}
 	};
 
-	broadcastAction(event);
+	actionbus().publishSite(event.payload.siteId, event);
 }
 
 async function handleClientUpdated(detail: { siteId: string | null }): Promise<void> {
@@ -319,7 +247,7 @@ async function handleClientUpdated(detail: { siteId: string | null }): Promise<v
 		}
 	};
 
-	broadcastAction(event);
+	actionbus().publishSite(event.payload.siteId, event);
 }
 
 async function handleSchedulerEvent(detail: { jobId: string }): Promise<void> {
@@ -336,17 +264,11 @@ async function handleSchedulerEvent(detail: { jobId: string }): Promise<void> {
 		}
 	};
 
-	broadcastAction(message);
+	actionbus().publishSite(message.payload.siteId, message);
 }
 
 discoveryController.on('connect', (socket) => {
 	void sendSnapshot(socket).catch(() => {
-		/* ignore send failures */
-	});
-});
-
-actionController.on('connect', (socket) => {
-	void sendActionSnapshot(socket).catch(() => {
 		/* ignore send failures */
 	});
 });
@@ -384,7 +306,7 @@ alertEvaluatorEvents.on('alert:fired', (detail) => {
 			message: detail.message
 		}
 	};
-	broadcastAction(event);
+	actionbus().publishSite(event.payload.siteId, event);
 });
 
 monitoringEvents.on('topology:updated', (detail) => {
@@ -393,7 +315,7 @@ monitoringEvents.on('topology:updated', (detail) => {
 		type: 'topology.updated',
 		payload: { siteId: detail.siteId }
 	};
-	broadcastAction(event);
+	actionbus().publishSite(event.payload.siteId, event);
 });
 
 alertEvaluatorEvents.on('alert:resolved', (detail) => {
@@ -406,7 +328,7 @@ alertEvaluatorEvents.on('alert:resolved', (detail) => {
 			deviceId: detail.deviceId
 		}
 	};
-	broadcastAction(event);
+	actionbus().publishSite(event.payload.siteId, event);
 });
 
 for (const eventName of [
@@ -433,6 +355,5 @@ for (const eventName of [
 }
 
 export {
-	actionController as actionWebsocketController,
 	discoveryController as discoveryWebsocketController
 };

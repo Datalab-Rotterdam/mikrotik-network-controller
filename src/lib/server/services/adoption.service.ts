@@ -201,8 +201,8 @@ export async function upsertAdoptionInventory(input: AdoptDeviceInput, siteId: s
 				type: networkInterface.type,
 				macAddress: networkInterface['mac-address'],
 				comment: undefined,
-				running: networkInterface.running ?? false,
-				disabled: networkInterface.disabled ?? false
+				running: networkInterface.running === true,
+				disabled: networkInterface.disabled === true
 			}))
 	);
 	await emitDeviceUpdated(device.id, 'interfaces');

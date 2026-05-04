@@ -1,4 +1,4 @@
-import { get, writable, type Writable } from 'svelte/store';
+import { writable, type Writable } from 'svelte/store';
 import type { DeviceInterfaceRow } from '$lib/server/services/site-device.service';
 import type { DiscoveryDevice } from './discovery-updates';
 
@@ -8,18 +8,19 @@ export type Device = {
 	id: string;
 	type: 'router' | 'switch' | string;
 	name: string;
-	application: string;
 	status: string;
-	macAddress: string;
 	model: string;
 	version: string;
 	ipAddress: string;
-	uplink: string;
-	parentDevice: string;
 	platform: string;
 	adopted: boolean;
 	image: { id: string; label: string; src: string };
 	interfaces: DeviceInterfaceRow[];
+	/** macAddress is present on discovered devices; optional on adopted (stored in details) */
+	macAddress?: string;
+	macAddress_legacy?: string;
+	/** discoveryInterfaceName for discovered devices (was "uplink") */
+	discoveryInterfaceName?: string;
 	details: {
 		identity: string;
 		serialNumber: string;

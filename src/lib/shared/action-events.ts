@@ -93,6 +93,7 @@ export type ActionDeviceUpdatedPayload = {
 	siteId: string | null;
 	deviceId: string;
 	reason: DeviceUpdateReason;
+	connectionStatus?: 'unknown' | 'online' | 'offline' | 'auth_failed' | 'blocked';
 	timestamp: string;
 };
 
@@ -138,18 +139,24 @@ export type TopologyUpdatedPayload = {
 	siteId: string;
 };
 
-export type ActionEventMap = App.ActionEvents;
-export type ActionEventType = keyof ActionEventMap;
-export type ActionEvent = ActionEventMap[ActionEventType];
-export type JobSnapshotEvent = ActionEventMap['job.snapshot'];
-export type JobUpdatedEvent = ActionEventMap['job.updated'];
-export type DiscoverySnapshotEvent = ActionEventMap['discovery.snapshot'];
-export type DiscoveryNeighborEvent = ActionEventMap['discovery.neighbor'];
-export type DeviceAdoptedEvent = ActionEventMap['device.adopted'];
-export type DeviceUpdatedEvent = ActionEventMap['device.updated'];
-export type DeviceRemovedEvent = ActionEventMap['device.removed'];
-export type MetricUpdatedEvent = ActionEventMap['metric.updated'];
-export type ClientUpdatedEvent = ActionEventMap['client.updated'];
-export type AlertFiredEvent = ActionEventMap['alert.fired'];
-export type AlertResolvedEvent = ActionEventMap['alert.resolved'];
-export type TopologyUpdatedEvent = ActionEventMap['topology.updated'];
+type NamedActionEvents<T extends Record<string, { type: string }>> = {
+	[EventName in keyof T]: T[EventName] & { type: EventName };
+};
+
+export type SiteActionEventMap = NamedActionEvents<App.ActionEvents['site:${string}']>;
+export type DiscoveryActionEventMap = NamedActionEvents<App.ActionEvents['discovery']>;
+export type ActionEventMap = SiteActionEventMap & DiscoveryActionEventMap;
+export type ActionEventType = Extract<keyof ActionEventMap, string>;
+export type ActionEvent = SiteActionEventMap[keyof SiteActionEventMap] | DiscoveryActionEventMap[keyof DiscoveryActionEventMap];
+export type JobSnapshotEvent = SiteActionEventMap['job.snapshot'];
+export type JobUpdatedEvent = SiteActionEventMap['job.updated'];
+export type DiscoverySnapshotEvent = DiscoveryActionEventMap['discovery.snapshot'];
+export type DiscoveryNeighborEvent = DiscoveryActionEventMap['discovery.neighbor'];
+export type DeviceAdoptedEvent = SiteActionEventMap['device.adopted'] | DiscoveryActionEventMap['device.adopted'];
+export type DeviceUpdatedEvent = SiteActionEventMap['device.updated'];
+export type DeviceRemovedEvent = SiteActionEventMap['device.removed'];
+export type MetricUpdatedEvent = SiteActionEventMap['metric.updated'];
+export type ClientUpdatedEvent = SiteActionEventMap['client.updated'];
+export type AlertFiredEvent = SiteActionEventMap['alert.fired'];
+export type AlertResolvedEvent = SiteActionEventMap['alert.resolved'];
+export type TopologyUpdatedEvent = SiteActionEventMap['topology.updated'];

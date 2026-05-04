@@ -1,310 +1,320 @@
 <script lang="ts">
-	let { data } = $props();
+  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
+  import Input from "$lib/client/components/primitives/Input.svelte";
 
-	type Filter = 'all' | 'wired' | 'wireless';
-	let filter = $state<Filter>('all');
-	let search = $state('');
+  let { data } = $props();
 
-	const deviceMap = $derived(new Map(data.siteDevices.map((d) => [d.id, d])));
+  type Filter = "all" | "wired" | "wireless";
+  let filter = $state<Filter>("all");
+  let search = $state("");
 
-	const filtered = $derived(
-		data.clients.filter((c) => {
-			if (filter === 'wired' && c.isWireless) return false;
-			if (filter === 'wireless' && !c.isWireless) return false;
-			if (search) {
-				const q = search.toLowerCase();
-				return (
-					c.macAddress.toLowerCase().includes(q) ||
-					(c.ipAddress ?? '').toLowerCase().includes(q) ||
-					(c.hostname ?? '').toLowerCase().includes(q)
-				);
-			}
-			return true;
-		})
-	);
+  const deviceMap = $derived(new Map(data.siteDevices.map((d) => [d.id, d])));
 
-	function relativeTime(date: Date | string): string {
-		const d = date instanceof Date ? date : new Date(date);
-		const diffMs = Date.now() - d.getTime();
-		const diffSec = Math.floor(diffMs / 1000);
-		if (diffSec < 60) return 'just now';
-		if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
-		if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
-		return `${Math.floor(diffSec / 86400)}d ago`;
-	}
+  const filtered = $derived(
+    data.clients.filter((c) => {
+      if (filter === "wired" && c.isWireless) return false;
+      if (filter === "wireless" && !c.isWireless) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return (
+          c.macAddress.toLowerCase().includes(q) ||
+          (c.ipAddress ?? "").toLowerCase().includes(q) ||
+          (c.hostname ?? "").toLowerCase().includes(q)
+        );
+      }
+      return true;
+    }),
+  );
+
+  function relativeTime(date: Date | string): string {
+    const d = date instanceof Date ? date : new Date(date);
+    const diffMs = Date.now() - d.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 60) return "just now";
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+    return `${Math.floor(diffSec / 86400)}d ago`;
+  }
 </script>
 
-<div class="page-header">
-	<div>
-		<h1>Clients</h1>
-		<p>{data.clients.length} active client{data.clients.length !== 1 ? 's' : ''} across {data.siteDevices.length} device{data.siteDevices.length !== 1 ? 's' : ''}</p>
-	</div>
-</div>
+<PageHeader
+  title="Clients"
+  subtitle="{data.clients.length} active client{data.clients.length !== 1
+    ? 's'
+    : ''} across {data.siteDevices.length} device{data.siteDevices.length !== 1
+    ? 's'
+    : ''}"
+/>
 
 <div class="toolbar">
-	<div class="filter-tabs" role="tablist" aria-label="Client type filter">
-		{#each (['all', 'wired', 'wireless'] as Filter[]) as tab}
-			<button
-				role="tab"
-				aria-selected={filter === tab}
-				class:active={filter === tab}
-				onclick={() => (filter = tab)}
-			>
-				{tab === 'all' ? 'All' : tab === 'wired' ? 'Wired' : 'Wireless'}
-			</button>
-		{/each}
-	</div>
+  <div class="filter-tabs" role="tablist" aria-label="Client type filter">
+    {#each ["all", "wired", "wireless"] as Filter[] as tab}
+      <button
+        role="tab"
+        aria-selected={filter === tab}
+        class:active={filter === tab}
+        onclick={() => (filter = tab)}
+      >
+        {tab === "all" ? "All" : tab === "wired" ? "Wired" : "Wireless"}
+      </button>
+    {/each}
+  </div>
 
-	<input
-		class="search"
-		type="search"
-		placeholder="Search MAC, IP, hostname…"
-		bind:value={search}
-		aria-label="Search clients"
-	/>
+  <Input
+    type="search"
+    name="clientSearch"
+    placeholder="Search MAC, IP, hostname…"
+    value={search}
+    oninput={(e: Event) => (search = (e.target as HTMLInputElement).value)}
+  />
 </div>
 
 <div class="panel">
-	{#if data.clients.length === 0}
-		<div class="empty-state">
-			<svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
-				<path fill="currentColor" d="M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0ZM12 2a1 1 0 0 1 1 1v1.07A9.003 9.003 0 0 1 20.93 11H22a1 1 0 1 1 0 2h-1.07A9.003 9.003 0 0 1 13 20.93V22a1 1 0 1 1-2 0v-1.07A9.003 9.003 0 0 1 3.07 13H2a1 1 0 1 1 0-2h1.07A9.003 9.003 0 0 1 11 3.07V2a1 1 0 0 1 1-1Z"/>
-			</svg>
-			<strong>No clients yet</strong>
-			<p>Clients appear automatically once devices start reporting DHCP leases and ARP entries.</p>
-		</div>
-	{:else if filtered.length === 0}
-		<div class="empty-state">No clients match your filter.</div>
-	{:else}
-		<table class="client-table">
-			<thead>
-				<tr>
-					<th>MAC</th>
-					<th>IP Address</th>
-					<th>Hostname</th>
-					<th>Device</th>
-					<th>Interface</th>
-					<th>Type</th>
-					<th>Last seen</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each filtered as client (client.id)}
-					{@const device = deviceMap.get(client.deviceId)}
-					<tr>
-						<td class="mono">{client.macAddress}</td>
-						<td class="mono">{client.ipAddress ?? '—'}</td>
-						<td>{client.hostname ?? '—'}</td>
-						<td>
-							{#if device}
-								<a href={`/manage/${data.site.id}/devices/${device.id}`} class="device-link">
-									{device.identity ?? device.name}
-								</a>
-							{:else}
-								—
-							{/if}
-						</td>
-						<td>{client.interfaceName ?? '—'}</td>
-						<td>
-							{#if client.isWireless}
-								<span class="badge badge-wireless">
-									Wireless{client.ssid ? ` · ${client.ssid}` : ''}
-									{#if client.signalStrength !== null}
-										<span class="signal">{client.signalStrength} dBm</span>
-									{/if}
-								</span>
-							{:else}
-								<span class="badge badge-wired">Wired</span>
-							{/if}
-						</td>
-						<td class="muted">{relativeTime(client.lastSeenAt)}</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	{/if}
+  {#if data.clients.length === 0}
+    <div class="empty-state">
+      <svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0ZM12 2a1 1 0 0 1 1 1v1.07A9.003 9.003 0 0 1 20.93 11H22a1 1 0 1 1 0 2h-1.07A9.003 9.003 0 0 1 13 20.93V22a1 1 0 1 1-2 0v-1.07A9.003 9.003 0 0 1 3.07 13H2a1 1 0 1 1 0-2h1.07A9.003 9.003 0 0 1 11 3.07V2a1 1 0 0 1 1-1Z"
+        />
+      </svg>
+      <strong>No clients yet</strong>
+      <p>
+        Clients appear automatically once devices start reporting DHCP leases
+        and ARP entries.
+      </p>
+    </div>
+  {:else if filtered.length === 0}
+    <div class="empty-state">No clients match your filter.</div>
+  {:else}
+    <table class="client-table">
+      <thead>
+        <tr>
+          <th>MAC</th>
+          <th>IP Address</th>
+          <th>Hostname</th>
+          <th>Device</th>
+          <th>Interface</th>
+          <th>Type</th>
+          <th>Last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each filtered as client (client.id)}
+          {@const device = deviceMap.get(client.deviceId)}
+          <tr>
+            <td class="mono">{client.macAddress}</td>
+            <td class="mono">{client.ipAddress ?? "—"}</td>
+            <td>{client.hostname ?? "—"}</td>
+            <td>
+              {#if device}
+                <a
+                  href={`/manage/${data.site.id}/devices/${device.id}`}
+                  class="device-link"
+                >
+                  {device.identity ?? device.name}
+                </a>
+              {:else}
+                —
+              {/if}
+            </td>
+            <td>{client.interfaceName ?? "—"}</td>
+            <td>
+              {#if client.isWireless}
+                <span class="badge badge-wireless">
+                  Wireless{client.ssid ? ` · ${client.ssid}` : ""}
+                  {#if client.signalStrength !== null}
+                    <span class="signal">{client.signalStrength} dBm</span>
+                  {/if}
+                </span>
+              {:else}
+                <span class="badge badge-wired">Wired</span>
+              {/if}
+            </td>
+            <td class="muted">{relativeTime(client.lastSeenAt)}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  {/if}
 </div>
 
 <style lang="scss">
-	.page-header {
-		display: flex;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: 16px;
-		margin-bottom: 18px;
-	}
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
 
-	h1 {
-		margin: 0;
-		font-size: 24px;
-		font-weight: 700;
-		color: var(--color-text);
-		line-height: 1.2;
-	}
+  .filter-tabs {
+    display: flex;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    overflow: hidden;
 
-	p {
-		margin: 4px 0 0;
-		color: var(--color-muted);
-		font-size: 13px;
-	}
+    button {
+      padding: 6px 14px;
+      border: none;
+      border-right: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition:
+        background 0.15s,
+        color 0.15s;
 
-	.toolbar {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		margin-bottom: 12px;
-		flex-wrap: wrap;
-	}
+      &:last-child {
+        border-right: none;
+      }
 
-	.filter-tabs {
-		display: flex;
-		border: 1px solid var(--color-border);
-		border-radius: 4px;
-		overflow: hidden;
+      &:hover {
+        background: var(--color-surface-hover);
+        color: var(--color-text);
+      }
+      &:focus-visible {
+        outline: 2px solid var(--color-link);
+        outline-offset: -2px;
+      }
 
-		button {
-			padding: 6px 14px;
-			border: none;
-			border-right: 1px solid var(--color-border);
-			background: var(--color-surface);
-			color: var(--color-muted);
-			font-size: 13px;
-			cursor: pointer;
-			transition: background 0.15s, color 0.15s;
+      &.active {
+        background: var(--color-link);
+        color: #fff;
+      }
+    }
+  }
 
-			&:last-child { border-right: none; }
+  .field {
+    flex: 1 1 220px;
+    max-width: 320px;
+  }
 
-			&:hover { background: var(--color-surface-hover); color: var(--color-text); }
-			&:focus-visible { outline: 2px solid var(--color-link); outline-offset: -2px; }
+  .panel {
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-surface);
+    overflow: hidden;
+  }
 
-			&.active {
-				background: var(--color-link);
-				color: #fff;
-			}
-		}
-	}
+  .empty-state {
+    display: grid;
+    place-items: center;
+    gap: 10px;
+    min-height: 220px;
+    padding: 32px;
+    color: var(--color-muted);
+    text-align: center;
 
-	.search {
-		flex: 1 1 220px;
-		max-width: 320px;
-		padding: 6px 10px;
-		border: 1px solid var(--color-border);
-		border-radius: 4px;
-		background: var(--color-surface);
-		color: var(--color-text);
-		font-size: 13px;
+    strong {
+      display: block;
+      color: var(--color-text);
+      font-size: 15px;
+    }
 
-		&:focus { outline: 2px solid var(--color-link); outline-offset: 1px; }
-		&::placeholder { color: var(--color-muted); }
-	}
+    p {
+      margin: 0;
+      max-width: 380px;
+    }
+  }
 
-	.panel {
-		border: 1px solid var(--color-border);
-		border-radius: 4px;
-		background: var(--color-surface);
-		overflow: hidden;
-	}
+  .client-table {
+    width: 100%;
+    border-collapse: collapse;
 
-	.empty-state {
-		display: grid;
-		place-items: center;
-		gap: 10px;
-		min-height: 220px;
-		padding: 32px;
-		color: var(--color-muted);
-		text-align: center;
+    th,
+    td {
+      padding: 0 14px;
+      height: 44px;
+      border-bottom: 1px solid var(--color-border);
+      color: var(--color-text);
+      font-size: 13px;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
-		strong {
-			display: block;
-			color: var(--color-text);
-			font-size: 15px;
-		}
+    th {
+      background: var(--color-surface);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--color-muted);
+    }
 
-		p { margin: 0; max-width: 380px; }
-	}
+    tbody tr {
+      &:last-child td {
+        border-bottom: none;
+      }
+      &:hover td {
+        background: var(--color-surface-hover);
+      }
+    }
+  }
 
-	.client-table {
-		width: 100%;
-		border-collapse: collapse;
+  .mono {
+    font-family: monospace;
+    font-size: 12px;
+  }
 
-		th,
-		td {
-			padding: 0 14px;
-			height: 44px;
-			border-bottom: 1px solid var(--color-border);
-			color: var(--color-text);
-			font-size: 13px;
-			text-align: left;
-			white-space: nowrap;
-			overflow: hidden;
-			text-overflow: ellipsis;
-		}
+  .muted {
+    color: var(--color-muted);
+  }
 
-		th {
-			background: var(--color-surface);
-			font-size: 11px;
-			font-weight: 700;
-			text-transform: uppercase;
-			color: var(--color-muted);
-		}
+  .device-link {
+    color: var(--color-link);
+    text-decoration: none;
 
-		tbody tr {
-			&:last-child td { border-bottom: none; }
-			&:hover td { background: var(--color-surface-hover); }
-		}
-	}
+    &:hover {
+      text-decoration: underline;
+    }
+    &:focus-visible {
+      outline: 2px solid var(--color-link);
+      border-radius: 2px;
+    }
+  }
 
-	.mono {
-		font-family: monospace;
-		font-size: 12px;
-	}
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
 
-	.muted {
-		color: var(--color-muted);
-	}
+  .badge-wired {
+    background: var(--color-surface-hover);
+    color: var(--color-muted);
+  }
 
-	.device-link {
-		color: var(--color-link);
-		text-decoration: none;
+  .badge-wireless {
+    background: color-mix(in srgb, var(--color-link, #3b82f6) 12%, transparent);
+    color: var(--color-link, #3b82f6);
+  }
 
-		&:hover { text-decoration: underline; }
-		&:focus-visible { outline: 2px solid var(--color-link); border-radius: 2px; }
-	}
+  .signal {
+    opacity: 0.75;
+    font-weight: 400;
+  }
 
-	.badge {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		padding: 2px 8px;
-		border-radius: 10px;
-		font-size: 11px;
-		font-weight: 600;
-	}
+  @media (max-width: 768px) {
+    .toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .field {
+      max-width: 100%;
+    }
 
-	.badge-wired {
-		background: var(--color-surface-hover);
-		color: var(--color-muted);
-	}
-
-	.badge-wireless {
-		background: color-mix(in srgb, var(--color-link, #3b82f6) 12%, transparent);
-		color: var(--color-link, #3b82f6);
-	}
-
-	.signal {
-		opacity: 0.75;
-		font-weight: 400;
-	}
-
-	@media (max-width: 768px) {
-		.toolbar { flex-direction: column; align-items: stretch; }
-		.search { max-width: 100%; }
-
-		.client-table th:nth-child(5),
-		.client-table td:nth-child(5),
-		.client-table th:nth-child(7),
-		.client-table td:nth-child(7) {
-			display: none;
-		}
-	}
+    .client-table th:nth-child(5),
+    .client-table td:nth-child(5),
+    .client-table th:nth-child(7),
+    .client-table td:nth-child(7) {
+      display: none;
+    }
+  }
 </style>

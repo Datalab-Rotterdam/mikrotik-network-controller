@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import SidePanel from '$lib/client/components/SidePanel.svelte';
+	import SidePanel from '$lib/client/components/layout/SidePanel.svelte';
 	import {
 		formatJobStatus,
 		getCurrentStep,
