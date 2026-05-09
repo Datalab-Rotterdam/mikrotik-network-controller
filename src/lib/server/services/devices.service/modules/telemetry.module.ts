@@ -1,4 +1,5 @@
 import {RouterOSClient} from '@sourceregistry/mikrotik-client/routeros';
+import {Service} from '@sourceregistry/sveltekit-service-manager';
 import {
     getDeviceById,
     getDeviceCredentials,
@@ -6,7 +7,6 @@ import {
     updateDeviceLastSeen
 } from '$lib/server/repositories/telemetry.repository';
 import {decryptSecret} from '$lib/server/security/secrets';
-import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
 
 export default {
     async list() {
@@ -72,7 +72,13 @@ export default {
             ]);
 
             await updateDeviceLastSeen(device.id);
-            await emitDeviceUpdated(device.id, 'telemetry');
+            Service('devices').event.emit('device.updated', {
+                siteId: device.siteId,
+                deviceId: device.id,
+                reason: 'telemetry',
+                connectionStatus: device.connectionStatus,
+                timestamp: new Date().toISOString()
+            });
 
             return {
                 id: device.id,

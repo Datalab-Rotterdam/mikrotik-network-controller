@@ -1,36 +1,93 @@
 import { describe, expect, it, vi } from 'vitest';
-import { channelsForEvent, siteChannel } from './index';
-import type { ActionJob } from '$lib/shared/action-events';
+
+const mocks = vi.hoisted(() => ({
+	broadcast: vi.fn(),
+	destroy: vi.fn(),
+	listener: vi.fn(),
+	resolveUser: vi.fn()
+}));
 
 vi.mock('@sourceregistry/sveltekit-actionbus/server', () => ({
 	createActionBus: vi.fn(() => ({
-		broadcast: vi.fn(),
-		destroy: vi.fn()
+		broadcast: mocks.broadcast,
+		destroy: mocks.destroy
 	}))
 }));
 
-const job: ActionJob = {
-	id: 'job-1',
-	type: 'sync',
-	status: 'running',
-	deviceId: 'device-1',
-	siteId: 'site-1',
-	requestedByUserId: null,
-	progress: 20,
-	attemptCount: 1,
-	maxAttempts: 1,
-	payload: {},
-	result: null,
-	errorMessage: null,
-	scheduledFor: null,
-	lockedAt: null,
-	lockedBy: null,
-	startedAt: null,
-	finishedAt: null,
-	createdAt: '2026-01-01T00:00:00.000Z',
-	updatedAt: '2026-01-01T00:00:00.000Z',
-	steps: []
-};
+vi.mock('@sourceregistry/sveltekit-service-manager/server', () => ({
+	ServiceManager: {
+		Load: vi.fn((service) => service)
+	},
+	Service: vi.fn((name: string) => {
+		if (name === 'devices') {
+			return {
+				event: {
+					any: mocks.listener
+				}
+			};
+		}
+
+		return {
+			resolveUser: mocks.resolveUser
+		};
+	})
+}));
+
+vi.mock('@sourceregistry/sveltekit-service-manager', () => ({
+	ServiceManager: {
+		Load: vi.fn((service) => service)
+	},
+	Service: vi.fn((name: string) => {
+		if (name === 'devices') {
+			return {
+				event: {
+					any: mocks.listener
+				}
+			};
+		}
+
+		return {
+			resolveUser: mocks.resolveUser
+		};
+	})
+}));
+
+vi.mock('$lib/server/configurations/env.configuration', () => ({
+	default: {
+		SESSION_COOKIE_NAME: 'mnc_session'
+	}
+}));
+
+vi.mock('$lib/server/services/discovery.service', () => ({
+	default: {
+		on: mocks.listener
+	}
+}));
+
+vi.mock('$lib/server/services/devices.service', () => ({}));
+vi.mock('$lib/server/services/monitoring.service', () => ({
+	monitoringEvents: { any: mocks.listener }
+}));
+vi.mock('$lib/server/services/scheduler.service', () => ({
+	schedulerEvents: { any: mocks.listener }
+}));
+vi.mock('$lib/server/services/alert.service', () => ({
+	alertEvents: { any: mocks.listener }
+}));
+vi.mock('$lib/server/repositories/device.repository', () => ({
+	listDevices: vi.fn()
+}));
+vi.mock('$lib/server/repositories/clients.repository', () => ({
+	getActiveClientCountBySite: vi.fn()
+}));
+vi.mock('$lib/server/repositories/job.repository', () => ({
+	getJobWithSteps: vi.fn()
+}));
+vi.mock('$lib/server/repositories/metrics.repository', () => ({
+	getLatestDeviceMetric: vi.fn()
+}));
+
+import { channelsForEvent, siteChannel } from './index';
 
 describe('actionbus service channel routing', () => {
 	it('builds site channels from site ids', () => {
@@ -43,7 +100,28 @@ describe('actionbus service channel routing', () => {
 				type: 'job.updated',
 				payload: {
 					siteId: 'site-1',
-					job
+					job: {
+						id: 'job-1',
+						type: 'sync',
+						status: 'running',
+						deviceId: 'device-1',
+						siteId: 'site-1',
+						requestedByUserId: null,
+						progress: 20,
+						attemptCount: 1,
+						maxAttempts: 1,
+						payload: {},
+						result: null,
+						errorMessage: null,
+						scheduledFor: null,
+						lockedAt: null,
+						lockedBy: null,
+						startedAt: null,
+						finishedAt: null,
+						createdAt: '2026-01-01T00:00:00.000Z',
+						updatedAt: '2026-01-01T00:00:00.000Z',
+						steps: []
+					}
 				}
 			})
 		).toEqual(['site:site-1']);
@@ -65,7 +143,7 @@ describe('actionbus service channel routing', () => {
 			channelsForEvent({
 				type: 'alert.fired',
 				payload: {
-					eventId: 'alert-1',
+					id: 'alert-1',
 					ruleId: 'rule-1',
 					siteId: 'site-3',
 					deviceId: null,
@@ -92,8 +170,26 @@ describe('actionbus service channel routing', () => {
 				payload: {
 					siteId: null,
 					job: {
-						...job,
-						siteId: null
+						id: 'job-1',
+						type: 'sync',
+						status: 'running',
+						deviceId: 'device-1',
+						siteId: null,
+						requestedByUserId: null,
+						progress: 20,
+						attemptCount: 1,
+						maxAttempts: 1,
+						payload: {},
+						result: null,
+						errorMessage: null,
+						scheduledFor: null,
+						lockedAt: null,
+						lockedBy: null,
+						startedAt: null,
+						finishedAt: null,
+						createdAt: '2026-01-01T00:00:00.000Z',
+						updatedAt: '2026-01-01T00:00:00.000Z',
+						steps: []
 					}
 				}
 			})

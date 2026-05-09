@@ -1,13 +1,13 @@
 import { redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
-import { resolveUserFromCookies } from '$lib/server/services/auth.service';
+import { Service } from '@sourceregistry/sveltekit-service-manager';
 
 /**
  * Auth guard — ensures the user is logged in.
  * Redirects to login if not authenticated.
  */
 export async function requireAuth(event: Parameters<Handle>[0]['event']): Promise<void> {
-    const user = await resolveUserFromCookies(event.cookies);
+    const user = await Service('authentication').resolveUser({ cookies: event.cookies });
     if (!user) {
         const loginRoute = '/manage/account/login';
         const redirectTo = `${event.url.pathname}${event.url.search}`;
@@ -24,7 +24,7 @@ export async function requireSetupComplete(
     hasUsers: () => Promise<boolean>
 ): Promise<void> {
     const setupComplete = await hasUsers();
-    if (!setupComplete) {
+    if (!setupComplete && !event.url.pathname.startsWith("/setup")) {
         throw redirect(303, '/setup');
     }
 }
@@ -38,7 +38,7 @@ export async function blockSetupIfComplete(
 ): Promise<void> {
     const setupComplete = await hasUsers();
     if (setupComplete && event.url.pathname === '/setup') {
-        const user = await resolveUserFromCookies(event.cookies);
+        const user = await Service('authentication').resolveUser({ cookies: event.cookies });
         throw redirect(303, user ? '/' : '/manage/account/login');
     }
 }

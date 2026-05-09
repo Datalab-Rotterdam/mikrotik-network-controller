@@ -79,7 +79,8 @@ export async function runExportBackup(
 
 		return record.id;
 	} finally {
-		await client.close().catch(() => {});
+		await client.close().catch(() => {
+		});
 	}
 }
 

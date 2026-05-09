@@ -298,7 +298,12 @@
       ["device.adopted", "device.removed", "device.updated"],
       (event) => {
         if (event.type === "device.adopted") {
-          processDeviceAdopted(event.payload);
+          if (event.payload.deviceId) {
+            processDeviceAdopted({
+              ...event.payload,
+              deviceId: event.payload.deviceId,
+            });
+          }
         } else if (event.type === "device.removed") {
           removeDevice(event.payload.deviceId);
         } else if (event.type === "device.updated" && event.payload.connectionStatus) {

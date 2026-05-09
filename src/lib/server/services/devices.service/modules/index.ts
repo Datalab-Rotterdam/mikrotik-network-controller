@@ -1,6 +1,7 @@
-export {default as adoption} from "./adoption.module.ts"
-export {default as telemetry} from "./telemetry.module.ts"
-export {default as provisioning} from "./provisioning.module.ts"
-export {default as credentials} from "./credentials.module.ts"
-export {default as removal} from "./removal.module.ts"
-export {default as config} from "./config.module.ts"
+export {default as adoption} from './adoption';
+export {default as telemetry} from './telemetry.module';
+export {default as provisioning} from './provisioning';
+export {default as credentials} from './credentials';
+export {default as removal} from './removal';
+export {default as config} from './config';
+export {default as event} from './event.module';

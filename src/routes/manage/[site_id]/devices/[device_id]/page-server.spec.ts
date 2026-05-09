@@ -61,7 +61,7 @@ vi.mock('$lib/server/services/firmware.service', () => ({
 	createFirmwareUpgradeTask: vi.fn()
 }));
 
-vi.mock('$lib/server/services/devices.service/tasks', () => ({
+vi.mock('$lib/server/services/devices.service/modules/provisioning/tasks', () => ({
 	createBackupDeviceTask: vi.fn()
 }));
 

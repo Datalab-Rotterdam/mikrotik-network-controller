@@ -7,7 +7,7 @@ import { isDeviceTerminalEligible } from '$lib/server/services/device-terminal.s
 import { getInterfaceMetricsHistory } from '$lib/server/repositories/metrics.repository';
 import { getDeviceBackups } from '$lib/server/services/backup.service';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
-import { createBackupDeviceTask } from '$lib/server/services/devices.service/tasks';
+import { createBackupDeviceTask } from '$lib/server/services/devices.service/modules/provisioning/tasks';
 import { createFirmwareCheckTask, createFirmwareUpgradeTask } from '$lib/server/services/firmware.service';
 import { getFirmwareVersion } from '$lib/server/repositories/firmware.repository';
 import type { ActionJob, ActionJobStep } from '$lib/shared/action-events';

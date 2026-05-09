@@ -31,7 +31,7 @@
           // prepend placeholder — full reload will sync on next navigation
           liveEvents = [
             {
-              id: event.payload.eventId,
+              id: event.payload.id,
               ruleId: event.payload.ruleId,
               siteId: event.payload.siteId,
               deviceId: event.payload.deviceId,
@@ -48,7 +48,7 @@
         }
         if (event.type === "alert.resolved") {
           liveEvents = liveEvents.map((e) =>
-            e.id === event.payload.eventId
+            e.id === event.payload.id
               ? { ...e, resolvedAt: new Date() }
               : e,
           );

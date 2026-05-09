@@ -1,8 +1,7 @@
 <script lang="ts">
 	import AccountMenu from '$lib/client/components/ui/AccountMenu.svelte';
-	import ActionSocket from '$lib/client/components/actions/ActionSocket.svelte';
-	import AlertBell from '$lib/client/components/actions/AlertBell.svelte';
-	import LiveDataInvalidator from '$lib/client/components/actions/LiveDataInvalidator.svelte';
+	import {ActionBus} from '@sourceregistry/sveltekit-actionbus';
+	// import AlertBell from '$lib/client/components/actions/AlertBell.svelte';
 	import SiteSwitcher from '$lib/client/components/ui/SiteSwitcher.svelte';
 	import favicon from '$lib/assets/favicon.svg';
 
@@ -34,8 +33,8 @@
 		{@render children()}
 	</div>
 {:else if data.user}
-	<ActionSocket siteId={data.site.id}>
-		<LiveDataInvalidator siteId={data.site.id} />
+	<ActionBus url="/actionbus">
+<!--		<LiveDataInvalidator siteId={data.site.id} />-->
 		<div class="app-shell">
 			<aside class="sidebar-rail">
 				<a class="rail-logo" href={basePath} aria-label={data.site.name}>
@@ -95,7 +94,7 @@
 				<header class="topbar">
 					<SiteSwitcher activeSite={data.site} sites={data.sites} pathname={data.pathname} />
 					<div class="topbar-right">
-						<AlertBell alertsHref={`${basePath}/alerts`} initialCount={data.unacknowledgedAlertCount ?? 0} />
+<!--						<AlertBell alertsHref={`${basePath}/alerts`} initialCount={data.unacknowledgedAlertCount ?? 0} />-->
 						<AccountMenu user={data.user} />
 					</div>
 				</header>
@@ -104,7 +103,7 @@
 				</section>
 			</main>
 		</div>
-	</ActionSocket>
+	</ActionBus>
 {:else}
 	{@render children()}
 {/if}

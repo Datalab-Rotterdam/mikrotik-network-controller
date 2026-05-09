@@ -1,10 +1,8 @@
 <script lang="ts">
-  import { useActionSocket } from "$lib/client/actions/use-action-socket";
-  import type { ActionEvent } from "$lib/shared/action-events";
 
   let { data } = $props();
 
-  const actions = useActionSocket();
+  // const actions = useActionSocket();
 
   // Live-updated counts and per-device metrics
   let liveClientCount = $state(data.summary.activeClientCount);
@@ -42,39 +40,39 @@
     ),
   );
 
-  $effect(() =>
-    actions.subscribe(
-      ["metric.updated", "client.updated", "device.updated", "device.removed"],
-      (event: ActionEvent) => {
-        if (event.type === "metric.updated") {
-          liveMetrics.set(event.payload.deviceId, event.payload);
-        }
-        if (
-          event.type === "client.updated" &&
-          event.payload.siteId === data.site.id
-        ) {
-          liveClientCount = event.payload.activeCount;
-        }
-        if (
-          event.type === "device.updated" &&
-          event.payload.siteId === data.site.id
-        ) {
-          const status = event.payload.connectionStatus;
-          if (status) {
-            liveStatusOverrides.set(event.payload.deviceId, status);
-            statusTick++;
-          }
-        }
-        if (
-          event.type === "device.removed" &&
-          event.payload.siteId === data.site.id
-        ) {
-          liveStatusOverrides.delete(event.payload.deviceId);
-          statusTick++;
-        }
-      },
-    ),
-  );
+  // $effect(() =>
+  //   actions.subscribe(
+  //     ["metric.updated", "client.updated", "device.updated", "device.removed"],
+  //     (event: ActionEvent) => {
+  //       if (event.type === "metric.updated") {
+  //         liveMetrics.set(event.payload.deviceId, event.payload);
+  //       }
+  //       if (
+  //         event.type === "client.updated" &&
+  //         event.payload.siteId === data.site.id
+  //       ) {
+  //         liveClientCount = event.payload.activeCount;
+  //       }
+  //       if (
+  //         event.type === "device.updated" &&
+  //         event.payload.siteId === data.site.id
+  //       ) {
+  //         const status = event.payload.connectionStatus;
+  //         if (status) {
+  //           liveStatusOverrides.set(event.payload.deviceId, status);
+  //           statusTick++;
+  //         }
+  //       }
+  //       if (
+  //         event.type === "device.removed" &&
+  //         event.payload.siteId === data.site.id
+  //       ) {
+  //         liveStatusOverrides.delete(event.payload.deviceId);
+  //         statusTick++;
+  //       }
+  //     },
+  //   ),
+  // );
 
   const metrics = $derived([
     { label: "Devices", value: data.summary.deviceCount },

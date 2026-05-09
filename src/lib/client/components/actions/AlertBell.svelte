@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { useActionSocket } from '$lib/client/actions/use-action-socket';
 	import type { ActionEvent } from '$lib/shared/action-events';
+	import {subscribe} from "@sourceregistry/sveltekit-actionbus/ActionBus.svelte";
+	import {page} from "$app/state";
 
 	let {
 		alertsHref,
@@ -11,6 +13,8 @@
 	} = $props();
 
 	let count = $state(initialCount);
+
+	const actionbus = subscribe(`site:${page.params.site_id}`)
 	const actions = useActionSocket();
 
 	$effect(() =>

@@ -1,17 +1,17 @@
 import { error } from '@sveltejs/kit';
 import { findSiteById, listSites } from '$lib/server/repositories/site.repository';
-import { countUnacknowledgedAlerts } from '$lib/server/repositories/alerts.repository';
+import AlertRepository from '$lib/server/repositories/alert.repository';
 
 export async function load({ params }) {
-	const [site, sites, unacknowledgedAlertCount] = await Promise.all([
+	const [site, sites, unacknowledgedAlerts] = await Promise.all([
 		findSiteById(params.site_id),
 		listSites(),
-		countUnacknowledgedAlerts(params.site_id)
+		AlertRepository.events({siteId: params.site_id}).unacknowledged()
 	]);
 
 	if (!site) {
 		throw error(404, 'Site not found');
 	}
 
-	return { site, sites, unacknowledgedAlertCount };
+	return { site, sites, unacknowledgedAlertCount: unacknowledgedAlerts.length };
 }

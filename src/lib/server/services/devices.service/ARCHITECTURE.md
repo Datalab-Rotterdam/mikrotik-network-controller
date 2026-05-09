@@ -51,7 +51,9 @@ That means operator actions flow through SvelteKit form actions or server logic,
 
 ## Internal module boundaries
 
-The service is internally split into four modules. These are application modules, not separate external services.
+The service is internally split into four core responsibility modules. These are application modules, not separate external services.
+
+The current code structure may also contain service-local support modules such as `config`, `removal`, and `event`. Those do not change the intended four-way responsibility split described below. They exist to keep scheduler tasks, internal orchestration, and device event emission inside the `devices` service boundary instead of scattering them into unrelated top-level services.
 
 ### Adoption
 
@@ -103,6 +105,51 @@ Responsibilities:
 * manage secure access lifecycle
 
 This module must not provision network config or own telemetry.
+
+## Internal module structure on disk
+
+The service is intended to keep module-owned implementation close to the owning module.
+
+In practice:
+
+* each module may be a folder with an `index.ts`
+* if a module owns scheduled work, it may have a `tasks/` folder
+* bootstrap-script generation belongs with `adoption`
+* provisioning-script generation belongs with `provisioning`
+* shared service-wide DTOs and device state types stay in `shared`
+
+This is a code-organization rule only. It does not change the semantic boundaries defined above.
+
+## Service-local support modules
+
+Some internal modules exist to support the lifecycle without changing ownership of the four core responsibility modules.
+
+### `config`
+
+Purpose:
+
+* schedule and coordinate config deployment work
+* stay inside the `devices` service boundary instead of exposing a separate service
+
+This support module exists for provisioning-oriented orchestration and does not change the rule that provisioning owns configuration changes.
+
+### `removal`
+
+Purpose:
+
+* handle controller-side removal and reset workflows
+* keep destructive lifecycle operations internal to the `devices` service
+
+This support module does not change the rule that sensitive lifecycle mutations remain internal-only.
+
+### `event`
+
+Purpose:
+
+* provide service-local event emission for device lifecycle changes
+* keep device event broadcast concerns inside the `devices` service boundary
+
+This support module does not introduce a separate domain responsibility. It is infrastructure inside the service boundary.
 
 ## Service boundaries
 

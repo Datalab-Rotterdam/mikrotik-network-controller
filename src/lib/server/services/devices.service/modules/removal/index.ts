@@ -1,7 +1,7 @@
-import { Service } from '@sourceregistry/sveltekit-service-manager';
-import { getDeviceById } from '$lib/server/repositories/telemetry.repository';
-import { recordAuditEvent } from '$lib/server/repositories/audit.repository';
-import { createRemoveDeviceTask } from '../tasks';
+import {Service} from '@sourceregistry/sveltekit-service-manager';
+import {getDeviceById} from '$lib/server/repositories/telemetry.repository';
+import {recordAuditEvent} from '$lib/server/repositories/audit.repository';
+import {createRemoveDeviceTask} from './tasks';
 
 export default {
 	async remove(deviceId: string, requestedByUserId: string) {

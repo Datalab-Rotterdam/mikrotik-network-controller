@@ -8,15 +8,13 @@ const mocks = vi.hoisted(() => ({
 	deleteDevice: vi.fn(),
 	replaceCredential: vi.fn(),
 	updateDeviceState: vi.fn(),
-	emitDeviceUpdated: vi.fn(),
-	emitDeviceRemoved: vi.fn(),
+	deviceEventEmit: vi.fn(),
+	deviceEventOn: vi.fn(),
 	recordAuditEvent: vi.fn(),
 	updateJob: vi.fn(),
 	createCredentialAdoptionAttempt: vi.fn(),
 	readAdoptionInventory: vi.fn(),
-	assertSupportedAdoptionInventory: vi.fn(),
-	markCredentialAdoptionSyncing: vi.fn(),
-	upsertAdoptionInventory: vi.fn(),
+	syncCredentialAdoptionInventory: vi.fn(),
 	storeAdoptionReadOnlyCredential: vi.fn(),
 	finishCredentialAdoption: vi.fn(),
 	failCredentialAdoption: vi.fn(),
@@ -62,11 +60,6 @@ vi.mock('$lib/server/repositories/site.repository', () => ({
 	ensureSiteByName: mocks.ensureSiteByName
 }));
 
-vi.mock('$lib/server/services/device-events.service', () => ({
-	emitDeviceUpdated: mocks.emitDeviceUpdated,
-	emitDeviceRemoved: mocks.emitDeviceRemoved
-}));
-
 vi.mock('$lib/server/repositories/audit.repository', () => ({
 	recordAuditEvent: mocks.recordAuditEvent
 }));
@@ -86,17 +79,26 @@ vi.mock('$lib/server/security/controller-ssh-keys', () => ({
 }));
 
 vi.mock('@sourceregistry/sveltekit-service-manager', () => ({
-	Service: vi.fn(() => ({
-		schedule: mocks.schedulerSchedule
-	}))
+	Service: vi.fn((name: string) => {
+		if (name === 'devices') {
+			return {
+				event: {
+					emit: mocks.deviceEventEmit,
+					on: mocks.deviceEventOn
+				}
+			};
+		}
+
+		return {
+			schedule: mocks.schedulerSchedule
+		};
+	})
 }));
 
-vi.mock('$lib/server/services/adoption.service', () => ({
+vi.mock('$lib/server/services/devices.service/modules/adoption/tasks/shared', () => ({
 	createCredentialAdoptionAttempt: mocks.createCredentialAdoptionAttempt,
 	readAdoptionInventory: mocks.readAdoptionInventory,
-	assertSupportedAdoptionInventory: mocks.assertSupportedAdoptionInventory,
-	markCredentialAdoptionSyncing: mocks.markCredentialAdoptionSyncing,
-	upsertAdoptionInventory: mocks.upsertAdoptionInventory,
+	syncCredentialAdoptionInventory: mocks.syncCredentialAdoptionInventory,
 	storeAdoptionReadOnlyCredential: mocks.storeAdoptionReadOnlyCredential,
 	finishCredentialAdoption: mocks.finishCredentialAdoption,
 	failCredentialAdoption: mocks.failCredentialAdoption
@@ -129,11 +131,11 @@ vi.mock('@sourceregistry/mikrotik-client/routeros', () => ({
 const {
 	createAdoptCredentialsTask,
 	createManagedAdoptCredentialsTask,
-	createPrepareBootstrapTask,
-	createProvisionDeviceTask,
-	createRotateRestSecretTask,
-	createRemoveDeviceTask
-} = await import('./tasks');
+	createPrepareBootstrapTask
+} = await import('./modules/adoption/tasks');
+const {createProvisionDeviceTask} = await import('./modules/provisioning/tasks');
+const {createRotateRestSecretTask} = await import('./modules/credentials/tasks');
+const {createRemoveDeviceTask} = await import('./modules/removal/tasks');
 
 const context: StepExecutionContext<{ deviceId: string; siteId: string | null }> = {
 	jobId: 'job-1',
@@ -240,7 +242,7 @@ beforeEach(() => {
 		model: 'hEX',
 		interfaces: []
 	});
-	mocks.upsertAdoptionInventory.mockResolvedValue(makeDevice());
+	mocks.syncCredentialAdoptionInventory.mockResolvedValue(makeDevice());
 	mocks.routerOsIdentitySet.mockResolvedValue(undefined);
 	mocks.routerOsLogin.mockResolvedValue(undefined);
 	mocks.routerOsExecute.mockResolvedValue({ records: [], traps: [], tag: 'tag-1' });
@@ -422,9 +424,13 @@ describe('createAdoptCredentialsTask', () => {
 		expect(mocks.readAdoptionInventory).toHaveBeenCalledWith(
 			expect.objectContaining({ host: '192.0.2.1', username: 'admin' })
 		);
-		expect(mocks.markCredentialAdoptionSyncing).toHaveBeenCalledWith('attempt-1');
-		expect(mocks.upsertAdoptionInventory).toHaveBeenCalled();
-		expect(mocks.updateJob).toHaveBeenCalledWith('job-adopt-1', { deviceId: 'device-1' });
+		expect(mocks.syncCredentialAdoptionInventory).toHaveBeenCalledWith(
+			expect.objectContaining({
+				attemptId: 'attempt-1',
+				jobId: 'job-adopt-1',
+				siteId: 'site-1'
+			})
+		);
 		expect(mocks.storeAdoptionReadOnlyCredential).toHaveBeenCalledWith(
 			expect.objectContaining({ host: '192.0.2.1' }),
 			'device-1'

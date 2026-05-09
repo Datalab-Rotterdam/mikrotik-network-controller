@@ -10,7 +10,7 @@ import { extractPlaceholders, renderTemplate, diffConfigs } from '$lib/server/se
 import type { TemplateVariable } from '$lib/server/services/template-renderer.service';
 import { listDevices } from '$lib/server/repositories/telemetry.repository';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
-import { createConfigDeployTask } from '$lib/server/services/devices.service/tasks';
+import { createConfigDeployTask } from '$lib/server/services/devices.service/modules/config/tasks';
 
 export async function load({ parent, params, depends }) {
 	const { site } = await parent();

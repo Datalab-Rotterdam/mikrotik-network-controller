@@ -1,14 +1,16 @@
 import { and, eq, gt } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { userSessions } from '$lib/server/db/schema';
+import { createSessionToken, hashSessionToken } from '$lib/server/security/session-token';
 
 export type SessionRecord = typeof userSessions.$inferSelect;
 
-export async function createUserSession(
-	userId: string,
-	tokenHash: string,
-	expiresAt: Date
-): Promise<SessionRecord> {
+export async function createSession(userId: string, expiresAt: Date): Promise<{
+	session: SessionRecord;
+	token: string;
+}> {
+	const token = createSessionToken();
+	const tokenHash = hashSessionToken(token);
 	const [session] = await db
 		.insert(userSessions)
 		.values({
@@ -18,7 +20,10 @@ export async function createUserSession(
 		})
 		.returning();
 
-	return session;
+	return {
+		session,
+		token
+	};
 }
 
 export async function findValidSessionByTokenHash(

@@ -1,7 +1,11 @@
-import { RouterOSClient } from '@sourceregistry/mikrotik-client/routeros';
-import { listDevices, getDeviceCredentials } from '$lib/server/repositories/telemetry.repository';
-import { updateDeviceTelemetryState } from '$lib/server/repositories/device.repository';
-import { decryptSecret } from '$lib/server/security/secrets';
+import {RouterOSClient} from '@sourceregistry/mikrotik-client/routeros';
+import type {Service} from '@sourceregistry/sveltekit-service-manager';
+import {Service as ResolveService} from '@sourceregistry/sveltekit-service-manager';
+import {ServiceManager} from '@sourceregistry/sveltekit-service-manager/server';
+import {OpenEventEmitter, type OpenListener} from '$lib/server/helpers/OpenEventEmitter';
+import {getDeviceById, getDeviceCredentials, listDevices} from '$lib/server/repositories/telemetry.repository';
+import {updateDeviceTelemetryState} from '$lib/server/repositories/device.repository';
+import {decryptSecret} from '$lib/server/security/secrets';
 import {
 	insertDeviceMetric,
 	insertInterfaceMetrics,
@@ -12,21 +16,28 @@ import {
 	upsertDeviceClients,
 	type DeviceClientInput
 } from '$lib/server/repositories/clients.repository';
-import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
-import { monitoringEvents } from '$lib/server/services/monitoring-events.service';
 import {
 	evaluateDeviceMetric,
 	evaluateDeviceOffline,
 	evaluateDeviceOnline
 } from '$lib/server/services/alert-evaluator.service';
-import { upsertTopologyLinks } from '$lib/server/repositories/topology.repository';
-import { createBackupDeviceTask } from '$lib/server/services/devices.service/tasks';
-import { createFirmwareCheckTask } from '$lib/server/services/firmware.service';
-import { Service } from '@sourceregistry/sveltekit-service-manager';
+import {upsertTopologyLinks} from '$lib/server/repositories/topology.repository';
+import {createBackupDeviceTask} from '$lib/server/services/devices.service/modules/provisioning/tasks';
+import {createFirmwareCheckTask} from '$lib/server/services/firmware.service';
+import type {DeviceEventMap, DeviceUpdatedPayload} from '$lib/server/services/devices.service/modules/event.module';
+
+export type MonitoringEventMap = {
+	'metric:updated': [{deviceId: string; siteId: string | null; collectedAt: Date}];
+	'client:updated': [{siteId: string | null}];
+	'topology:updated': [{siteId: string | null}];
+};
+
+export const monitoringEvents = new OpenEventEmitter<MonitoringEventMap>();
 
 const POLL_INTERVAL_MS = 30_000;
 const STARTUP_DELAY_MS = 8_000;
 const CLIENT_TIMEOUT_MS = 10_000;
+const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1_000;
 
 type MonitorableDevice = {
 	id: string;
@@ -34,11 +45,27 @@ type MonitorableDevice = {
 	host: string;
 	apiPort: number;
 	capabilities: string[];
+	adoptionState: string;
+	adoptionMode: string;
+	connectionStatus: string;
+	platform: string;
 };
 
 type RawRecord = Record<string, unknown>;
 
-/** Parse RouterOS uptime string (e.g. "1w2d3h4m5s") into total seconds. */
+type DeviceMonitorEntry = {
+	device: MonitorableDevice;
+	timer: NodeJS.Timeout;
+	inFlight: Promise<void> | null;
+};
+
+const monitors = new Map<string, DeviceMonitorEntry>();
+let pollStartupTimer: NodeJS.Timeout | null = null;
+let pruneTimer: NodeJS.Timeout | null = null;
+let backupTimer: NodeJS.Timeout | null = null;
+let firmwareTimer: NodeJS.Timeout | null = null;
+let started = false;
+
 function parseUptimeSeconds(value: unknown): number {
 	if (typeof value !== 'string') return 0;
 	let total = 0;
@@ -62,6 +89,20 @@ function str(value: unknown): string | null {
 	return typeof value === 'string' && value ? value : null;
 }
 
+function isMonitorable(device: Pick<MonitorableDevice, 'adoptionState'>): boolean {
+	return device.adoptionState !== 'discovered' && device.adoptionState !== 'failed';
+}
+
+function stopMonitor(deviceId: string): void {
+	const entry = monitors.get(deviceId);
+	if (!entry) {
+		return;
+	}
+
+	clearInterval(entry.timer);
+	monitors.delete(deviceId);
+}
+
 async function collectDevice(device: MonitorableDevice): Promise<void> {
 	const credentials = await getDeviceCredentials(device.id);
 	const cred = credentials.find((c) => c.purpose === 'read_only');
@@ -80,8 +121,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 
 	try {
 		const now = new Date();
-
-		const [resourceResult, ifaceResult, healthResult, arpResult, dhcpResult, capsmAnResult, neighborResult] =
+		const [resourceResult, ifaceResult, healthResult, arpResult, dhcpResult, capsmanResult, neighborResult] =
 			await Promise.allSettled([
 				client.system.resource.get() as Promise<RawRecord>,
 				client.print('/interface', {}) as Promise<RawRecord[]>,
@@ -94,7 +134,6 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 				client.print('/ip/neighbor', {}) as Promise<RawRecord[]>
 			]);
 
-		// --- System metrics ---
 		if (resourceResult.status === 'fulfilled') {
 			const res = resourceResult.value;
 			const uptime = parseUptimeSeconds(res['uptime'] ?? res.uptime);
@@ -122,7 +161,13 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 			});
 
 			await updateDeviceTelemetryState(device.id, 'online', uptime || undefined);
-			await emitDeviceUpdated(device.id, 'telemetry');
+			ResolveService('devices').event.emit('device.updated', {
+				siteId: device.siteId,
+				deviceId: device.id,
+				reason: 'telemetry',
+				connectionStatus: 'online',
+				timestamp: now.toISOString()
+			});
 			monitoringEvents.emit('metric:updated', {
 				deviceId: device.id,
 				siteId: device.siteId,
@@ -143,7 +188,6 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 			}
 		}
 
-		// --- Interface metrics ---
 		if (ifaceResult.status === 'fulfilled') {
 			const rows = ifaceResult.value
 				.filter((iface) => str(iface['name'] ?? iface.name))
@@ -161,8 +205,6 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 			await insertInterfaceMetrics(rows);
 		}
 
-		// --- Connected clients ---
-		// Build a map: mac → client. DHCP hostname takes priority over ARP entry.
 		const clientMap = new Map<string, DeviceClientInput>();
 
 		if (arpResult.status === 'fulfilled') {
@@ -207,16 +249,15 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 			}
 		}
 
-		if (capsmAnResult.status === 'fulfilled') {
-			for (const reg of capsmAnResult.value) {
+		if (capsmanResult.status === 'fulfilled') {
+			for (const reg of capsmanResult.value) {
 				const mac = str(reg['mac-address'] ?? reg.macAddress);
 				if (!mac) continue;
-				// Signal strength comes as e.g. "-65dBm@6GHz" — strip the unit
 				const rawSignal = str(reg['signal-strength'] ?? reg.signalStrength) ?? '';
 				const signal = num(rawSignal.replace(/[^0-9-]/g, ''));
 				const prev = clientMap.get(mac);
 				clientMap.set(mac, {
-					...(prev ?? { deviceId: device.id, siteId: device.siteId, macAddress: mac }),
+					...(prev ?? {deviceId: device.id, siteId: device.siteId, macAddress: mac}),
 					isWireless: true,
 					ssid: str(reg['ssid'] ?? reg.ssid) ?? prev?.ssid ?? null,
 					signalStrength: signal,
@@ -228,9 +269,8 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 
 		await markDeviceClientsInactive(device.id);
 		await upsertDeviceClients([...clientMap.values()]);
-		monitoringEvents.emit('client:updated', { siteId: device.siteId });
+		monitoringEvents.emit('client:updated', {siteId: device.siteId});
 
-		// --- Topology neighbors ---
 		if (neighborResult.status === 'fulfilled' && neighborResult.value.length > 0) {
 			const links = neighborResult.value
 				.filter((n) => str(n['address'] ?? n.address))
@@ -245,11 +285,17 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 					discoveredVia: 'neighbor' as const
 				}));
 			void upsertTopologyLinks(links).catch(() => {});
-			monitoringEvents.emit('topology:updated', { siteId: device.siteId });
+			monitoringEvents.emit('topology:updated', {siteId: device.siteId});
 		}
 	} catch {
 		await updateDeviceTelemetryState(device.id, 'offline');
-		await emitDeviceUpdated(device.id, 'telemetry');
+		ResolveService('devices').event.emit('device.updated', {
+			siteId: device.siteId,
+			deviceId: device.id,
+			reason: 'telemetry',
+			connectionStatus: 'offline',
+			timestamp: new Date().toISOString()
+		});
 		if (device.siteId) {
 			void evaluateDeviceOffline(device.id, device.siteId).catch(() => {});
 		}
@@ -260,67 +306,200 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 	}
 }
 
-async function pollAll(): Promise<void> {
+function triggerMonitor(deviceId: string): void {
+	const entry = monitors.get(deviceId);
+	if (!entry || entry.inFlight) {
+		return;
+	}
+
+	entry.inFlight = collectDevice(entry.device).finally(() => {
+		const current = monitors.get(deviceId);
+		if (current) {
+			current.inFlight = null;
+		}
+	});
+}
+
+function startMonitor(device: MonitorableDevice): void {
+	stopMonitor(device.id);
+
+	const timer = setInterval(() => {
+		triggerMonitor(device.id);
+	}, POLL_INTERVAL_MS);
+
+	monitors.set(device.id, {
+		device,
+		timer,
+		inFlight: null
+	});
+
+	triggerMonitor(device.id);
+}
+
+function upsertMonitor(device: MonitorableDevice): void {
+	if (!isMonitorable(device)) {
+		stopMonitor(device.id);
+		return;
+	}
+
+	const existing = monitors.get(device.id);
+	if (!existing) {
+		startMonitor(device);
+		return;
+	}
+
+	existing.device = device;
+}
+
+async function syncMonitor(deviceId: string): Promise<void> {
+	const device = await getDeviceById(deviceId);
+	if (!device) {
+		stopMonitor(deviceId);
+		return;
+	}
+
+	upsertMonitor(device);
+}
+
+async function syncMonitors(): Promise<void> {
 	try {
 		const devices = await listDevices();
-		const monitorable = devices.filter(
-			(d): d is typeof d & MonitorableDevice =>
-				d.adoptionState !== 'discovered' && d.adoptionState !== 'failed'
-		);
-		await Promise.allSettled(monitorable.map((d) => collectDevice(d)));
+		const seen = new Set<string>();
+
+		for (const device of devices) {
+			seen.add(device.id);
+			upsertMonitor(device);
+		}
+
+		for (const deviceId of monitors.keys()) {
+			if (!seen.has(deviceId)) {
+				stopMonitor(deviceId);
+			}
+		}
 	} catch {
-		/* individual device errors are already handled; ignore top-level failures */
+		/* ignore */
 	}
 }
 
-let started = false;
+async function updateAllMonitors(): Promise<void> {
+	await Promise.allSettled([...monitors.keys()].map(async (deviceId) => triggerMonitor(deviceId)));
+}
+
+async function backupAllDevices(): Promise<void> {
+	try {
+		const devices = await listDevices();
+		const managed = devices.filter(
+			(d) => d.adoptionMode === 'managed' && d.adoptionState === 'fully_managed'
+		);
+		for (const d of managed) {
+			void ResolveService('scheduler')
+				.schedule(createBackupDeviceTask(d.id, d.siteId ?? undefined))
+				.catch(() => {});
+		}
+	} catch {
+		/* ignore */
+	}
+}
+
+async function checkAllFirmware(): Promise<void> {
+	try {
+		const devices = await listDevices();
+		const routeros = devices.filter((d) => d.platform === 'routeros' && d.connectionStatus === 'online');
+		for (const d of routeros) {
+			void ResolveService('scheduler')
+				.schedule(createFirmwareCheckTask(d.id, d.siteId ?? undefined))
+				.catch(() => {});
+		}
+	} catch {
+		/* ignore */
+	}
+}
+
+const handleDeviceEvent: OpenListener<DeviceEventMap> = (eventName, ...args) => {
+	switch (eventName) {
+		case 'device.adopted': {
+			const payload = args[0];
+			if (payload.deviceId) {
+				void syncMonitor(payload.deviceId).catch(() => {
+					/* ignore */
+				});
+			}
+			return;
+		}
+		case 'device.updated': {
+			const payload = args[0] as DeviceUpdatedPayload;
+			if (payload.reason === 'telemetry') {
+				return;
+			}
+			void syncMonitor(payload.deviceId).catch(() => {
+				/* ignore */
+			});
+			return;
+		}
+		case 'device.removed': {
+			const payload = args[0];
+			stopMonitor(payload.deviceId);
+			return;
+		}
+	}
+};
+
+function stopMonitoring(): void {
+	if (pollStartupTimer) {
+		clearTimeout(pollStartupTimer);
+		pollStartupTimer = null;
+	}
+	if (pruneTimer) {
+		clearInterval(pruneTimer);
+		pruneTimer = null;
+	}
+	if (backupTimer) {
+		clearInterval(backupTimer);
+		backupTimer = null;
+	}
+	if (firmwareTimer) {
+		clearInterval(firmwareTimer);
+		firmwareTimer = null;
+	}
+
+	for (const deviceId of [...monitors.keys()]) {
+		stopMonitor(deviceId);
+	}
+
+	ResolveService('devices').event.removeAny(handleDeviceEvent);
+	started = false;
+}
 
 export function startMonitoring(): void {
 	if (started) return;
 	started = true;
 
-	setTimeout(() => {
-		void pollAll();
-		setInterval(() => void pollAll(), POLL_INTERVAL_MS);
+	ResolveService('devices').event.any(handleDeviceEvent);
 
-		// Prune metrics older than 30 days, once per day
+	pollStartupTimer = setTimeout(() => {
+		void syncMonitors();
+
 		void pruneOldMetrics(30);
-		setInterval(() => void pruneOldMetrics(30), 24 * 60 * 60 * 1_000);
+		pruneTimer = setInterval(() => void pruneOldMetrics(30), DAILY_INTERVAL_MS);
 
-		// Daily backup for all managed devices
-		async function backupAllDevices() {
-			try {
-				const devices = await listDevices();
-				const managed = devices.filter(
-					(d) => d.adoptionMode === 'managed' && d.adoptionState === 'fully_managed'
-				);
-				for (const d of managed) {
-					void Service('scheduler')
-						.schedule(createBackupDeviceTask(d.id, d.siteId ?? undefined))
-						.catch(() => {});
-				}
-			} catch {
-				/* ignore */
-			}
-		}
 		void backupAllDevices();
-		setInterval(() => void backupAllDevices(), 24 * 60 * 60 * 1_000);
+		backupTimer = setInterval(() => void backupAllDevices(), DAILY_INTERVAL_MS);
 
-		// Daily firmware check for all adopted RouterOS devices
-		async function checkAllFirmware() {
-			try {
-				const devices = await listDevices();
-				const routeros = devices.filter((d) => d.platform === 'routeros' && d.connectionStatus === 'online');
-				for (const d of routeros) {
-					void Service('scheduler')
-						.schedule(createFirmwareCheckTask(d.id, d.siteId ?? undefined))
-						.catch(() => {});
-				}
-			} catch {
-				/* ignore */
-			}
-		}
 		void checkAllFirmware();
-		setInterval(() => void checkAllFirmware(), 24 * 60 * 60 * 1_000);
+		firmwareTimer = setInterval(() => void checkAllFirmware(), DAILY_INTERVAL_MS);
 	}, STARTUP_DELAY_MS);
 }
+
+export const service = {
+	name: 'monitoring',
+	local: {
+		start: startMonitoring,
+		syncMonitors,
+		updateAllMonitors
+	},
+	cleanup: stopMonitoring
+} satisfies Service<'monitoring'>;
+
+export type MonitoringService = typeof service;
+
+export default ServiceManager.Load(service, import.meta);

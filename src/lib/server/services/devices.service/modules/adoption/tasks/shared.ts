@@ -1,23 +1,18 @@
-import { RouterOSClient, type RouterOSInterface } from '@sourceregistry/mikrotik-client/routeros';
+import {RouterOSClient, type RouterOSInterface} from '@sourceregistry/mikrotik-client/routeros';
 import {
 	SwitchOSClient,
 	decodeSwitchOSHexString
 } from '@sourceregistry/mikrotik-client/switchos';
-import { EventEmitter } from 'node:events';
-import { createAdoptionAttempt, updateAdoptionAttempt } from '$lib/server/repositories/adoption.repository';
-import { recordAuditEvent } from '$lib/server/repositories/audit.repository';
-import {
-	replaceDeviceInterfaces,
-	replaceReadOnlyCredential,
-	upsertAdoptedDevice
-} from '$lib/server/repositories/device.repository';
-import { ensureSiteByName } from '$lib/server/repositories/site.repository';
-import { encryptSecret } from '$lib/server/security/secrets';
-import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
+import {Service} from '@sourceregistry/sveltekit-service-manager';
+import {createAdoptionAttempt, updateAdoptionAttempt} from '$lib/server/repositories/adoption.repository';
+import {recordAuditEvent} from '$lib/server/repositories/audit.repository';
+import {replaceDeviceInterfaces, replaceReadOnlyCredential, upsertAdoptedDevice} from '$lib/server/repositories/device.repository';
+import {updateJob} from '$lib/server/repositories/job.repository';
+import {ensureSiteByName} from '$lib/server/repositories/site.repository';
+import {encryptSecret} from '$lib/server/security/secrets';
 
-export const adoptionEvents = new EventEmitter();
-
-type DevicePlatform = 'routeros' | 'switchos';
+export type DevicePlatform = 'routeros' | 'switchos';
+export type AdoptionMode = 'read_only' | 'managed';
 
 export type AdoptDeviceInput = {
 	host: string;
@@ -69,7 +64,7 @@ function parseRouterOsUptimeSeconds(uptime: string | undefined): number | undefi
 	return (((weeks * 7 + days) * 24 + hours) * 60 + minutes) * 60 + seconds;
 }
 
-async function readRealRouterOsInventory(input: AdoptDeviceInput): Promise<RouterOSInventory> {
+async function readRouterOsInventory(input: AdoptDeviceInput): Promise<RouterOSInventory> {
 	const client = new RouterOSClient({
 		host: input.host,
 		port: input.apiPort,
@@ -82,10 +77,10 @@ async function readRealRouterOsInventory(input: AdoptDeviceInput): Promise<Route
 		await client.login();
 
 		const [identity, resource, routerboard, interfaces] = await Promise.all([
-			client.system.identity.get({ timeoutMs: 8_000 }),
-			client.system.resource.get({ timeoutMs: 8_000 }),
-			client.system.routerboard.get({ timeoutMs: 8_000 }).catch(() => undefined),
-			client.interface.list({ timeoutMs: 8_000 })
+			client.system.identity.get({timeoutMs: 8_000}),
+			client.system.resource.get({timeoutMs: 8_000}),
+			client.system.routerboard.get({timeoutMs: 8_000}).catch(() => undefined),
+			client.interface.list({timeoutMs: 8_000})
 		]);
 
 		return {
@@ -102,7 +97,7 @@ async function readRealRouterOsInventory(input: AdoptDeviceInput): Promise<Route
 	}
 }
 
-async function readRealSwitchOsInventory(input: AdoptDeviceInput): Promise<RouterOSInventory> {
+async function readSwitchOsInventory(input: AdoptDeviceInput): Promise<RouterOSInventory> {
 	const client = new SwitchOSClient({
 		baseUrl: `http://${input.host}:${input.apiPort}`,
 		username: input.username,
@@ -124,22 +119,21 @@ async function readRealSwitchOsInventory(input: AdoptDeviceInput): Promise<Route
 }
 
 export async function readAdoptionInventory(input: AdoptDeviceInput): Promise<RouterOSInventory> {
-	if (input.platform === 'switchos') {
-		return readRealSwitchOsInventory(input);
+	const inventory = input.platform === 'switchos'
+		? await readSwitchOsInventory(input)
+		: await readRouterOsInventory(input);
+
+	if (input.platform === 'routeros') {
+		const majorVersion = parseRouterOsMajorVersion(inventory.version);
+		if (majorVersion !== undefined && majorVersion < 7) {
+			throw new Error(`RouterOS ${inventory.version} is not supported. Minimum supported version is v7.`);
+		}
 	}
 
-	return readRealRouterOsInventory(input);
+	return inventory;
 }
 
-export function assertSupportedAdoptionInventory(input: AdoptDeviceInput, inventory: RouterOSInventory): void {
-	const majorVersion = parseRouterOsMajorVersion(inventory.version);
-
-	if (input.platform === 'routeros' && majorVersion !== undefined && majorVersion < 7) {
-		throw new Error(`RouterOS ${inventory.version} is not supported. Minimum supported version is v7.`);
-	}
-}
-
-export async function createCredentialAdoptionAttempt(input: AdoptDeviceInput, mode: 'read_only' | 'managed' = 'read_only') {
+export async function createCredentialAdoptionAttempt(input: AdoptDeviceInput, mode: AdoptionMode = 'read_only') {
 	const site = await ensureSiteByName(input.siteName || 'Default');
 	const attempt = await createAdoptionAttempt({
 		siteId: site.id,
@@ -154,37 +148,42 @@ export async function createCredentialAdoptionAttempt(input: AdoptDeviceInput, m
 		}
 	});
 
-	return { site, attempt };
+	return {site, attempt};
 }
 
-export async function markCredentialAdoptionSyncing(attemptId: string): Promise<void> {
-	await updateAdoptionAttempt(attemptId, {
+export async function syncCredentialAdoptionInventory(input: {
+	adoption: AdoptDeviceInput;
+	attemptId: string;
+	siteId: string;
+	inventory: RouterOSInventory;
+	jobId?: string;
+}) {
+	const now = new Date();
+
+	await updateAdoptionAttempt(input.attemptId, {
 		status: 'syncing_inventory',
 		progress: {
 			steps: ['created', 'validating_credentials', 'syncing_inventory']
 		}
 	});
-}
 
-export async function upsertAdoptionInventory(input: AdoptDeviceInput, siteId: string, inventory: RouterOSInventory) {
-	const now = new Date();
 	const device = await upsertAdoptedDevice({
-		siteId,
-		name: inventory.identity,
-		platform: input.platform,
+		siteId: input.siteId,
+		name: input.inventory.identity,
+		platform: input.adoption.platform,
 		adoptionMode: 'read_only',
 		adoptionState: 'inventoried',
 		connectionStatus: 'online',
-		host: input.host,
-		apiPort: input.apiPort,
-		identity: inventory.identity,
-		model: inventory.model,
-		serialNumber: inventory.serialNumber,
-		routerOsVersion: inventory.version,
-		architecture: inventory.architecture,
-		uptimeSeconds: inventory.uptimeSeconds,
+		host: input.adoption.host,
+		apiPort: input.adoption.apiPort,
+		identity: input.inventory.identity,
+		model: input.inventory.model,
+		serialNumber: input.inventory.serialNumber,
+		routerOsVersion: input.inventory.version,
+		architecture: input.inventory.architecture,
+		uptimeSeconds: input.inventory.uptimeSeconds,
 		capabilities: [
-			input.platform === 'switchos' ? 'switchos-http' : 'routeros-api'
+			input.adoption.platform === 'switchos' ? 'switchos-http' : 'routeros-api'
 		],
 		tags: [],
 		lastSeenAt: now,
@@ -193,7 +192,7 @@ export async function upsertAdoptionInventory(input: AdoptDeviceInput, siteId: s
 
 	await replaceDeviceInterfaces(
 		device.id,
-		inventory.interfaces
+		input.inventory.interfaces
 			.filter((networkInterface) => networkInterface.name)
 			.map((networkInterface) => ({
 				routerosId: networkInterface['.id'],
@@ -205,7 +204,18 @@ export async function upsertAdoptionInventory(input: AdoptDeviceInput, siteId: s
 				disabled: networkInterface.disabled === true
 			}))
 	);
-	await emitDeviceUpdated(device.id, 'interfaces');
+
+	if (input.jobId) {
+		await updateJob(input.jobId, {deviceId: device.id});
+	}
+
+	Service('devices').event.emit('device.updated', {
+		siteId: device.siteId,
+		deviceId: device.id,
+		reason: 'interfaces',
+		connectionStatus: device.connectionStatus,
+		timestamp: new Date().toISOString()
+	});
 
 	return device;
 }
@@ -220,10 +230,10 @@ export async function storeAdoptionReadOnlyCredential(input: AdoptDeviceInput, d
 
 export async function finishCredentialAdoption(input: AdoptDeviceInput, context: {
 	attemptId: string;
-	device: Awaited<ReturnType<typeof upsertAdoptionInventory>>;
+	device: Awaited<ReturnType<typeof syncCredentialAdoptionInventory>>;
 	site: Awaited<ReturnType<typeof ensureSiteByName>>;
 	inventory: RouterOSInventory;
-	mode?: 'read_only' | 'managed';
+	mode?: AdoptionMode;
 }): Promise<void> {
 	const mode = context.mode ?? 'read_only';
 
@@ -237,7 +247,7 @@ export async function finishCredentialAdoption(input: AdoptDeviceInput, context:
 		}
 	});
 
-	adoptionEvents.emit('device.adopted', {
+	Service('devices').event.emit('device.adopted', {
 		host: context.device.host,
 		deviceId: context.device.id,
 		siteId: context.site.id,
@@ -279,22 +289,4 @@ export async function failCredentialAdoption(input: AdoptDeviceInput, attemptId:
 			error: error instanceof Error ? error.message : 'Unknown adoption error.'
 		}
 	});
-}
-
-export async function adoptRouterOsDevice(input: AdoptDeviceInput) {
-	const { site, attempt } = await createCredentialAdoptionAttempt(input);
-
-	try {
-		const inventory = await readAdoptionInventory(input);
-		assertSupportedAdoptionInventory(input, inventory);
-		await markCredentialAdoptionSyncing(attempt.id);
-		const device = await upsertAdoptionInventory(input, site.id, inventory);
-		await storeAdoptionReadOnlyCredential(input, device.id);
-		await finishCredentialAdoption(input, { attemptId: attempt.id, device, site, inventory });
-
-		return { device, site };
-	} catch (error) {
-		await failCredentialAdoption(input, attempt.id, error);
-		throw error;
-	}
 }

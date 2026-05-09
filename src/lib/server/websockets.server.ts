@@ -1,32 +1,8 @@
 import { websockets } from '@sourceregistry/sveltekit-websockets/server';
-import { Service } from '@sourceregistry/sveltekit-service-manager/server';
+import { Service } from '@sourceregistry/sveltekit-service-manager';
 import '$lib/server/services/actionbus.service';
 import discoveryService from '$lib/server/services/discovery.service';
 import { listDevices } from '$lib/server/repositories/device.repository';
-import { adoptionEvents } from '$lib/server/services/adoption.service';
-import { deviceEvents } from '$lib/server/services/device-events.service';
-import { monitoringEvents } from '$lib/server/services/monitoring-events.service';
-import { alertEvaluatorEvents } from '$lib/server/services/alert-evaluator.service';
-import {
-	getJobWithSteps
-} from '$lib/server/repositories/job.repository';
-import { getLatestDeviceMetric } from '$lib/server/repositories/metrics.repository';
-import { getActiveClientCountBySite } from '$lib/server/repositories/clients.repository';
-import {
-	schedulerEvents
-} from '$lib/server/services/scheduler.service';
-import type {
-	ActionJob,
-	ActionJobStep,
-	AlertFiredEvent,
-	AlertResolvedEvent,
-	ClientUpdatedEvent,
-	DeviceRemovedEvent,
-	DeviceUpdatedEvent,
-	JobUpdatedEvent,
-	MetricUpdatedEvent,
-	TopologyUpdatedEvent
-} from '$lib/shared/action-events';
 
 type DiscoveryDevice = {
 	id: string;
@@ -53,7 +29,7 @@ type DiscoveryNeighborMessage = {
 
 type DeviceAdoptedPayload = {
 	host: string;
-	deviceId: string;
+	deviceId: string | null;
 	siteId: string;
 	siteName: string;
 	identity?: string;
@@ -69,60 +45,6 @@ type DeviceAdoptedMessage = {
 type DiscoveryWebSocketMessage = DiscoverySnapshotMessage | DiscoveryNeighborMessage | DeviceAdoptedMessage;
 
 const discoveryController = websockets.continuous('/ws/discovery', { useConnectionKeys: false });
-
-function serializeDate(value: Date | string | null | undefined): string | null {
-	if (!value) {
-		return null;
-	}
-
-	return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-}
-
-function serializeStep(
-	step: NonNullable<Awaited<ReturnType<typeof getJobWithSteps>>>['steps'][number]
-): ActionJobStep {
-	return {
-		id: step.id,
-		jobId: step.jobId,
-		index: step.index,
-		name: step.name,
-		status: step.status,
-		result: step.result,
-		errorMessage: step.errorMessage,
-		revertResult: step.revertResult ?? null,
-		revertErrorMessage: step.revertErrorMessage,
-		startedAt: serializeDate(step.startedAt),
-		finishedAt: serializeDate(step.finishedAt),
-		revertedAt: serializeDate(step.revertedAt),
-		createdAt: serializeDate(step.createdAt) ?? new Date(0).toISOString(),
-		updatedAt: serializeDate(step.updatedAt) ?? new Date(0).toISOString()
-	};
-}
-
-function serializeJob(job: NonNullable<Awaited<ReturnType<typeof getJobWithSteps>>>): ActionJob {
-	return {
-		id: job.id,
-		type: job.type,
-		status: job.status,
-		deviceId: job.deviceId,
-		siteId: job.siteId,
-		requestedByUserId: job.requestedByUserId,
-		progress: job.progress,
-		attemptCount: job.attemptCount,
-		maxAttempts: job.maxAttempts,
-		payload: job.payload,
-		result: job.result ?? null,
-		errorMessage: job.errorMessage,
-		scheduledFor: serializeDate(job.scheduledFor),
-		lockedAt: serializeDate(job.lockedAt),
-		lockedBy: job.lockedBy,
-		startedAt: serializeDate(job.startedAt),
-		finishedAt: serializeDate(job.finishedAt),
-		createdAt: serializeDate(job.createdAt) ?? new Date(0).toISOString(),
-		updatedAt: serializeDate(job.updatedAt) ?? new Date(0).toISOString(),
-		steps: job.steps.map(serializeStep)
-	};
-}
 
 async function buildDiscoverySnapshot(): Promise<DiscoveryDevice[]> {
 	const allDevices = await listDevices();
@@ -146,10 +68,6 @@ function broadcast(message: DiscoveryWebSocketMessage): void {
 	discoveryController.broadcast(JSON.stringify(message), {
 		filter: (socket) => socket.readyState === socket.OPEN
 	});
-}
-
-function actionbus() {
-	return Service('actionbus');
 }
 
 async function sendSnapshot(socket: { send(data: string): void }): Promise<void> {
@@ -177,10 +95,6 @@ async function handleNeighbor(device: DiscoveryDevice): Promise<void> {
 	};
 
 	broadcast(message);
-	actionbus().publishDiscovery({
-		type: 'discovery.neighbor',
-		payload: device
-	});
 }
 
 function handleDeviceAdopted(payload: DeviceAdoptedPayload): void {
@@ -190,81 +104,6 @@ function handleDeviceAdopted(payload: DeviceAdoptedPayload): void {
 	};
 
 	broadcast(message);
-	actionbus().publishSite(payload.siteId, {
-		type: 'device.adopted',
-		payload
-	});
-}
-
-function handleDeviceUpdated(payload: DeviceUpdatedEvent['payload']): void {
-	actionbus().publishSite(payload.siteId, {
-		type: 'device.updated',
-		payload
-	});
-}
-
-function handleDeviceRemoved(payload: DeviceRemovedEvent['payload']): void {
-	actionbus().publishSite(payload.siteId, {
-		type: 'device.removed',
-		payload
-	});
-}
-
-async function handleMetricUpdated(detail: {
-	deviceId: string;
-	siteId: string | null;
-	collectedAt: Date;
-}): Promise<void> {
-	const metric = await getLatestDeviceMetric(detail.deviceId);
-	if (!metric) return;
-
-	const event: MetricUpdatedEvent = {
-		type: 'metric.updated',
-		payload: {
-			deviceId: detail.deviceId,
-			siteId: detail.siteId,
-			cpuPercent: metric.cpuPercent,
-			freeMemoryBytes: metric.freeMemoryBytes,
-			totalMemoryBytes: metric.totalMemoryBytes,
-			temperatureCelsius: metric.temperatureCelsius,
-			uptimeSeconds: metric.uptimeSeconds,
-			collectedAt: detail.collectedAt.toISOString()
-		}
-	};
-
-	actionbus().publishSite(event.payload.siteId, event);
-}
-
-async function handleClientUpdated(detail: { siteId: string | null }): Promise<void> {
-	if (!detail.siteId) return;
-
-	const activeCount = await getActiveClientCountBySite(detail.siteId);
-	const event: ClientUpdatedEvent = {
-		type: 'client.updated',
-		payload: {
-			siteId: detail.siteId,
-			activeCount
-		}
-	};
-
-	actionbus().publishSite(event.payload.siteId, event);
-}
-
-async function handleSchedulerEvent(detail: { jobId: string }): Promise<void> {
-	const job = await getJobWithSteps(detail.jobId);
-	if (!job) {
-		return;
-	}
-
-	const message: JobUpdatedEvent = {
-		type: 'job.updated',
-		payload: {
-			siteId: job.siteId,
-			job: serializeJob(job)
-		}
-	};
-
-	actionbus().publishSite(message.payload.siteId, message);
 }
 
 discoveryController.on('connect', (socket) => {
@@ -278,81 +117,7 @@ discoveryService.on('neighbor', (neighbor) => {
 		/* ignore discovery broadcast failures */
 	});
 });
-adoptionEvents.on('device.adopted', handleDeviceAdopted);
-deviceEvents.on('device.updated', handleDeviceUpdated);
-deviceEvents.on('device.removed', handleDeviceRemoved);
-
-monitoringEvents.on('metric:updated', (detail) => {
-	void handleMetricUpdated(detail).catch(() => {
-		/* ignore broadcast failures */
-	});
-});
-
-monitoringEvents.on('client:updated', (detail) => {
-	void handleClientUpdated(detail).catch(() => {
-		/* ignore broadcast failures */
-	});
-});
-
-alertEvaluatorEvents.on('alert:fired', (detail) => {
-	const event: AlertFiredEvent = {
-		type: 'alert.fired',
-		payload: {
-			eventId: detail.eventId,
-			ruleId: detail.ruleId,
-			siteId: detail.siteId,
-			deviceId: detail.deviceId,
-			severity: detail.severity,
-			message: detail.message
-		}
-	};
-	actionbus().publishSite(event.payload.siteId, event);
-});
-
-monitoringEvents.on('topology:updated', (detail) => {
-	if (!detail.siteId) return;
-	const event: TopologyUpdatedEvent = {
-		type: 'topology.updated',
-		payload: { siteId: detail.siteId }
-	};
-	actionbus().publishSite(event.payload.siteId, event);
-});
-
-alertEvaluatorEvents.on('alert:resolved', (detail) => {
-	const event: AlertResolvedEvent = {
-		type: 'alert.resolved',
-		payload: {
-			eventId: detail.eventId,
-			ruleId: detail.ruleId,
-			siteId: detail.siteId,
-			deviceId: detail.deviceId
-		}
-	};
-	actionbus().publishSite(event.payload.siteId, event);
-});
-
-for (const eventName of [
-	'job:queued',
-	'job:started',
-	'job:succeeded',
-	'job:failed',
-	'job:rolling_back',
-	'job:reverted',
-	'job:revert_failed',
-	'step:started',
-	'step:succeeded',
-	'step:failed',
-	'step:reverting',
-	'step:reverted',
-	'step:revert_failed',
-	'step:revert_skipped'
-] as const) {
-	schedulerEvents.on(eventName, (detail) => {
-		void handleSchedulerEvent(detail).catch(() => {
-			/* ignore scheduler broadcast failures */
-		});
-	});
-}
+Service('devices').event.on('device.adopted', handleDeviceAdopted);
 
 export {
 	discoveryController as discoveryWebsocketController
