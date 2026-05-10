@@ -20,14 +20,8 @@ import {
 	evaluateDeviceOnline
 } from '$lib/server/services/alert-evaluator.service';
 import { upsertTopologyLinks } from '$lib/server/repositories/topology.repository';
-import {
-	upsertFirewallRule,
-	deleteFirewallRulesByDeviceExcluding
-} from '$lib/server/repositories/firewall.repository';
-import {
-	upsertVlan,
-	deleteVlansByDeviceExcluding
-} from '$lib/server/repositories/vlan.repository';
+import { FirewallRepository } from '$lib/server/repositories/firewall.repository';
+import { VlanRepository } from '$lib/server/repositories/vlan.repository';
 import { createBackupDeviceTask } from '$lib/server/services/devices.service/tasks';
 import { createFirmwareCheckTask } from '$lib/server/services/firmware.service';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
@@ -271,7 +265,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 				if (!routerId || !chain || !action) continue;
 				if (!validChains.has(chain) || !validActions.has(action)) continue;
 				seenRouterIds.push(routerId);
-				void upsertFirewallRule({
+				void FirewallRepository.upsert({
 					deviceId: device.id,
 					siteId: device.siteId,
 					chain: chain as 'input' | 'forward' | 'output',
@@ -289,7 +283,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 					routerId
 				}).catch(() => {});
 			}
-			void deleteFirewallRulesByDeviceExcluding(device.id, seenRouterIds).catch(() => {});
+			void FirewallRepository.deleteByDeviceExcluding(device.id, seenRouterIds).catch(() => {});
 		}
 
 		// --- VLANs ---
@@ -301,7 +295,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 				const vlanId = num(vlan['vlan-id'] ?? vlan.vlanId);
 				if (!routerId || !name || vlanId === null) continue;
 				seenRouterIds.push(routerId);
-				void upsertVlan({
+				void VlanRepository.upsert({
 					deviceId: device.id,
 					siteId: device.siteId,
 					vlanId,
@@ -311,7 +305,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 					routerId
 				}).catch(() => {});
 			}
-			void deleteVlansByDeviceExcluding(device.id, seenRouterIds).catch(() => {});
+			void VlanRepository.deleteByDeviceExcluding(device.id, seenRouterIds).catch(() => {});
 		}
 	} catch {
 		await updateDeviceTelemetryState(device.id, 'offline');

@@ -16,8 +16,8 @@ import {
 } from '$lib/server/services/devices.service/tasks';
 import { createFirmwareCheckTask, createFirmwareUpgradeTask } from '$lib/server/services/firmware.service';
 import { getFirmwareVersion } from '$lib/server/repositories/firmware.repository';
-import { listFirewallRulesByDevice } from '$lib/server/repositories/firewall.repository';
-import { listVlansByDevice } from '$lib/server/repositories/vlan.repository';
+import { FirewallRepository } from '$lib/server/repositories/firewall.repository';
+import { VlanRepository } from '$lib/server/repositories/vlan.repository';
 import type { ActionJob, ActionJobStep } from '$lib/shared/action-events';
 import { provisionDeviceAction, removeDeviceAction } from '../device-actions.server';
 
@@ -248,8 +248,8 @@ export async function load({ locals, parent, params, depends }) {
 		getInterfaceMetricsHistory(device.id, 60 * 60 * 1000), // last 1h
 		getDeviceBackups(device.id),
 		getFirmwareVersion(device.id),
-		listFirewallRulesByDevice(device.id),
-		listVlansByDevice(device.id)
+		FirewallRepository.listByDevice(device.id),
+		VlanRepository.listByDevice(device.id)
 	]);
 	const hydratedJobs = await Promise.all(recentJobs.map((job) => getJobWithSteps(job.id)));
 

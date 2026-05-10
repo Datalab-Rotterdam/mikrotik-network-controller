@@ -55,11 +55,15 @@ vi.mock('$lib/server/repositories/firmware.repository', () => ({
 }));
 
 vi.mock('$lib/server/repositories/firewall.repository', () => ({
-	listFirewallRulesByDevice: mocks.listFirewallRulesByDevice
+	FirewallRepository: {
+		listByDevice: mocks.listFirewallRulesByDevice
+	}
 }));
 
 vi.mock('$lib/server/repositories/vlan.repository', () => ({
-	listVlansByDevice: mocks.listVlansByDevice
+	VlanRepository: {
+		listByDevice: mocks.listVlansByDevice
+	}
 }));
 
 vi.mock('$lib/server/services/device-terminal.service', () => ({
