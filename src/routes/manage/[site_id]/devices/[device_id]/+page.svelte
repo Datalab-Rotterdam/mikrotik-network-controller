@@ -15,7 +15,7 @@
   import TrafficSparkline from "$lib/client/components/ui/TrafficSparkline.svelte";
   import type { JobStatus } from "$lib/shared/action-events";
 
-  type DeviceTab = "overview" | "activity" | "backups" | "advanced";
+  type DeviceTab = "overview" | "firewall" | "vlans" | "activity" | "backups" | "advanced";
   type TabItem<T extends string = string> = {
     id: T;
     label: string;
@@ -47,6 +47,16 @@
       id: "activity",
       label: "Activity",
       icon: "M5 19h14v2H5v-2Zm1-8h3v6H6v-6Zm5-8h3v14h-3V3Zm5 5h3v9h-3V8Z",
+    },
+    {
+      id: "firewall",
+      label: "Firewall",
+      icon: "M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4Zm0 2.2 7 3.1V11c0 4.5-3 8.7-7 10-4-1.3-7-5.5-7-10V6.3l7-3.1Z",
+    },
+    {
+      id: "vlans",
+      label: "VLANs",
+      icon: "M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z",
     },
     {
       id: "backups",
@@ -457,6 +467,86 @@
           </div>
         </section>
       {/if}
+    {:else if activeTab === "firewall"}
+      <section class="content-section">
+        <div class="section-heading">
+          <h2>Firewall Rules</h2>
+          <span>{data.firewallRules.length} rules</span>
+        </div>
+        {#if data.firewallRules.length === 0}
+          <div class="empty-state">No firewall rules collected yet. Rules sync during the next monitoring tick.</div>
+        {:else}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Chain</th>
+                  <th>Action</th>
+                  <th>Src</th>
+                  <th>Dst</th>
+                  <th>Protocol</th>
+                  <th>Comment</th>
+                  <th>State</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each data.firewallRules as rule, i}
+                  <tr class:disabled-row={rule.disabled}>
+                    <td class="mono-cell">{i + 1}</td>
+                    <td><span class="chain-badge chain-{rule.chain}">{rule.chain}</span></td>
+                    <td><span class="action-badge action-{rule.action}">{rule.action}</span></td>
+                    <td class="mono-cell">{rule.srcAddress || rule.inInterface || "—"}</td>
+                    <td class="mono-cell">{rule.dstAddress || rule.outInterface || "—"}</td>
+                    <td>{rule.protocol || "any"}</td>
+                    <td class="comment-cell">{rule.comment || "—"}</td>
+                    <td>
+                      {#if rule.disabled}
+                        <span class="status-pill">Disabled</span>
+                      {:else}
+                        <span class="status-pill status-success">Active</span>
+                      {/if}
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+      </section>
+    {:else if activeTab === "vlans"}
+      <section class="content-section">
+        <div class="section-heading">
+          <h2>VLANs</h2>
+          <span>{data.vlans.length} configured</span>
+        </div>
+        {#if data.vlans.length === 0}
+          <div class="empty-state">No VLANs collected yet. VLANs sync during the next monitoring tick.</div>
+        {:else}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>VLAN ID</th>
+                  <th>Name</th>
+                  <th>Interface</th>
+                  <th>Comment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each data.vlans as vlan}
+                  <tr>
+                    <td class="mono-cell">{vlan.vlanId}</td>
+                    <td>{vlan.name}</td>
+                    <td class="mono-cell">{vlan.interfaceName || "—"}</td>
+                    <td class="comment-cell">{vlan.comment || "—"}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+      </section>
     {:else if activeTab === "activity"}
       <section class="content-section">
         <div class="section-heading">
@@ -1177,5 +1267,41 @@
   .legend-tx-label {
     color: var(--color-success, #22c55e);
     font-weight: 600;
+  }
+
+  .chain-badge,
+  .action-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .chain-input { background: #e8f4fd; color: #1565c0; }
+  .chain-forward { background: #e8f0fe; color: #3949ab; }
+  .chain-output { background: #f3e8fd; color: #6a1b9a; }
+
+  .action-accept { background: #e8f5e9; color: #2e7d32; }
+  .action-drop { background: #fce4ec; color: #b71c1c; }
+  .action-reject { background: #fff3e0; color: #e65100; }
+  .action-log { background: #f3f4f6; color: #374151; }
+  .action-jump,
+  .action-return,
+  .action-passthrough { background: #fafafa; color: #6b7280; }
+
+  .disabled-row td {
+    opacity: 0.45;
+  }
+
+  .comment-cell {
+    color: #8a949c;
+    font-size: 12px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>

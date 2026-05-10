@@ -20,6 +20,14 @@ import {
 	evaluateDeviceOnline
 } from '$lib/server/services/alert-evaluator.service';
 import { upsertTopologyLinks } from '$lib/server/repositories/topology.repository';
+import {
+	upsertFirewallRule,
+	deleteFirewallRulesByDeviceExcluding
+} from '$lib/server/repositories/firewall.repository';
+import {
+	upsertVlan,
+	deleteVlansByDeviceExcluding
+} from '$lib/server/repositories/vlan.repository';
 import { createBackupDeviceTask } from '$lib/server/services/devices.service/tasks';
 import { createFirmwareCheckTask } from '$lib/server/services/firmware.service';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
@@ -81,7 +89,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 	try {
 		const now = new Date();
 
-		const [resourceResult, ifaceResult, healthResult, arpResult, dhcpResult, capsmAnResult, neighborResult] =
+		const [resourceResult, ifaceResult, healthResult, arpResult, dhcpResult, capsmAnResult, neighborResult, firewallResult, vlanResult] =
 			await Promise.allSettled([
 				client.system.resource.get() as Promise<RawRecord>,
 				client.print('/interface', {}) as Promise<RawRecord[]>,
@@ -91,7 +99,9 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 				hasCapsMan
 					? (client.print('/caps-man/registration-table', {}) as Promise<RawRecord[]>)
 					: Promise.resolve([] as RawRecord[]),
-				client.print('/ip/neighbor', {}) as Promise<RawRecord[]>
+				client.print('/ip/neighbor', {}) as Promise<RawRecord[]>,
+				client.print('/ip/firewall/filter', {}) as Promise<RawRecord[]>,
+				client.print('/interface/vlan', {}) as Promise<RawRecord[]>
 			]);
 
 		// --- System metrics ---
@@ -246,6 +256,62 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 				}));
 			void upsertTopologyLinks(links).catch(() => {});
 			monitoringEvents.emit('topology:updated', { siteId: device.siteId });
+		}
+
+		// --- Firewall filter rules ---
+		const validChains = new Set(['input', 'forward', 'output']);
+		const validActions = new Set(['accept', 'drop', 'reject', 'jump', 'return', 'passthrough', 'log']);
+		if (firewallResult.status === 'fulfilled') {
+			const seenRouterIds: string[] = [];
+			for (let i = 0; i < firewallResult.value.length; i++) {
+				const rule = firewallResult.value[i];
+				const routerId = str(rule['.id'] ?? rule.id);
+				const chain = str(rule['chain'] ?? rule.chain);
+				const action = str(rule['action'] ?? rule.action);
+				if (!routerId || !chain || !action) continue;
+				if (!validChains.has(chain) || !validActions.has(action)) continue;
+				seenRouterIds.push(routerId);
+				void upsertFirewallRule({
+					deviceId: device.id,
+					siteId: device.siteId,
+					chain: chain as 'input' | 'forward' | 'output',
+					action: action as 'accept' | 'drop' | 'reject' | 'jump' | 'return' | 'passthrough' | 'log',
+					srcAddress: str(rule['src-address'] ?? rule.srcAddress),
+					dstAddress: str(rule['dst-address'] ?? rule.dstAddress),
+					protocol: str(rule['protocol'] ?? rule.protocol),
+					srcPort: str(rule['src-port'] ?? rule.srcPort),
+					dstPort: str(rule['dst-port'] ?? rule.dstPort),
+					inInterface: str(rule['in-interface'] ?? rule.inInterface),
+					outInterface: str(rule['out-interface'] ?? rule.outInterface),
+					comment: str(rule['comment'] ?? rule.comment),
+					disabled: rule['disabled'] === 'true' || rule['disabled'] === true,
+					position: i,
+					routerId
+				}).catch(() => {});
+			}
+			void deleteFirewallRulesByDeviceExcluding(device.id, seenRouterIds).catch(() => {});
+		}
+
+		// --- VLANs ---
+		if (vlanResult.status === 'fulfilled') {
+			const seenRouterIds: string[] = [];
+			for (const vlan of vlanResult.value) {
+				const routerId = str(vlan['.id'] ?? vlan.id);
+				const name = str(vlan['name'] ?? vlan.name);
+				const vlanId = num(vlan['vlan-id'] ?? vlan.vlanId);
+				if (!routerId || !name || vlanId === null) continue;
+				seenRouterIds.push(routerId);
+				void upsertVlan({
+					deviceId: device.id,
+					siteId: device.siteId,
+					vlanId,
+					name,
+					interfaceName: str(vlan['interface'] ?? vlan.interface),
+					comment: str(vlan['comment'] ?? vlan.comment),
+					routerId
+				}).catch(() => {});
+			}
+			void deleteVlansByDeviceExcluding(device.id, seenRouterIds).catch(() => {});
 		}
 	} catch {
 		await updateDeviceTelemetryState(device.id, 'offline');

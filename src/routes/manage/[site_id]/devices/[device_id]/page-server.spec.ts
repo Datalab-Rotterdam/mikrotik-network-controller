@@ -15,7 +15,9 @@ const mocks = vi.hoisted(() => ({
 	getDeviceBackups: vi.fn(),
 	getFirmwareVersion: vi.fn(),
 	isDeviceTerminalEligible: vi.fn(),
-	scheduleService: vi.fn()
+	scheduleService: vi.fn(),
+	listFirewallRulesByDevice: vi.fn(),
+	listVlansByDevice: vi.fn()
 }));
 
 vi.mock('$lib/server/repositories/device.repository', () => ({
@@ -50,6 +52,14 @@ vi.mock('$lib/server/services/backup.service', () => ({
 
 vi.mock('$lib/server/repositories/firmware.repository', () => ({
 	getFirmwareVersion: mocks.getFirmwareVersion
+}));
+
+vi.mock('$lib/server/repositories/firewall.repository', () => ({
+	listFirewallRulesByDevice: mocks.listFirewallRulesByDevice
+}));
+
+vi.mock('$lib/server/repositories/vlan.repository', () => ({
+	listVlansByDevice: mocks.listVlansByDevice
 }));
 
 vi.mock('$lib/server/services/device-terminal.service', () => ({
@@ -201,6 +211,8 @@ beforeEach(() => {
 	mocks.getInterfaceMetricsHistory.mockResolvedValue([]);
 	mocks.getDeviceBackups.mockResolvedValue([]);
 	mocks.getFirmwareVersion.mockResolvedValue(null);
+	mocks.listFirewallRulesByDevice.mockResolvedValue([]);
+	mocks.listVlansByDevice.mockResolvedValue([]);
 	mocks.isDeviceTerminalEligible.mockImplementation(({ userRoles }: { userRoles: string[] }) => userRoles.includes('admin') && true);
 	mocks.scheduleService.mockResolvedValue({ id: 'job-1' });
 });

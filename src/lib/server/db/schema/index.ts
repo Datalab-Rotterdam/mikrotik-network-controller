@@ -11,3 +11,5 @@ export * from './metrics';
 export * from './sites';
 export * from './templates';
 export * from './topology';
+export * from './firewall';
+export * from './vlans';
