@@ -488,6 +488,7 @@
                   <th>Protocol</th>
                   <th>Comment</th>
                   <th>State</th>
+                  {#if provisioned}<th></th>{/if}
                 </tr>
               </thead>
               <tbody>
@@ -507,11 +508,85 @@
                         <span class="status-pill status-success">Active</span>
                       {/if}
                     </td>
+                    {#if provisioned}
+                      <td class="action-cell">
+                        {#if rule.routerId}
+                          <form method="POST" action="?/deleteFirewallRule" use:enhance>
+                            <input type="hidden" name="routerId" value={rule.routerId} />
+                            <button
+                              type="submit"
+                              class="row-delete-btn"
+                              onclick={(e) => { if (!confirm("Delete this firewall rule from the device?")) e.preventDefault(); }}
+                            >✕</button>
+                          </form>
+                        {/if}
+                      </td>
+                    {/if}
                   </tr>
                 {/each}
               </tbody>
             </table>
           </div>
+        {/if}
+        {#if provisioned}
+          <div class="add-rule-section">
+            <p class="add-rule-label">Add rule</p>
+            <form method="POST" action="?/addFirewallRule" use:enhance class="add-form">
+              <div class="add-form-grid">
+                <label class="form-field">
+                  <span>Chain *</span>
+                  <select name="chain" required>
+                    <option value="input">input</option>
+                    <option value="forward">forward</option>
+                    <option value="output">output</option>
+                  </select>
+                </label>
+                <label class="form-field">
+                  <span>Action *</span>
+                  <select name="fwAction" required>
+                    <option value="accept">accept</option>
+                    <option value="drop">drop</option>
+                    <option value="reject">reject</option>
+                    <option value="log">log</option>
+                    <option value="jump">jump</option>
+                    <option value="return">return</option>
+                    <option value="passthrough">passthrough</option>
+                  </select>
+                </label>
+                <label class="form-field">
+                  <span>Src Address</span>
+                  <input type="text" name="srcAddress" placeholder="10.0.0.0/8" />
+                </label>
+                <label class="form-field">
+                  <span>Dst Address</span>
+                  <input type="text" name="dstAddress" placeholder="192.168.1.0/24" />
+                </label>
+                <label class="form-field">
+                  <span>Protocol</span>
+                  <input type="text" name="protocol" placeholder="tcp / udp / icmp" />
+                </label>
+                <label class="form-field">
+                  <span>In Interface</span>
+                  <input type="text" name="inInterface" placeholder="ether1" />
+                </label>
+                <label class="form-field">
+                  <span>Src Port</span>
+                  <input type="text" name="srcPort" placeholder="80 / 8080-8090" />
+                </label>
+                <label class="form-field">
+                  <span>Dst Port</span>
+                  <input type="text" name="dstPort" placeholder="443" />
+                </label>
+                <label class="form-field form-field-wide">
+                  <span>Comment</span>
+                  <input type="text" name="comment" placeholder="Optional description" />
+                </label>
+              </div>
+              <Button type="submit" size="sm">Add rule</Button>
+            </form>
+          </div>
+        {:else}
+          <p class="muted">Write operations require a fully managed device.</p>
         {/if}
       </section>
     {:else if activeTab === "vlans"}
@@ -531,6 +606,7 @@
                   <th>Name</th>
                   <th>Interface</th>
                   <th>Comment</th>
+                  {#if provisioned}<th></th>{/if}
                 </tr>
               </thead>
               <tbody>
@@ -540,11 +616,53 @@
                     <td>{vlan.name}</td>
                     <td class="mono-cell">{vlan.interfaceName || "—"}</td>
                     <td class="comment-cell">{vlan.comment || "—"}</td>
+                    {#if provisioned}
+                      <td class="action-cell">
+                        {#if vlan.routerId}
+                          <form method="POST" action="?/deleteVlan" use:enhance>
+                            <input type="hidden" name="routerId" value={vlan.routerId} />
+                            <button
+                              type="submit"
+                              class="row-delete-btn"
+                              onclick={(e) => { if (!confirm(`Delete VLAN ${vlan.vlanId} (${vlan.name}) from the device?`)) e.preventDefault(); }}
+                            >✕</button>
+                          </form>
+                        {/if}
+                      </td>
+                    {/if}
                   </tr>
                 {/each}
               </tbody>
             </table>
           </div>
+        {/if}
+        {#if provisioned}
+          <div class="add-rule-section">
+            <p class="add-rule-label">Add VLAN</p>
+            <form method="POST" action="?/addVlan" use:enhance class="add-form">
+              <div class="add-form-grid">
+                <label class="form-field">
+                  <span>VLAN ID * (1–4094)</span>
+                  <input type="number" name="vlanId" min="1" max="4094" required placeholder="100" />
+                </label>
+                <label class="form-field">
+                  <span>Name *</span>
+                  <input type="text" name="name" required placeholder="vlan-mgmt" />
+                </label>
+                <label class="form-field">
+                  <span>Interface *</span>
+                  <input type="text" name="interfaceName" required placeholder="ether1" />
+                </label>
+                <label class="form-field">
+                  <span>Comment</span>
+                  <input type="text" name="comment" placeholder="Optional description" />
+                </label>
+              </div>
+              <Button type="submit" size="sm">Add VLAN</Button>
+            </form>
+          </div>
+        {:else}
+          <p class="muted">Write operations require a fully managed device.</p>
         {/if}
       </section>
     {:else if activeTab === "activity"}
@@ -1303,5 +1421,89 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .action-cell {
+    width: 40px;
+    padding: 0 8px;
+    text-align: center;
+  }
+
+  .row-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid #f1c7c7;
+    border-radius: 4px;
+    background: #fff8f8;
+    color: #ad2d2d;
+    font-size: 11px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  tr:hover .row-delete-btn {
+    opacity: 1;
+  }
+
+  .add-rule-section {
+    border-top: 1px solid #f0f2f4;
+    padding-top: 14px;
+  }
+
+  .add-rule-label {
+    color: #30373d;
+    font-size: 13px;
+    font-weight: 800;
+    margin-bottom: 10px;
+  }
+
+  .add-form {
+    display: grid;
+    gap: 12px;
+    align-items: end;
+  }
+
+  .add-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+  }
+
+  .form-field-wide {
+    grid-column: span 2;
+  }
+
+  .form-field {
+    display: grid;
+    gap: 4px;
+  }
+
+  .form-field span {
+    color: #8a949c;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .form-field input,
+  .form-field select {
+    height: 32px;
+    border: 1px solid #dce4e9;
+    border-radius: 4px;
+    padding: 0 8px;
+    color: #30373d;
+    background: #fbfdff;
+    font-size: 13px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .form-field input:focus,
+  .form-field select:focus {
+    outline: none;
+    border-color: var(--color-brand);
   }
 </style>

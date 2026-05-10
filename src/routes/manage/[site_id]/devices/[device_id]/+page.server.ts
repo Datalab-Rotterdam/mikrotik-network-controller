@@ -7,7 +7,13 @@ import { isDeviceTerminalEligible } from '$lib/server/services/device-terminal.s
 import { getInterfaceMetricsHistory } from '$lib/server/repositories/metrics.repository';
 import { getDeviceBackups } from '$lib/server/services/backup.service';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
-import { createBackupDeviceTask } from '$lib/server/services/devices.service/tasks';
+import {
+	createBackupDeviceTask,
+	createAddFirewallRuleTask,
+	createDeleteFirewallRuleTask,
+	createAddVlanTask,
+	createDeleteVlanTask
+} from '$lib/server/services/devices.service/tasks';
 import { createFirmwareCheckTask, createFirmwareUpgradeTask } from '$lib/server/services/firmware.service';
 import { getFirmwareVersion } from '$lib/server/repositories/firmware.repository';
 import { listFirewallRulesByDevice } from '$lib/server/repositories/firewall.repository';
@@ -44,6 +50,87 @@ export const actions: Actions = {
 		try {
 			const job = await Service('scheduler').schedule(createFirmwareUpgradeTask(deviceId, siteId));
 			return { success: true, message: 'Firmware upgrade queued', jobId: job.id };
+		} catch (e) {
+			return fail(500, { success: false, message: String(e) });
+		}
+	},
+	addFirewallRule: async ({ request, params }) => {
+		const siteId = params.site_id as string;
+		const deviceId = params.device_id as string;
+		const form = await request.formData();
+		const chain = form.get('chain') as string;
+		const fwAction = form.get('fwAction') as string;
+		const validChains = ['input', 'forward', 'output'];
+		const validActions = ['accept', 'drop', 'reject', 'jump', 'return', 'passthrough', 'log'];
+		if (!validChains.includes(chain)) return fail(400, { success: false, message: 'Invalid chain' });
+		if (!validActions.includes(fwAction)) return fail(400, { success: false, message: 'Invalid action' });
+		try {
+			const job = await Service('scheduler').schedule(
+				createAddFirewallRuleTask(deviceId, siteId, {
+					chain: chain as 'input' | 'forward' | 'output',
+					action: fwAction as 'accept' | 'drop' | 'reject' | 'jump' | 'return' | 'passthrough' | 'log',
+					srcAddress: (form.get('srcAddress') as string) || null,
+					dstAddress: (form.get('dstAddress') as string) || null,
+					protocol: (form.get('protocol') as string) || null,
+					srcPort: (form.get('srcPort') as string) || null,
+					dstPort: (form.get('dstPort') as string) || null,
+					inInterface: (form.get('inInterface') as string) || null,
+					outInterface: (form.get('outInterface') as string) || null,
+					comment: (form.get('comment') as string) || null
+				})
+			);
+			return { success: true, message: 'Firewall rule queued', jobId: job.id };
+		} catch (e) {
+			return fail(500, { success: false, message: String(e) });
+		}
+	},
+	deleteFirewallRule: async ({ request, params }) => {
+		const siteId = params.site_id as string;
+		const deviceId = params.device_id as string;
+		const form = await request.formData();
+		const routerId = form.get('routerId') as string;
+		if (!routerId) return fail(400, { success: false, message: 'routerId is required' });
+		try {
+			const job = await Service('scheduler').schedule(
+				createDeleteFirewallRuleTask(deviceId, siteId, routerId)
+			);
+			return { success: true, message: 'Firewall rule removal queued', jobId: job.id };
+		} catch (e) {
+			return fail(500, { success: false, message: String(e) });
+		}
+	},
+	addVlan: async ({ request, params }) => {
+		const siteId = params.site_id as string;
+		const deviceId = params.device_id as string;
+		const form = await request.formData();
+		const vlanId = Number(form.get('vlanId'));
+		const name = (form.get('name') as string).trim();
+		const interfaceName = (form.get('interfaceName') as string).trim();
+		const comment = (form.get('comment') as string) || null;
+		if (!Number.isInteger(vlanId) || vlanId < 1 || vlanId > 4094)
+			return fail(400, { success: false, message: 'VLAN ID must be 1–4094' });
+		if (!name) return fail(400, { success: false, message: 'Name is required' });
+		if (!interfaceName) return fail(400, { success: false, message: 'Interface name is required' });
+		try {
+			const job = await Service('scheduler').schedule(
+				createAddVlanTask(deviceId, siteId, { vlanId, name, interfaceName, comment })
+			);
+			return { success: true, message: 'VLAN creation queued', jobId: job.id };
+		} catch (e) {
+			return fail(500, { success: false, message: String(e) });
+		}
+	},
+	deleteVlan: async ({ request, params }) => {
+		const siteId = params.site_id as string;
+		const deviceId = params.device_id as string;
+		const form = await request.formData();
+		const routerId = form.get('routerId') as string;
+		if (!routerId) return fail(400, { success: false, message: 'routerId is required' });
+		try {
+			const job = await Service('scheduler').schedule(
+				createDeleteVlanTask(deviceId, siteId, routerId)
+			);
+			return { success: true, message: 'VLAN removal queued', jobId: job.id };
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
 		}
