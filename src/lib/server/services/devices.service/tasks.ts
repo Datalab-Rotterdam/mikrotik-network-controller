@@ -3,6 +3,14 @@ import { RouterOSClient, RouterOSSshClient } from '@sourceregistry/mikrotik-clie
 import { Service } from '@sourceregistry/sveltekit-service-manager';
 import { runExportBackup } from '$lib/server/services/backup.service';
 import type { TaskDefinition } from '$lib/server/services/scheduler.service/types';
+import {
+	addFirewallRule,
+	deleteFirewallRule,
+	addVlan,
+	deleteVlan,
+	type FirewallRuleInput,
+	type VlanInput
+} from '$lib/server/services/network-config.service';
 import { getDeviceById, getDeviceCredentials, updateDeviceLastSeen } from '$lib/server/repositories/telemetry.repository';
 import { deleteDevice, replaceCredential, updateDeviceState } from '$lib/server/repositories/device.repository';
 import { recordAuditEvent } from '$lib/server/repositories/audit.repository';
@@ -1183,6 +1191,98 @@ export function createRemoveDeviceTask(input: {
 						await recordFailure(error, 'delete_controller_records');
 						throw error;
 					}
+				}
+			}
+		]
+	};
+}
+
+export function createAddFirewallRuleTask(
+	deviceId: string,
+	siteId: string | null,
+	input: FirewallRuleInput
+): TaskDefinition<{ deviceId: string; input: FirewallRuleInput }> {
+	return {
+		name: 'devices.network.add-firewall-rule',
+		deviceId,
+		siteId,
+		payload: { deviceId, input },
+		failurePolicy: 'stop',
+		steps: [
+			{
+				name: 'Add firewall rule on device',
+				async execute({ payload }) {
+					await addFirewallRule(payload.deviceId, payload.input);
+					return { message: 'Firewall rule added' };
+				}
+			}
+		]
+	};
+}
+
+export function createDeleteFirewallRuleTask(
+	deviceId: string,
+	siteId: string | null,
+	routerId: string
+): TaskDefinition<{ deviceId: string; routerId: string }> {
+	return {
+		name: 'devices.network.delete-firewall-rule',
+		deviceId,
+		siteId,
+		payload: { deviceId, routerId },
+		failurePolicy: 'stop',
+		steps: [
+			{
+				name: 'Remove firewall rule on device',
+				async execute({ payload }) {
+					await deleteFirewallRule(payload.deviceId, payload.routerId);
+					return { message: 'Firewall rule removed' };
+				}
+			}
+		]
+	};
+}
+
+export function createAddVlanTask(
+	deviceId: string,
+	siteId: string | null,
+	input: VlanInput
+): TaskDefinition<{ deviceId: string; input: VlanInput }> {
+	return {
+		name: 'devices.network.add-vlan',
+		deviceId,
+		siteId,
+		payload: { deviceId, input },
+		failurePolicy: 'stop',
+		steps: [
+			{
+				name: 'Add VLAN on device',
+				async execute({ payload }) {
+					await addVlan(payload.deviceId, payload.input);
+					return { message: 'VLAN added' };
+				}
+			}
+		]
+	};
+}
+
+export function createDeleteVlanTask(
+	deviceId: string,
+	siteId: string | null,
+	routerId: string
+): TaskDefinition<{ deviceId: string; routerId: string }> {
+	return {
+		name: 'devices.network.delete-vlan',
+		deviceId,
+		siteId,
+		payload: { deviceId, routerId },
+		failurePolicy: 'stop',
+		steps: [
+			{
+				name: 'Remove VLAN on device',
+				async execute({ payload }) {
+					await deleteVlan(payload.deviceId, payload.routerId);
+					return { message: 'VLAN removed' };
 				}
 			}
 		]

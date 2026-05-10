@@ -3,6 +3,7 @@
 	import { useActionSocket } from '$lib/client/actions/use-action-socket';
 	import { processDiscoveryWebSocketMessage } from '$lib/client/stores/discovery-updates';
 	import { processJobActionEvent } from '$lib/client/stores/jobs';
+	import type { ActionEvent } from '$lib/shared/action-events';
 
 	let {
 		siteId
@@ -19,9 +20,10 @@
 	$effect(() => {
 		const unsubscribeEvents = subscription.events.subscribe((messages) => {
 			for (const message of messages.slice(handledEventCount)) {
-				processJobActionEvent(message.event);
-				processDiscoveryWebSocketMessage(message.event);
-				bus.publish(message.event);
+				const event = message.event as unknown as ActionEvent;
+				processJobActionEvent(event);
+				processDiscoveryWebSocketMessage(event);
+				bus.publish(event);
 			}
 
 			handledEventCount = messages.length;

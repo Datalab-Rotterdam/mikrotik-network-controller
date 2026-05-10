@@ -17,6 +17,7 @@
 		{ href: `${basePath}/topology`, label: 'Topology', icon: 'M7 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm10 10a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM7 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm2.6-7.2 4.8 6.4 1.6-1.2-4.8-6.4-1.6 1.2Zm.4 9.2h4v-2h-4v2Z' },
 		{ href: `${basePath}/devices`, label: 'Devices', icon: 'M4 5h14v10H4V5Zm2 2v6h10V7H6Zm-3 11h18v2H3v-2Zm17-9h1v5h-1V9Z' },
 		{ href: `${basePath}/clients`, label: 'Clients', icon: 'M7 9a4 4 0 1 1 8 0 4 4 0 0 1-8 0Zm-3 11c.8-3.3 3.7-5 8-5s7.2 1.7 8 5H4Z' },
+		{ href: `${basePath}/network`, label: 'Network', icon: 'M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4Zm0 2.2 7 3.1V11c0 4.5-3 8.7-7 10-4-1.3-7-5.5-7-10V6.3l7-3.1Z' },
 		{ href: `${basePath}/alerts`, label: 'Alerts', icon: 'M12 2a7 7 0 0 1 7 7c0 2.4-.8 4.7-2.2 6.4L18 17H6l1.2-1.6A10 10 0 0 1 5 9a7 7 0 0 1 7-7Zm0 18a2 2 0 0 1-2-2h4a2 2 0 0 1-2 2Z' },
 		{ href: `${basePath}/config/templates`, label: 'Config', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm4 18H6V4h7v5h5v11ZM8 15h8v2H8v-2Zm0-4h8v2H8v-2Zm0-4h5v2H8V7Z' },
 		{ href: `${basePath}/jobs`, label: 'Jobs', group: 'management', icon: 'M5 4h14v4H5V4Zm0 6h14v4H5v-4Zm0 6h14v4H5v-4Zm2-10v1h10V6H7Zm0 6v1h10v-1H7Zm0 6v1h10v-1H7Z' },

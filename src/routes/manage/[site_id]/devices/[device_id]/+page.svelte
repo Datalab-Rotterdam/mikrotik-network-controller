@@ -15,7 +15,7 @@
   import TrafficSparkline from "$lib/client/components/ui/TrafficSparkline.svelte";
   import type { JobStatus } from "$lib/shared/action-events";
 
-  type DeviceTab = "overview" | "activity" | "backups" | "advanced";
+  type DeviceTab = "overview" | "firewall" | "vlans" | "activity" | "backups" | "advanced";
   type TabItem<T extends string = string> = {
     id: T;
     label: string;
@@ -47,6 +47,16 @@
       id: "activity",
       label: "Activity",
       icon: "M5 19h14v2H5v-2Zm1-8h3v6H6v-6Zm5-8h3v14h-3V3Zm5 5h3v9h-3V8Z",
+    },
+    {
+      id: "firewall",
+      label: "Firewall",
+      icon: "M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4Zm0 2.2 7 3.1V11c0 4.5-3 8.7-7 10-4-1.3-7-5.5-7-10V6.3l7-3.1Z",
+    },
+    {
+      id: "vlans",
+      label: "VLANs",
+      icon: "M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z",
     },
     {
       id: "backups",
@@ -457,6 +467,204 @@
           </div>
         </section>
       {/if}
+    {:else if activeTab === "firewall"}
+      <section class="content-section">
+        <div class="section-heading">
+          <h2>Firewall Rules</h2>
+          <span>{data.firewallRules.length} rules</span>
+        </div>
+        {#if data.firewallRules.length === 0}
+          <div class="empty-state">No firewall rules collected yet. Rules sync during the next monitoring tick.</div>
+        {:else}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Chain</th>
+                  <th>Action</th>
+                  <th>Src</th>
+                  <th>Dst</th>
+                  <th>Protocol</th>
+                  <th>Comment</th>
+                  <th>State</th>
+                  {#if provisioned}<th></th>{/if}
+                </tr>
+              </thead>
+              <tbody>
+                {#each data.firewallRules as rule, i}
+                  <tr class:disabled-row={rule.disabled}>
+                    <td class="mono-cell">{i + 1}</td>
+                    <td><span class="chain-badge chain-{rule.chain}">{rule.chain}</span></td>
+                    <td><span class="action-badge action-{rule.action}">{rule.action}</span></td>
+                    <td class="mono-cell">{rule.srcAddress || rule.inInterface || "—"}</td>
+                    <td class="mono-cell">{rule.dstAddress || rule.outInterface || "—"}</td>
+                    <td>{rule.protocol || "any"}</td>
+                    <td class="comment-cell">{rule.comment || "—"}</td>
+                    <td>
+                      {#if rule.disabled}
+                        <span class="status-pill">Disabled</span>
+                      {:else}
+                        <span class="status-pill status-success">Active</span>
+                      {/if}
+                    </td>
+                    {#if provisioned}
+                      <td class="action-cell">
+                        {#if rule.routerId}
+                          <form method="POST" action="?/deleteFirewallRule" use:enhance>
+                            <input type="hidden" name="routerId" value={rule.routerId} />
+                            <button
+                              type="submit"
+                              class="row-delete-btn"
+                              onclick={(e) => { if (!confirm("Delete this firewall rule from the device?")) e.preventDefault(); }}
+                            >✕</button>
+                          </form>
+                        {/if}
+                      </td>
+                    {/if}
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+        {#if provisioned}
+          <div class="add-rule-section">
+            <p class="add-rule-label">Add rule</p>
+            <form method="POST" action="?/addFirewallRule" use:enhance class="add-form">
+              <div class="add-form-grid">
+                <label class="form-field">
+                  <span>Chain *</span>
+                  <select name="chain" required>
+                    <option value="input">input</option>
+                    <option value="forward">forward</option>
+                    <option value="output">output</option>
+                  </select>
+                </label>
+                <label class="form-field">
+                  <span>Action *</span>
+                  <select name="fwAction" required>
+                    <option value="accept">accept</option>
+                    <option value="drop">drop</option>
+                    <option value="reject">reject</option>
+                    <option value="log">log</option>
+                    <option value="jump">jump</option>
+                    <option value="return">return</option>
+                    <option value="passthrough">passthrough</option>
+                  </select>
+                </label>
+                <label class="form-field">
+                  <span>Src Address</span>
+                  <input type="text" name="srcAddress" placeholder="10.0.0.0/8" />
+                </label>
+                <label class="form-field">
+                  <span>Dst Address</span>
+                  <input type="text" name="dstAddress" placeholder="192.168.1.0/24" />
+                </label>
+                <label class="form-field">
+                  <span>Protocol</span>
+                  <input type="text" name="protocol" placeholder="tcp / udp / icmp" />
+                </label>
+                <label class="form-field">
+                  <span>In Interface</span>
+                  <input type="text" name="inInterface" placeholder="ether1" />
+                </label>
+                <label class="form-field">
+                  <span>Src Port</span>
+                  <input type="text" name="srcPort" placeholder="80 / 8080-8090" />
+                </label>
+                <label class="form-field">
+                  <span>Dst Port</span>
+                  <input type="text" name="dstPort" placeholder="443" />
+                </label>
+                <label class="form-field form-field-wide">
+                  <span>Comment</span>
+                  <input type="text" name="comment" placeholder="Optional description" />
+                </label>
+              </div>
+              <Button type="submit" size="sm">Add rule</Button>
+            </form>
+          </div>
+        {:else}
+          <p class="muted">Write operations require a fully managed device.</p>
+        {/if}
+      </section>
+    {:else if activeTab === "vlans"}
+      <section class="content-section">
+        <div class="section-heading">
+          <h2>VLANs</h2>
+          <span>{data.vlans.length} configured</span>
+        </div>
+        {#if data.vlans.length === 0}
+          <div class="empty-state">No VLANs collected yet. VLANs sync during the next monitoring tick.</div>
+        {:else}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>VLAN ID</th>
+                  <th>Name</th>
+                  <th>Interface</th>
+                  <th>Comment</th>
+                  {#if provisioned}<th></th>{/if}
+                </tr>
+              </thead>
+              <tbody>
+                {#each data.vlans as vlan}
+                  <tr>
+                    <td class="mono-cell">{vlan.vlanId}</td>
+                    <td>{vlan.name}</td>
+                    <td class="mono-cell">{vlan.interfaceName || "—"}</td>
+                    <td class="comment-cell">{vlan.comment || "—"}</td>
+                    {#if provisioned}
+                      <td class="action-cell">
+                        {#if vlan.routerId}
+                          <form method="POST" action="?/deleteVlan" use:enhance>
+                            <input type="hidden" name="routerId" value={vlan.routerId} />
+                            <button
+                              type="submit"
+                              class="row-delete-btn"
+                              onclick={(e) => { if (!confirm(`Delete VLAN ${vlan.vlanId} (${vlan.name}) from the device?`)) e.preventDefault(); }}
+                            >✕</button>
+                          </form>
+                        {/if}
+                      </td>
+                    {/if}
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+        {#if provisioned}
+          <div class="add-rule-section">
+            <p class="add-rule-label">Add VLAN</p>
+            <form method="POST" action="?/addVlan" use:enhance class="add-form">
+              <div class="add-form-grid">
+                <label class="form-field">
+                  <span>VLAN ID * (1–4094)</span>
+                  <input type="number" name="vlanId" min="1" max="4094" required placeholder="100" />
+                </label>
+                <label class="form-field">
+                  <span>Name *</span>
+                  <input type="text" name="name" required placeholder="vlan-mgmt" />
+                </label>
+                <label class="form-field">
+                  <span>Interface *</span>
+                  <input type="text" name="interfaceName" required placeholder="ether1" />
+                </label>
+                <label class="form-field">
+                  <span>Comment</span>
+                  <input type="text" name="comment" placeholder="Optional description" />
+                </label>
+              </div>
+              <Button type="submit" size="sm">Add VLAN</Button>
+            </form>
+          </div>
+        {:else}
+          <p class="muted">Write operations require a fully managed device.</p>
+        {/if}
+      </section>
     {:else if activeTab === "activity"}
       <section class="content-section">
         <div class="section-heading">
@@ -1177,5 +1385,125 @@
   .legend-tx-label {
     color: var(--color-success, #22c55e);
     font-weight: 600;
+  }
+
+  .chain-badge,
+  .action-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .chain-input { background: #e8f4fd; color: #1565c0; }
+  .chain-forward { background: #e8f0fe; color: #3949ab; }
+  .chain-output { background: #f3e8fd; color: #6a1b9a; }
+
+  .action-accept { background: #e8f5e9; color: #2e7d32; }
+  .action-drop { background: #fce4ec; color: #b71c1c; }
+  .action-reject { background: #fff3e0; color: #e65100; }
+  .action-log { background: #f3f4f6; color: #374151; }
+  .action-jump,
+  .action-return,
+  .action-passthrough { background: #fafafa; color: #6b7280; }
+
+  .disabled-row td {
+    opacity: 0.45;
+  }
+
+  .comment-cell {
+    color: #8a949c;
+    font-size: 12px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .action-cell {
+    width: 40px;
+    padding: 0 8px;
+    text-align: center;
+  }
+
+  .row-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid #f1c7c7;
+    border-radius: 4px;
+    background: #fff8f8;
+    color: #ad2d2d;
+    font-size: 11px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  tr:hover .row-delete-btn {
+    opacity: 1;
+  }
+
+  .add-rule-section {
+    border-top: 1px solid #f0f2f4;
+    padding-top: 14px;
+  }
+
+  .add-rule-label {
+    color: #30373d;
+    font-size: 13px;
+    font-weight: 800;
+    margin-bottom: 10px;
+  }
+
+  .add-form {
+    display: grid;
+    gap: 12px;
+    align-items: end;
+  }
+
+  .add-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+  }
+
+  .form-field-wide {
+    grid-column: span 2;
+  }
+
+  .form-field {
+    display: grid;
+    gap: 4px;
+  }
+
+  .form-field span {
+    color: #8a949c;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .form-field input,
+  .form-field select {
+    height: 32px;
+    border: 1px solid #dce4e9;
+    border-radius: 4px;
+    padding: 0 8px;
+    color: #30373d;
+    background: #fbfdff;
+    font-size: 13px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .form-field input:focus,
+  .form-field select:focus {
+    outline: none;
+    border-color: var(--color-brand);
   }
 </style>

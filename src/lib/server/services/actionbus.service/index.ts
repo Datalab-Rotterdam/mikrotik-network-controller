@@ -115,15 +115,15 @@ export const service = {
 
             server.broadcast(
                 siteChannel(siteId),
-                event as ActionEventForChannel<SiteActionChannel>
+                event as unknown as ActionEventForChannel<SiteActionChannel>
             );
         },
         publishDiscovery(event: DiscoveryActionEvent): void {
-            server.broadcast('discovery', event);
+            server.broadcast('discovery', event as unknown as ActionEventForChannel<'discovery'>);
         },
         publishEvent(event: ActionEvent): void {
             for (const channel of channelsForEvent(event)) {
-                server.broadcast(channel, event as ActionEventForChannel<typeof channel>);
+                server.broadcast(channel, event as unknown as ActionEventForChannel<typeof channel>);
             }
         }
     },
