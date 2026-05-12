@@ -1,12 +1,6 @@
 import { EventEmitter } from 'events';
-import {
-	createAlertEvent,
-	getOpenAlertEvent,
-	getMostRecentFiredAlertEvent,
-	listAlertRules,
-	resolveAlertEvent
-} from '$lib/server/repositories/alerts.repository';
-import { getActiveClientCountBySite } from '$lib/server/repositories/clients.repository';
+import { AlertRepository } from '$lib/server/repositories/alerts.repository';
+import { ClientRepository } from '$lib/server/repositories/clients.repository';
 
 type AlertFiredDetail = {
 	eventId: string;
@@ -65,7 +59,7 @@ async function fireAlert(
 	message: string,
 	metadata: Record<string, unknown> = {}
 ): Promise<void> {
-	const event = await createAlertEvent({
+	const event = await AlertRepository.createEvent({
 		ruleId,
 		siteId,
 		deviceId,
@@ -89,10 +83,10 @@ async function resolveIfOpen(
 	siteId: string,
 	deviceId: string | null
 ): Promise<void> {
-	const open = await getOpenAlertEvent(ruleId, deviceId);
+	const open = await AlertRepository.getOpenEvent(ruleId, deviceId);
 	if (!open) return;
 
-	await resolveAlertEvent(open.id);
+	await AlertRepository.resolveEvent(open.id);
 	alertEvaluatorEvents.emit('alert:resolved', {
 		eventId: open.id,
 		ruleId,
@@ -104,7 +98,7 @@ async function resolveIfOpen(
 export async function evaluateDeviceMetric(metric: MetricSnapshot): Promise<void> {
 	if (!metric.siteId) return;
 
-	const rules = await listAlertRules(metric.siteId);
+	const rules = await AlertRepository.listRules(metric.siteId);
 	const enabledRules = rules.filter((r) => r.enabled);
 
 	for (const rule of enabledRules) {
@@ -122,9 +116,9 @@ export async function evaluateDeviceMetric(metric: MetricSnapshot): Promise<void
 			if (rule.conditionType === 'cpu_above') {
 				const threshold = Number(params['threshold'] ?? 90);
 				if (metric.cpuPercent !== null && metric.cpuPercent > threshold) {
-					const open = await getOpenAlertEvent(rule.id, metric.deviceId);
+					const open = await AlertRepository.getOpenEvent(rule.id, metric.deviceId);
 					if (!open) {
-						const last = await getMostRecentFiredAlertEvent(rule.id, metric.deviceId);
+						const last = await AlertRepository.getMostRecentFiredEvent(rule.id, metric.deviceId);
 						if (!last || !isCooldownActive(last.firedAt, rule.cooldownSeconds)) {
 							await fireAlert(
 								rule.id,
@@ -145,9 +139,9 @@ export async function evaluateDeviceMetric(metric: MetricSnapshot): Promise<void
 				const thresholdMb = Number(params['thresholdMb'] ?? 64);
 				const freeBytes = metric.freeMemoryBytes;
 				if (freeBytes !== null && freeBytes / 1_048_576 < thresholdMb) {
-					const open = await getOpenAlertEvent(rule.id, metric.deviceId);
+					const open = await AlertRepository.getOpenEvent(rule.id, metric.deviceId);
 					if (!open) {
-						const last = await getMostRecentFiredAlertEvent(rule.id, metric.deviceId);
+						const last = await AlertRepository.getMostRecentFiredEvent(rule.id, metric.deviceId);
 						if (!last || !isCooldownActive(last.firedAt, rule.cooldownSeconds)) {
 							const freeMb = (freeBytes / 1_048_576).toFixed(1);
 							await fireAlert(
@@ -168,9 +162,9 @@ export async function evaluateDeviceMetric(metric: MetricSnapshot): Promise<void
 			if (rule.conditionType === 'temperature_above') {
 				const threshold = Number(params['threshold'] ?? 70);
 				if (metric.temperatureCelsius !== null && metric.temperatureCelsius > threshold) {
-					const open = await getOpenAlertEvent(rule.id, metric.deviceId);
+					const open = await AlertRepository.getOpenEvent(rule.id, metric.deviceId);
 					if (!open) {
-						const last = await getMostRecentFiredAlertEvent(rule.id, metric.deviceId);
+						const last = await AlertRepository.getMostRecentFiredEvent(rule.id, metric.deviceId);
 						if (!last || !isCooldownActive(last.firedAt, rule.cooldownSeconds)) {
 							await fireAlert(
 								rule.id,
@@ -192,7 +186,7 @@ export async function evaluateDeviceMetric(metric: MetricSnapshot): Promise<void
 				rule.conditionType === 'client_count_below'
 			) {
 				const threshold = Number(params['threshold'] ?? 0);
-				const count = await getActiveClientCountBySite(metric.siteId);
+				const count = await ClientRepository.getActiveCountBySite(metric.siteId);
 
 				const triggered =
 					rule.conditionType === 'client_count_above'
@@ -200,9 +194,9 @@ export async function evaluateDeviceMetric(metric: MetricSnapshot): Promise<void
 						: count < threshold;
 
 				if (triggered) {
-					const open = await getOpenAlertEvent(rule.id, null);
+					const open = await AlertRepository.getOpenEvent(rule.id, null);
 					if (!open) {
-						const last = await getMostRecentFiredAlertEvent(rule.id, null);
+						const last = await AlertRepository.getMostRecentFiredEvent(rule.id, null);
 						if (!last || !isCooldownActive(last.firedAt, rule.cooldownSeconds)) {
 							const direction = rule.conditionType === 'client_count_above' ? 'above' : 'below';
 							await fireAlert(
@@ -226,7 +220,7 @@ export async function evaluateDeviceMetric(metric: MetricSnapshot): Promise<void
 }
 
 export async function evaluateDeviceOffline(deviceId: string, siteId: string): Promise<void> {
-	const rules = await listAlertRules(siteId);
+	const rules = await AlertRepository.listRules(siteId);
 	const offlineRules = rules.filter(
 		(r) => r.enabled && r.conditionType === 'device_offline'
 	);
@@ -235,9 +229,9 @@ export async function evaluateDeviceOffline(deviceId: string, siteId: string): P
 		const scope = rule.scope as { deviceIds?: string[] };
 		if (scope.deviceIds?.length && !scope.deviceIds.includes(deviceId)) continue;
 
-		const open = await getOpenAlertEvent(rule.id, deviceId);
+		const open = await AlertRepository.getOpenEvent(rule.id, deviceId);
 		if (!open) {
-			const last = await getMostRecentFiredAlertEvent(rule.id, deviceId);
+			const last = await AlertRepository.getMostRecentFiredEvent(rule.id, deviceId);
 			if (!last || !isCooldownActive(last.firedAt, rule.cooldownSeconds)) {
 				await fireAlert(rule.id, siteId, deviceId, rule.severity, 'Device went offline', {
 					deviceId
@@ -248,7 +242,7 @@ export async function evaluateDeviceOffline(deviceId: string, siteId: string): P
 }
 
 export async function evaluateDeviceOnline(deviceId: string, siteId: string): Promise<void> {
-	const rules = await listAlertRules(siteId);
+	const rules = await AlertRepository.listRules(siteId);
 	const offlineRules = rules.filter(
 		(r) => r.enabled && r.conditionType === 'device_offline'
 	);

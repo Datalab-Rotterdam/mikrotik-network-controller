@@ -1,15 +1,7 @@
-import { and, eq } from 'drizzle-orm';
-import { join } from 'node:path';
-import { mkdir, writeFile, readFile, unlink } from 'node:fs/promises';
 import { RouterOSClient, RouterOSSshClient } from '@sourceregistry/mikrotik-client/routeros';
-import { getDeviceById, getDeviceCredentials } from '$lib/server/repositories/telemetry.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { decryptSecret } from '$lib/server/security/secrets';
-import {
-	getTemplate,
-	createDeployment,
-} from '$lib/server/repositories/templates.repository';
-import { db } from '$lib/server/db/client';
-import { configDeployments } from '$lib/server/db/schema';
+import { TemplateRepository } from '$lib/server/repositories/templates.repository';
 import { renderTemplate, diffConfigs } from '$lib/server/services/template-renderer.service';
 
 export type DeployMode = 'dry-run' | 'apply';
@@ -51,7 +43,7 @@ export async function deployConfig({
 	variableValues: DeployVariableValues;
 	mode?: DeployMode;
 }): Promise<ConfigDeployResult> {
-	const template = await getTemplate(templateId);
+	const template = await TemplateRepository.get(templateId);
 	if (!template) {
 		throw new Error(`Template ${templateId} not found`);
 	}
@@ -66,7 +58,7 @@ export async function deployConfig({
 		throw new Error(`Missing required variable values: ${missingRequired.join(', ')}`);
 	}
 
-	const device = await getDeviceById(deviceId);
+	const device = await TelemetryRepository.getDeviceById(deviceId);
 	if (!device) {
 		throw new Error(`Device ${deviceId} not found`);
 	}
@@ -83,7 +75,7 @@ export async function deployConfig({
 }
 
 async function buildDryRun(
-	device: Awaited<ReturnType<typeof getDeviceById>>,
+	device: Awaited<ReturnType<typeof TelemetryRepository.getDeviceById>>,
 	renderedContent: string
 ): Promise<DeployDryRunResult> {
 	const currentConfig = await fetchCurrentConfig(device);
@@ -92,13 +84,13 @@ async function buildDryRun(
 }
 
 async function doApply(
-	device: Awaited<ReturnType<typeof getDeviceById>>,
+	device: Awaited<ReturnType<typeof TelemetryRepository.getDeviceById>>,
 	deviceId: string,
 	templateId: string,
 	renderedContent: string,
 	variableValues: DeployVariableValues
 ): Promise<DeployApplyResult> {
-	const credentials = await getDeviceCredentials(deviceId);
+	const credentials = await TelemetryRepository.getCredentials(deviceId);
 	const writeCred = credentials.find((c) => c.purpose === 'write');
 
 	const steps: string[] = [];
@@ -130,7 +122,7 @@ async function doApply(
 }
 
 async function deployViaSSH(
-	device: Awaited<ReturnType<typeof getDeviceById>>,
+	device: Awaited<ReturnType<typeof TelemetryRepository.getDeviceById>>,
 	deviceId: string,
 	templateId: string,
 	renderedContent: string,
@@ -170,7 +162,7 @@ async function deployViaSSH(
 	}
 
 	// Create deployment record
-	const deployment = await createDeployment({
+	const deployment = await TemplateRepository.createDeployment({
 		templateId,
 		deviceId,
 		jobId: null,
@@ -183,7 +175,7 @@ async function deployViaSSH(
 }
 
 async function deployViaAPI(
-	device: Awaited<ReturnType<typeof getDeviceById>>,
+	device: Awaited<ReturnType<typeof TelemetryRepository.getDeviceById>>,
 	deviceId: string,
 	templateId: string,
 	renderedContent: string,
@@ -224,7 +216,7 @@ async function deployViaAPI(
 	}
 
 	// Create deployment record
-	const deployment = await createDeployment({
+	const deployment = await TemplateRepository.createDeployment({
 		templateId,
 		deviceId,
 		jobId: null,
@@ -236,8 +228,8 @@ async function deployViaAPI(
 	return { mode: 'apply', deploymentId: deployment.id, steps };
 }
 
-async function fetchCurrentConfig(device: Awaited<ReturnType<typeof getDeviceById>>): Promise<string> {
-	const credentials = await getDeviceCredentials(device.id);
+async function fetchCurrentConfig(device: Awaited<ReturnType<typeof TelemetryRepository.getDeviceById>>): Promise<string> {
+	const credentials = await TelemetryRepository.getCredentials(device.id);
 	const cred = credentials.find((c) => c.purpose === 'backup')
 		?? credentials.find((c) => c.purpose === 'read_only');
 
@@ -260,8 +252,8 @@ async function fetchCurrentConfig(device: Awaited<ReturnType<typeof getDeviceByI
 }
 
 async function cleanupTempFile(
-	device: Awaited<ReturnType<typeof getDeviceById>>,
-	credentials: Awaited<ReturnType<typeof getDeviceCredentials>>,
+	device: Awaited<ReturnType<typeof TelemetryRepository.getDeviceById>>,
+	credentials: Awaited<ReturnType<typeof TelemetryRepository.getCredentials>>,
 	tempName: string
 ): Promise<void> {
 	const cred = credentials.find((c) => c.purpose === 'write')

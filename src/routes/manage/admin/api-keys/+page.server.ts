@@ -1,27 +1,11 @@
 import { fail, type Actions } from '@sveltejs/kit';
-import { createApiKey, deleteApiKey } from '$lib/server/repositories/api-keys.repository';
-import { listUsers } from '$lib/server/repositories/user.repository';
-import { db } from '$lib/server/db/client';
-import { apiKeys, users } from '$lib/server/db/schema';
-import { desc, eq } from 'drizzle-orm';
+import { ApiKeyRepository } from '$lib/server/repositories/api-keys.repository';
+import { UserRepository } from '$lib/server/repositories/user.repository';
 
 export async function load() {
-	const rows = await db
-		.select({
-			id: apiKeys.id,
-			name: apiKeys.name,
-			userId: apiKeys.userId,
-			userEmail: users.email,
-			userDisplay: users.displayName,
-			lastUsedAt: apiKeys.lastUsedAt,
-			expiresAt: apiKeys.expiresAt,
-			createdAt: apiKeys.createdAt
-		})
-		.from(apiKeys)
-		.leftJoin(users, eq(apiKeys.userId, users.id))
-		.orderBy(desc(apiKeys.createdAt));
+	const rows = await ApiKeyRepository.listWithUsers();
 
-	const allUsers = await listUsers();
+	const allUsers = await UserRepository.list();
 
 	return { keys: rows, users: allUsers };
 }
@@ -39,7 +23,7 @@ export const actions: Actions = {
 		if (expiresAt && isNaN(expiresAt.getTime())) return fail(400, { error: 'Invalid expiry date' });
 
 		try {
-			const { row, raw } = await createApiKey({ userId, name, expiresAt });
+			const { row, raw } = await ApiKeyRepository.create({ userId, name, expiresAt });
 			return { success: true, createdId: row.id, createdRaw: raw, createdName: name };
 		} catch (e: unknown) {
 			return fail(500, { error: e instanceof Error ? e.message : String(e) });
@@ -50,7 +34,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		if (!id) return fail(400, { error: 'Missing id' });
-		await deleteApiKey(id);
+		await ApiKeyRepository.delete(id);
 		return { success: true };
 	}
 };

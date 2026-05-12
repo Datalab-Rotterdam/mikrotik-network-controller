@@ -1,17 +1,22 @@
 import { error } from '@sveltejs/kit';
-import { findSiteById, listSites } from '$lib/server/repositories/site.repository';
-import { countUnacknowledgedAlerts } from '$lib/server/repositories/alerts.repository';
+import { enhance } from '@sourceregistry/sveltekit-enhance';
+import { SiteRepository } from '$lib/server/repositories/site.repository';
+import { AlertRepository } from '$lib/server/repositories/alerts.repository';
+import { SessionContext } from '$lib/server/context/session.context';
 
-export async function load({ params }) {
-	const [site, sites, unacknowledgedAlertCount] = await Promise.all([
-		findSiteById(params.site_id),
-		listSites(),
-		countUnacknowledgedAlerts(params.site_id)
-	]);
+export const load = enhance.load(
+	async ({ params }) => {
+		const [site, sites, unacknowledgedAlertCount] = await Promise.all([
+			SiteRepository.findById(params.site_id),
+			SiteRepository.list(),
+			AlertRepository.countUnacknowledged(params.site_id)
+		]);
 
-	if (!site) {
-		throw error(404, 'Site not found');
-	}
+		if (!site) {
+			throw error(404, 'Site not found');
+		}
 
-	return { site, sites, unacknowledgedAlertCount };
-}
+		return { site, sites, unacknowledgedAlertCount };
+	},
+	SessionContext.ensure
+);

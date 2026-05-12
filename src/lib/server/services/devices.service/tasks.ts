@@ -11,10 +11,10 @@ import {
 	type FirewallRuleInput,
 	type VlanInput
 } from '$lib/server/services/network-config.service';
-import { getDeviceById, getDeviceCredentials, updateDeviceLastSeen } from '$lib/server/repositories/telemetry.repository';
-import { deleteDevice, replaceCredential, updateDeviceState } from '$lib/server/repositories/device.repository';
-import { recordAuditEvent } from '$lib/server/repositories/audit.repository';
-import { updateJob } from '$lib/server/repositories/job.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
+import { DeviceRepository } from '$lib/server/repositories/device.repository';
+import { AuditRepository } from '$lib/server/repositories/audit.repository';
+import { JobRepository } from '$lib/server/repositories/job.repository';
 import { decryptSecret, encryptSecret } from '$lib/server/security/secrets';
 import { ensureControllerSshKeyPair, getControllerSshPrivateKeyPath } from '$lib/server/security/controller-ssh-keys';
 import { emitDeviceRemoved, emitDeviceUpdated } from '$lib/server/services/device-events.service';
@@ -32,7 +32,11 @@ import {
 } from '$lib/server/services/adoption.service';
 import { generateBootstrapScript } from '$lib/server/services/router-provisioning.service';
 import { deployConfig, type DeployVariableValues } from '$lib/server/services/config-deploy.service';
-import { createDeployment } from '$lib/server/repositories/templates.repository';
+import { TemplateRepository } from '$lib/server/repositories/templates.repository';
+
+async function recordAuditEvent(input: typeof import('$lib/server/db/schema').auditEvents.$inferInsert): Promise<void> {
+	await AuditRepository.record(input);
+}
 
 export function createBackupDeviceTask(deviceId: string, siteId?: string): TaskDefinition<{ deviceId: string }> {
 	return {
@@ -403,7 +407,7 @@ export function createAdoptCredentialsTask(input: AdoptDeviceInput & { siteId: s
 
 						await markCredentialAdoptionSyncing(attempt.id);
 						device = await upsertAdoptionInventory(input, site.id, inventory);
-						await updateJob(context.jobId, { deviceId: device.id });
+						await JobRepository.update(context.jobId, { deviceId: device.id });
 
 						return {
 							message: 'Inventory synced',
@@ -641,7 +645,7 @@ export function createManagedAdoptCredentialsTask(input: AdoptDeviceInput & {
 						assertSupportedAdoptionInventory(input, inventory);
 						await markCredentialAdoptionSyncing(attempt.id);
 						device = await upsertAdoptionInventory(input, site.id, inventory);
-						await updateJob(context.jobId, { deviceId: device.id });
+						await JobRepository.update(context.jobId, { deviceId: device.id });
 
 						return {
 							message: 'Inventory synced',
@@ -720,26 +724,26 @@ export function createManagedAdoptCredentialsTask(input: AdoptDeviceInput & {
 							throw new Error('Managed credential installation did not complete');
 						}
 
-						await replaceCredential({
+						await DeviceRepository.replaceCredential({
 							deviceId: device.id,
 							purpose: 'read_only',
 							username: REST_USER,
 							secretEncrypted: encryptSecret(restPassword)
 						});
 
-						await replaceCredential({
+						await DeviceRepository.replaceCredential({
 							deviceId: device.id,
 							purpose: 'write',
 							username: MANAGED_USER,
 							secretEncrypted: encryptSecret('ssh-key:controller')
 						});
 
-						await updateDeviceState(device.id, {
+						await DeviceRepository.updateState(device.id, {
 							adoptionMode: 'managed',
 							adoptionState: 'fully_managed',
 							connectionStatus: 'online'
 						});
-						await updateDeviceLastSeen(device.id);
+						await TelemetryRepository.updateLastSeen(device.id);
 						await emitDeviceUpdated(device.id, 'adoption');
 
 						return { message: 'Managed credentials stored' };
@@ -785,8 +789,8 @@ export function createManagedAdoptCredentialsTask(input: AdoptDeviceInput & {
 }
 
 export function createProvisionDeviceTask(deviceId: string): TaskDefinition<{ deviceId: string }> {
-	let device: Awaited<ReturnType<typeof getDeviceById>>;
-	let restCredential: Awaited<ReturnType<typeof getDeviceCredentials>>[number] | undefined;
+	let device: Awaited<ReturnType<typeof TelemetryRepository.getDeviceById>>;
+	let restCredential: Awaited<ReturnType<typeof TelemetryRepository.getCredentials>>[number] | undefined;
 	let previousIdentity: string | null = null;
 
 	return {
@@ -798,12 +802,12 @@ export function createProvisionDeviceTask(deviceId: string): TaskDefinition<{ de
 			{
 				name: 'Validate device and REST access',
 				async execute() {
-					device = await getDeviceById(deviceId);
+					device = await TelemetryRepository.getDeviceById(deviceId);
 					if (!device) {
 						throw new Error(`Device ${deviceId} not found`);
 					}
 
-					const credentials = await getDeviceCredentials(device.id);
+					const credentials = await TelemetryRepository.getCredentials(device.id);
 					restCredential = credentials.find((credential) => credential.purpose === 'read_only');
 
 					if (!restCredential?.secretEncrypted) {
@@ -887,7 +891,7 @@ export function createProvisionDeviceTask(deviceId: string): TaskDefinition<{ de
 
 					try {
 						const resource = await client.system.resource.get();
-						await updateDeviceLastSeen(device.id);
+						await TelemetryRepository.updateLastSeen(device.id);
 						await emitDeviceUpdated(device.id, 'telemetry');
 
 						return {
@@ -904,9 +908,9 @@ export function createProvisionDeviceTask(deviceId: string): TaskDefinition<{ de
 }
 
 export function createRotateRestSecretTask(deviceId: string): TaskDefinition<{ deviceId: string }> {
-	let device: Awaited<ReturnType<typeof getDeviceById>>;
-	let restCredential: Awaited<ReturnType<typeof getDeviceCredentials>>[number] | undefined;
-	let managedCredential: Awaited<ReturnType<typeof getDeviceCredentials>>[number] | undefined;
+	let device: Awaited<ReturnType<typeof TelemetryRepository.getDeviceById>>;
+	let restCredential: Awaited<ReturnType<typeof TelemetryRepository.getCredentials>>[number] | undefined;
+	let managedCredential: Awaited<ReturnType<typeof TelemetryRepository.getCredentials>>[number] | undefined;
 	let previousSecret: string | null = null;
 	let controllerPrivateKeyPath = '';
 	const nextSecret = generateSecret();
@@ -920,12 +924,12 @@ export function createRotateRestSecretTask(deviceId: string): TaskDefinition<{ d
 			{
 				name: 'Validate device and SSH trust',
 				async execute() {
-					device = await getDeviceById(deviceId);
+					device = await TelemetryRepository.getDeviceById(deviceId);
 					if (!device) {
 						throw new Error(`Device ${deviceId} not found`);
 					}
 
-					const credentials = await getDeviceCredentials(device.id);
+					const credentials = await TelemetryRepository.getCredentials(device.id);
 					restCredential = credentials.find((credential) => credential.purpose === 'read_only');
 					managedCredential = credentials.find((credential) => credential.purpose === 'write');
 
@@ -996,24 +1000,24 @@ export function createRotateRestSecretTask(deviceId: string): TaskDefinition<{ d
 						throw new Error('Credential validation step did not complete');
 					}
 
-					await replaceCredential({
-						deviceId: device.id,
-						purpose: 'read_only',
-						username: restCredential.username,
-						secretEncrypted: encryptSecret(nextSecret)
-					});
+await DeviceRepository.replaceCredential({
+					deviceId: device.id,
+					purpose: 'read_only',
+					username: restCredential.username,
+					secretEncrypted: encryptSecret(nextSecret)
+				});
 
-					await updateDeviceLastSeen(device.id);
-					await emitDeviceUpdated(device.id, 'credentials');
+				await TelemetryRepository.updateLastSeen(device.id);
+				await emitDeviceUpdated(device.id, 'credentials');
 
-					return { message: 'REST credential stored' };
+				return { message: 'REST credential stored' };
 				},
 				async revert() {
 					if (!device || !restCredential || !previousSecret) {
 						return { message: 'No previous REST credential available' };
 					}
 
-					await replaceCredential({
+					await DeviceRepository.replaceCredential({
 						deviceId: device.id,
 						purpose: 'read_only',
 						username: restCredential.username,
@@ -1032,9 +1036,13 @@ export function createRemoveDeviceTask(input: {
 	siteId: string | null;
 	requestedByUserId: string;
 }): TaskDefinition<{ deviceId: string; siteId: string | null }> {
-	let device: Awaited<ReturnType<typeof getDeviceById>>;
-	let managedCredential: Awaited<ReturnType<typeof getDeviceCredentials>>[number] | undefined;
+	let device: Awaited<ReturnType<typeof TelemetryRepository.getDeviceById>>;
+	let managedCredential: Awaited<ReturnType<typeof TelemetryRepository.getCredentials>>[number] | undefined;
 	let controllerPrivateKeyPath = '';
+
+	async function recordAuditEvent(input: typeof import('$lib/server/db/schema').auditEvents.$inferInsert): Promise<void> {
+		await AuditRepository.record(input);
+	}
 
 	async function recordFailure(error: unknown, stage: string): Promise<void> {
 		await recordAuditEvent({
@@ -1066,7 +1074,7 @@ export function createRemoveDeviceTask(input: {
 				name: 'Validate device and SSH trust',
 				async execute() {
 					try {
-						device = await getDeviceById(input.deviceId);
+						device = await TelemetryRepository.getDeviceById(input.deviceId);
 						if (!device) {
 							throw new Error(`Device ${input.deviceId} not found`);
 						}
@@ -1083,7 +1091,7 @@ export function createRemoveDeviceTask(input: {
 							throw new Error(`Device ${input.deviceId} is not adopted`);
 						}
 
-						const credentials = await getDeviceCredentials(device.id);
+						const credentials = await TelemetryRepository.getCredentials(device.id);
 						managedCredential = credentials.find((credential) => credential.purpose === 'write');
 
 						if (!managedCredential) {
@@ -1163,7 +1171,7 @@ export function createRemoveDeviceTask(input: {
 							throw new Error('Removal validation step did not complete');
 						}
 
-						await recordAuditEvent({
+						await AuditRepository.record({
 							actorUserId: input.requestedByUserId,
 							targetDeviceId: device.id,
 							action: 'device.removed.reset',
@@ -1175,7 +1183,7 @@ export function createRemoveDeviceTask(input: {
 							}
 						});
 
-						await deleteDevice(device.id);
+						await DeviceRepository.delete(device.id);
 						emitDeviceRemoved({
 							siteId: device.siteId,
 							deviceId: device.id

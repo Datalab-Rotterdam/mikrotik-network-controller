@@ -5,9 +5,8 @@ import { startNotificationService } from '$lib/server/services/notification.serv
 import { redirect, type Handle } from '@sveltejs/kit';
 import { hasAnyUsers } from '$lib/server/services/auth.service';
 import { requireAuth, requireSetupComplete, blockSetupIfComplete } from '$lib/server/middleware/auth-guards';
-import { findApiKeyByRaw, touchApiKey } from '$lib/server/repositories/api-keys.repository';
-import { getUserRoleNames } from '$lib/server/repositories/user.repository';
-import { findUserById } from '$lib/server/repositories/user.repository';
+import { ApiKeyRepository } from '$lib/server/repositories/api-keys.repository';
+import { UserRepository } from '$lib/server/repositories/user.repository';
 
 startMonitoring();
 startNotificationService();
@@ -22,13 +21,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const authHeader = event.request.headers.get('authorization') ?? '';
 	if (authHeader.startsWith('Bearer mtk_')) {
 		const raw = authHeader.slice('Bearer '.length);
-		const keyRow = await findApiKeyByRaw(raw);
+		const keyRow = await ApiKeyRepository.findByRaw(raw);
 		if (keyRow && (!keyRow.expiresAt || keyRow.expiresAt > new Date())) {
-			const user = await findUserById(keyRow.userId);
+			const user = await UserRepository.findById(keyRow.userId);
 			if (user && !user.disabledAt) {
-				const roles = await getUserRoleNames(user.id);
+				const roles = await UserRepository.getRoleNames(user.id);
 				event.locals.user = { id: user.id, email: user.email, displayName: user.displayName, roles };
-				void touchApiKey(keyRow.id);
+				void ApiKeyRepository.touch(keyRow.id);
 			}
 		}
 	}

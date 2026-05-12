@@ -9,6 +9,8 @@
   import StatusBadge from "$lib/client/components/primitives/StatusBadge.svelte";
   import SidePanel from "$lib/client/components/layout/SidePanel.svelte";
   import DevicePortLayout from "$lib/client/components/ui/DevicePortLayout.svelte";
+  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
+  import { PageShell } from "$lib/client/components/layout";
   import {
     discoveredDevices,
     initializeDiscoveryDeviceSnapshot,
@@ -353,26 +355,14 @@
   }
 </script>
 
-<section class="devices-page" class:with-panel={anyPanelOpen}>
+{#snippet devicesActions()}
   <div class="devices-toolbar">
-    <div class="toolbar-left">
-      <input
-        class="search-input"
-        type="search"
-        placeholder="Search"
-        aria-label="Search devices"
-      />
-      <div class="tabs" aria-label="Device filters">
-        <a href={`${basePath}/devices`} aria-current="page"
-          >All ({rows.length})</a
-        >
-        <a href={`${basePath}/devices`}>WiFi (0)</a>
-        <a href={`${basePath}/devices`}>Wired ({rows.length})</a>
-        <a href={`${basePath}/devices`}>Adopted ({adoptedCount})</a>
-        <a href={`${basePath}/devices`}>Discovered ({discoveredCount})</a>
-      </div>
-    </div>
-
+    <input
+      class="search-input"
+      type="search"
+      placeholder="Search"
+      aria-label="Search devices"
+    />
     <a
       class="icon-button"
       href={`${basePath}/devices?adopt=`}
@@ -383,6 +373,24 @@
         <path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z" />
       </svg>
     </a>
+  </div>
+{/snippet}
+
+<PageShell>
+  <PageHeader
+    title="Devices"
+    subtitle={`${adoptedCount} adopted · ${discoveredCount} discovered`}
+    actions={devicesActions}
+  />
+
+  <div class="tabs" aria-label="Device filters">
+    <a href={`${basePath}/devices`} aria-current="page"
+      >All ({rows.length})</a
+    >
+    <a href={`${basePath}/devices`}>WiFi (0)</a>
+    <a href={`${basePath}/devices`}>Wired ({rows.length})</a>
+    <a href={`${basePath}/devices`}>Adopted ({adoptedCount})</a>
+    <a href={`${basePath}/devices`}>Discovered ({discoveredCount})</a>
   </div>
 
   <div class="devices-table-wrap">
@@ -937,31 +945,13 @@
       </div>
     </SidePanel>
   {/if}
-</section>
+</PageShell>
 
 <style lang="scss">
-  .devices-page {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-  }
-
-  .devices-page.with-panel {
-    padding-right: min(390px, 28vw);
-  }
-
   .devices-toolbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 12px;
-    margin-bottom: 12px;
-  }
-
-  .toolbar-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
   }
 
   .search-input {

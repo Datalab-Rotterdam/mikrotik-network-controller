@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { getDeviceById } from '$lib/server/repositories/telemetry.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import type {
 	ActionDeviceRemovedPayload,
 	ActionDeviceUpdatedPayload,
@@ -10,7 +10,7 @@ export const deviceEvents = new EventEmitter();
 
 
 export async function emitDeviceUpdated(deviceId: string, reason: DeviceUpdateReason): Promise<void> {
-	const device = await getDeviceById(deviceId);
+	const device = await TelemetryRepository.getDeviceById(deviceId);
 	if (!device) {
 		return;
 	}

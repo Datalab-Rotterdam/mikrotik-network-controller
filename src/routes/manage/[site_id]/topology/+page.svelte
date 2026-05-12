@@ -12,6 +12,8 @@
   import { onMount } from "svelte";
   import { invalidate } from "$app/navigation";
   import SidePanel from "$lib/client/components/layout/SidePanel.svelte";
+  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
+  import { PageShell } from "$lib/client/components/layout";
   import TopologyDeviceNode from "$lib/client/components/ui/TopologyDeviceNode.svelte";
   import DiscoveryUpdatesWebSocket from "$lib/client/components/ui/DiscoveryUpdatesWebSocket.svelte";
   import { useActionSocket } from "$lib/client/actions/use-action-socket";
@@ -277,19 +279,21 @@
 
 <DiscoveryUpdatesWebSocket />
 
-<section class="topology-page" class:with-panel={Boolean(selectedDevice)}>
-  <div class="page-title">
-    <div>
-      <h1>Topology</h1>
-      <p>Adopted RouterOS and SwitchOS devices, plus discovered MikroTik neighbors.</p>
-    </div>
-    <div class="topology-stats" aria-label="Topology summary">
-      <span>{adoptedCount} adopted</span>
-      <span>{discoveredCount} discovered</span>
-      {#if linkCount > 0}<span>{linkCount} links</span>{/if}
-      <span>{interfaceCount} interfaces</span>
-    </div>
+{#snippet topologyActions()}
+  <div class="topology-stats" aria-label="Topology summary">
+    <span>{adoptedCount} adopted</span>
+    <span>{discoveredCount} discovered</span>
+    {#if linkCount > 0}<span>{linkCount} links</span>{/if}
+    <span>{interfaceCount} interfaces</span>
   </div>
+{/snippet}
+
+<PageShell>
+  <PageHeader
+    title="Topology"
+    subtitle="Adopted RouterOS and SwitchOS devices, plus discovered MikroTik neighbors."
+    actions={topologyActions}
+  />
 
   <section class="topology-shell">
     {#if adoptedCount || discoveredCount}
@@ -404,7 +408,7 @@
       </div>
     </SidePanel>
   {/if}
-</section>
+</PageShell>
 
 <style lang="scss">
   .topology-page {
@@ -416,26 +420,6 @@
 
   .topology-page.with-panel {
     padding-right: min(390px, 28vw);
-  }
-
-  .page-title {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 16px;
-  }
-
-  h1 {
-    margin: 0;
-    color: var(--color-text);
-    font-size: 24px;
-    line-height: 1.15;
-  }
-
-  p {
-    margin: 7px 0 0;
-    color: var(--color-muted);
-    line-height: 1.5;
   }
 
   .topology-stats {
@@ -458,6 +442,7 @@
   }
 
   .topology-shell {
+    flex: 1 1 auto;
     min-height: 420px;
     border: 1px solid var(--color-border);
     border-radius: 6px;

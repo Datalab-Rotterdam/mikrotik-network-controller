@@ -1,17 +1,9 @@
 import { RouterOSClient } from '@sourceregistry/mikrotik-client/routeros';
-import { listDevices, getDeviceCredentials } from '$lib/server/repositories/telemetry.repository';
-import { updateDeviceTelemetryState } from '$lib/server/repositories/device.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
+import { DeviceRepository } from '$lib/server/repositories/device.repository';
 import { decryptSecret } from '$lib/server/security/secrets';
-import {
-	insertDeviceMetric,
-	insertInterfaceMetrics,
-	pruneOldMetrics
-} from '$lib/server/repositories/metrics.repository';
-import {
-	markDeviceClientsInactive,
-	upsertDeviceClients,
-	type DeviceClientInput
-} from '$lib/server/repositories/clients.repository';
+import { MetricsRepository } from '$lib/server/repositories/metrics.repository';
+import { ClientRepository, type DeviceClientInput } from '$lib/server/repositories/clients.repository';
 import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
 import { monitoringEvents } from '$lib/server/services/monitoring-events.service';
 import {
@@ -19,7 +11,7 @@ import {
 	evaluateDeviceOffline,
 	evaluateDeviceOnline
 } from '$lib/server/services/alert-evaluator.service';
-import { upsertTopologyLinks } from '$lib/server/repositories/topology.repository';
+import { TopologyRepository } from '$lib/server/repositories/topology.repository';
 import { FirewallRepository } from '$lib/server/repositories/firewall.repository';
 import { VlanRepository } from '$lib/server/repositories/vlan.repository';
 import { createBackupDeviceTask } from '$lib/server/services/devices.service/tasks';
@@ -65,7 +57,7 @@ function str(value: unknown): string | null {
 }
 
 async function collectDevice(device: MonitorableDevice): Promise<void> {
-	const credentials = await getDeviceCredentials(device.id);
+	const credentials = await TelemetryRepository.getCredentials(device.id);
 	const cred = credentials.find((c) => c.purpose === 'read_only');
 	if (!cred) return;
 
@@ -116,7 +108,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 				}
 			}
 
-			await insertDeviceMetric({
+			await MetricsRepository.insertDeviceMetric({
 				deviceId: device.id,
 				cpuPercent: num(res['cpu-load'] ?? res.cpuLoad),
 				freeMemoryBytes: num(res['free-memory'] ?? res.freeMemory),
@@ -125,7 +117,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 				uptimeSeconds: uptime || null
 			});
 
-			await updateDeviceTelemetryState(device.id, 'online', uptime || undefined);
+			await DeviceRepository.updateTelemetryState(device.id, 'online', uptime || undefined);
 			await emitDeviceUpdated(device.id, 'telemetry');
 			monitoringEvents.emit('metric:updated', {
 				deviceId: device.id,
@@ -162,7 +154,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 					txDrops: num(iface['tx-drop'] ?? iface.txDrop),
 					running: iface['running'] === 'true' || iface['running'] === true
 				}));
-			await insertInterfaceMetrics(rows);
+			await MetricsRepository.insertInterfaceMetrics(rows);
 		}
 
 		// --- Connected clients ---
@@ -230,8 +222,8 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 			}
 		}
 
-		await markDeviceClientsInactive(device.id);
-		await upsertDeviceClients([...clientMap.values()]);
+		await ClientRepository.markInactiveForDevice(device.id);
+		await ClientRepository.upsertForDevice([...clientMap.values()]);
 		monitoringEvents.emit('client:updated', { siteId: device.siteId });
 
 		// --- Topology neighbors ---
@@ -248,7 +240,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 					targetIdentity: str(n['identity'] ?? n.identity),
 					discoveredVia: 'neighbor' as const
 				}));
-			void upsertTopologyLinks(links).catch(() => {});
+			void TopologyRepository.upsertLinks(links).catch(() => {});
 			monitoringEvents.emit('topology:updated', { siteId: device.siteId });
 		}
 
@@ -308,7 +300,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 			void VlanRepository.deleteByDeviceExcluding(device.id, seenRouterIds).catch(() => {});
 		}
 	} catch {
-		await updateDeviceTelemetryState(device.id, 'offline');
+		await DeviceRepository.updateTelemetryState(device.id, 'offline');
 		await emitDeviceUpdated(device.id, 'telemetry');
 		if (device.siteId) {
 			void evaluateDeviceOffline(device.id, device.siteId).catch(() => {});
@@ -322,7 +314,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
 
 async function pollAll(): Promise<void> {
 	try {
-		const devices = await listDevices();
+		const devices = await TelemetryRepository.listDevices();
 		const monitorable = devices.filter(
 			(d): d is typeof d & MonitorableDevice =>
 				d.adoptionState !== 'discovered' && d.adoptionState !== 'failed'
@@ -344,13 +336,13 @@ export function startMonitoring(): void {
 		setInterval(() => void pollAll(), POLL_INTERVAL_MS);
 
 		// Prune metrics older than 30 days, once per day
-		void pruneOldMetrics(30);
-		setInterval(() => void pruneOldMetrics(30), 24 * 60 * 60 * 1_000);
+		void MetricsRepository.pruneOld(30);
+		setInterval(() => void MetricsRepository.pruneOld(30), 24 * 60 * 60 * 1_000);
 
 		// Daily backup for all managed devices
 		async function backupAllDevices() {
 			try {
-				const devices = await listDevices();
+				const devices = await TelemetryRepository.listDevices();
 				const managed = devices.filter(
 					(d) => d.adoptionMode === 'managed' && d.adoptionState === 'fully_managed'
 				);
@@ -369,7 +361,7 @@ export function startMonitoring(): void {
 		// Daily firmware check for all adopted RouterOS devices
 		async function checkAllFirmware() {
 			try {
-				const devices = await listDevices();
+				const devices = await TelemetryRepository.listDevices();
 				const routeros = devices.filter((d) => d.platform === 'routeros' && d.connectionStatus === 'online');
 				for (const d of routeros) {
 					void Service('scheduler')

@@ -1,17 +1,17 @@
 import { Service } from '@sourceregistry/sveltekit-service-manager';
-import { getDeviceById } from '$lib/server/repositories/telemetry.repository';
-import { recordAuditEvent } from '$lib/server/repositories/audit.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
+import { AuditRepository } from '$lib/server/repositories/audit.repository';
 import { createRemoveDeviceTask } from '../tasks';
 
 export default {
 	async remove(deviceId: string, requestedByUserId: string) {
-		const device = await getDeviceById(deviceId);
+		const device = await TelemetryRepository.getDeviceById(deviceId);
 
 		if (!device) {
 			throw new Error(`Device ${deviceId} not found`);
 		}
 
-		await recordAuditEvent({
+		await AuditRepository.record({
 			actorUserId: requestedByUserId,
 			targetDeviceId: device.id,
 			action: 'device.removal.requested',

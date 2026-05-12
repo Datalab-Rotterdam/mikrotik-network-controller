@@ -217,7 +217,9 @@
 	}
 
 	.content {
-		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
 		overflow-y: auto;
 		padding: 18px 14px;
 	}

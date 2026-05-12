@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import SidePanel from '$lib/client/components/layout/SidePanel.svelte';
+	import PageHeader from '$lib/client/components/primitives/PageHeader.svelte';
+	import { PageShell } from '$lib/client/components/layout';
 	import {
 		formatJobStatus,
 		getCurrentStep,
@@ -58,13 +60,11 @@
 	}
 </script>
 
-<section class="jobs-page" class:with-panel={Boolean(selectedJob)}>
-	<div class="jobs-toolbar">
-		<div>
-			<h1>Jobs</h1>
-			<p>{runningJobs.length} running, {jobs.length} recent</p>
-		</div>
-	</div>
+<PageShell>
+	<PageHeader
+		title="Jobs"
+		subtitle={`${runningJobs.length} running · ${jobs.length} recent`}
+	/>
 
 	<div class="jobs-table-wrap">
 		<table class="jobs-table">
@@ -168,43 +168,9 @@
 			</div>
 		</SidePanel>
 	{/if}
-</section>
+</PageShell>
 
 <style lang="scss">
-	.jobs-page {
-		display: grid;
-		gap: 12px;
-	}
-
-	.jobs-page.with-panel {
-		padding-right: min(390px, 28vw);
-	}
-
-	.jobs-toolbar {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 16px;
-		min-height: 50px;
-		margin: -18px -14px 6px;
-		padding: 0 18px;
-		border-bottom: 1px solid #eef1f3;
-		background: var(--color-surface);
-	}
-
-	h1 {
-		margin: 0;
-		color: #6f7780;
-		font-size: 20px;
-		font-weight: 500;
-	}
-
-	p {
-		margin: 3px 0 0;
-		color: var(--color-muted);
-		font-size: 13px;
-	}
-
 	.jobs-table-wrap {
 		border-top: 1px solid #eef1f3;
 		background: var(--color-surface);

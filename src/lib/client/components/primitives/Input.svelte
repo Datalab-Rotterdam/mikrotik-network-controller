@@ -14,7 +14,7 @@
     label,
     name,
     type = "text",
-    value = "",
+    value = $bindable(""),
     autocomplete,
     inputmode,
     minlength,

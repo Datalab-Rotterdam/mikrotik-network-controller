@@ -8,6 +8,7 @@
   import Select from "$lib/client/components/primitives/Select.svelte";
   import Checkbox from "$lib/client/components/primitives/Checkbox.svelte";
   import TextArea from "$lib/client/components/primitives/TextArea.svelte";
+  import { PageShell } from "$lib/client/components/layout";
 
   let { data } = $props();
 
@@ -109,18 +110,20 @@
   let channelType = $state<string>("webhook");
 </script>
 
-<PageHeader
-  title="Alerts"
-  subtitle="Rules, active events, and notification channels."
->
+{#snippet alertsActions()}
   {#if unacknowledged > 0}
-    {#snippet actions()}
-      <span class="badge-critical">{unacknowledged} unacknowledged</span>
-    {/snippet}
+    <span class="badge-critical">{unacknowledged} unacknowledged</span>
   {/if}
-</PageHeader>
+{/snippet}
 
-<div class="tab-bar" role="tablist">
+<PageShell>
+  <PageHeader
+    title="Alerts"
+    subtitle="Rules, active events, and notification channels."
+    actions={alertsActions}
+  />
+
+  <div class="tab-bar" role="tablist">
   <button
     role="tab"
     class="tab-btn"
@@ -485,6 +488,7 @@
     {/if}
   </div>
 {/if}
+</PageShell>
 
 <style lang="scss">
   .badge-critical {

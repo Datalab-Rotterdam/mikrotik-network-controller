@@ -1,33 +1,26 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import {
-	listAlertRules,
-	listAlertEvents,
-	listNotificationChannels,
-	createAlertRule,
-	updateAlertRule,
-	deleteAlertRule,
-	createNotificationChannel,
-	updateNotificationChannel,
-	deleteNotificationChannel,
-	acknowledgeAlertEvent,
-	setRuleChannels
-} from '$lib/server/repositories/alerts.repository';
+import { AlertRepository } from '$lib/server/repositories/alerts.repository';
+import { enhance } from '@sourceregistry/sveltekit-enhance';
+import { SessionContext } from '$lib/server/context/session.context';
 
-export const load: PageServerLoad = async ({ params, depends }) => {
-	depends(`app:alerts:${params.site_id}`);
+export const load: PageServerLoad = enhance.load(
+	async ({ params, depends }) => {
+		depends(`app:alerts:${params.site_id}`);
 
-	const [rules, events, channels] = await Promise.all([
-		listAlertRules(params.site_id),
-		listAlertEvents(params.site_id, 50),
-		listNotificationChannels(params.site_id)
-	]);
+		const [rules, events, channels] = await Promise.all([
+			AlertRepository.listRules(params.site_id),
+			AlertRepository.listEvents(params.site_id, 50),
+			AlertRepository.listChannels(params.site_id)
+		]);
 
-	return { rules, events, channels };
-};
+		return { rules, events, channels };
+	},
+	SessionContext.ensure
+);
 
 export const actions: Actions = {
-	createRule: async ({ request, params }) => {
+	createRule: enhance.action(async ({ request, params }) => {
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();
 		const conditionType = String(data.get('conditionType') ?? '') as
@@ -57,7 +50,7 @@ export const actions: Actions = {
 			}
 		}
 
-		const rule = await createAlertRule({
+		const rule = await AlertRepository.createRule({
 			siteId: params.site_id,
 			name,
 			conditionType,
@@ -69,28 +62,28 @@ export const actions: Actions = {
 		});
 
 		if (channelIds.length > 0) {
-			await setRuleChannels(rule.id, channelIds);
+			await AlertRepository.setRuleChannels(rule.id, channelIds);
 		}
 
 		return { success: true };
-	},
+	}, SessionContext.require),
 
-	toggleRule: async ({ request }) => {
+	toggleRule: enhance.action(async ({ request }) => {
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		const enabled = data.get('enabled') === 'true';
-		await updateAlertRule(id, { enabled });
+		await AlertRepository.updateRule(id, { enabled });
 		return { success: true };
-	},
+	}, SessionContext.require),
 
-	deleteRule: async ({ request }) => {
+	deleteRule: enhance.action(async ({ request }) => {
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
-		await deleteAlertRule(id);
+		await AlertRepository.deleteRule(id);
 		return { success: true };
-	},
+	}, SessionContext.require),
 
-	createChannel: async ({ request, params }) => {
+	createChannel: enhance.action(async ({ request, params }) => {
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();
 		const type = String(data.get('type') ?? '') as 'webhook' | 'slack' | 'email';
@@ -105,23 +98,21 @@ export const actions: Actions = {
 			return fail(400, { error: 'Invalid JSON in config' });
 		}
 
-		await createNotificationChannel({ siteId: params.site_id, name, type, config, enabled: true });
+		await AlertRepository.createChannel({ siteId: params.site_id, name, type, config, enabled: true });
 		return { success: true };
-	},
+	}, SessionContext.require),
 
-	deleteChannel: async ({ request }) => {
+	deleteChannel: enhance.action(async ({ request }) => {
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
-		await deleteNotificationChannel(id);
+		await AlertRepository.deleteChannel(id);
 		return { success: true };
-	},
+	}, SessionContext.require),
 
-	acknowledge: async ({ request, locals }) => {
+	acknowledge: enhance.action(async ({ request, context }) => {
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
-		const userId = locals.user?.id;
-		if (!userId) return fail(401, { error: 'Unauthorized' });
-		await acknowledgeAlertEvent(id, userId);
-		return { success: true };
-	}
+		await AlertRepository.acknowledgeEvent(id, context.user.id);
+		return { success: true }
+	}, SessionContext.require)
 };

@@ -12,15 +12,17 @@ type DeviceNodeData = {
 
 	let {
 		data,
-		targetPosition = Position.Top,
-		sourcePosition = Position.Bottom
 	}: NodeProps = $props();
 
 const node = $derived(data as DeviceNodeData);
 const hasThumbnail = $derived(node.imageSrc !== '/favicon.svg');
 </script>
 
-<Handle type="target" position={targetPosition} />
+<!-- Target handles on all sides for center-originating edges -->
+<Handle type="target" position={Position.Left} />
+<Handle type="target" position={Position.Right} />
+<Handle type="target" position={Position.Top} />
+<Handle type="target" position={Position.Bottom} />
 <div class="device-node" class:thumbnail={hasThumbnail} class:switch={node.kind === 'switch'} class:discovered={!node.adopted}>
 	<div class="device-image">
 		<img src={node.imageSrc} alt="" width="130" height="84" />
@@ -33,7 +35,11 @@ const hasThumbnail = $derived(node.imageSrc !== '/favicon.svg');
 		{/if}
 	</div>
 </div>
-<Handle type="source" position={sourcePosition} />
+<!-- Source handles on all sides for center-originating edges -->
+<Handle type="source" position={Position.Left} />
+<Handle type="source" position={Position.Right} />
+<Handle type="source" position={Position.Top} />
+<Handle type="source" position={Position.Bottom} />
 
 <style lang="scss">
 	.device-node {

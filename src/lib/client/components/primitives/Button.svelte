@@ -8,6 +8,7 @@
     disabled = false,
     type = "button",
     fullWidth = false,
+    transparent = false,
     children,
     ...rest
   }: {
@@ -17,11 +18,12 @@
     disabled?: boolean;
     type?: HTMLButtonAttributes["type"];
     fullWidth?: boolean;
+    transparent?: boolean;
     children?: import("svelte").Snippet;
   } & HTMLButtonAttributes = $props();
 
   let buttonClass = $derived(
-    `btn btn--${variant} ${size !== "md" ? `btn--${size}` : ""}`,
+    `btn btn--${variant} ${size !== "md" ? `btn--${size}` : ""} ${transparent ? "btn--transparent" : ""}`,
   );
 </script>
 
@@ -89,6 +91,28 @@
       border-color: transparent;
       background: transparent;
       color: var(--color-text);
+    }
+
+    &--transparent {
+      background: transparent;
+      border-color: transparent;
+
+      &.btn--primary,
+      &.btn--secondary {
+        color: var(--color-brand);
+      }
+
+      &.btn--danger {
+        color: var(--color-danger);
+      }
+
+      &.btn--warning {
+        color: var(--color-warning);
+      }
+
+      &.btn--ghost {
+        color: var(--color-text);
+      }
     }
 
     &--sm {

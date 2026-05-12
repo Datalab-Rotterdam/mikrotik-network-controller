@@ -1,20 +1,15 @@
 import {RouterOSClient} from '@sourceregistry/mikrotik-client/routeros';
-import {
-    getDeviceById,
-    getDeviceCredentials,
-    listDevices,
-    updateDeviceLastSeen
-} from '$lib/server/repositories/telemetry.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import {decryptSecret} from '$lib/server/security/secrets';
 import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
 
 export default {
     async list() {
-        return listDevices();
+        return TelemetryRepository.listDevices();
     },
 
     async get(id: string) {
-        const device = await getDeviceById(id);
+        const device = await TelemetryRepository.getDeviceById(id);
         if (!device) {
             return null;
         }
@@ -46,12 +41,12 @@ export default {
     },
 
     async stats(id: string) {
-        const device = await getDeviceById(id);
+        const device = await TelemetryRepository.getDeviceById(id);
         if (!device) {
             throw new Error(`Device ${id} not found`);
         }
 
-        const credentials = await getDeviceCredentials(device.id);
+        const credentials = await TelemetryRepository.getCredentials(device.id);
         const restCredential = credentials.find((c: { purpose: string }) => c.purpose === 'read_only');
 
         if (!restCredential || !restCredential.secretEncrypted) {
@@ -71,7 +66,7 @@ export default {
                 client.interface.list()
             ]);
 
-            await updateDeviceLastSeen(device.id);
+            await TelemetryRepository.updateLastSeen(device.id);
             await emitDeviceUpdated(device.id, 'telemetry');
 
             return {

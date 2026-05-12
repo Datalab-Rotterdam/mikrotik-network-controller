@@ -1,7 +1,9 @@
 import { error, fail, type Actions } from '@sveltejs/kit';
 import { websockets } from '@sourceregistry/sveltekit-websockets/server';
-import { getDeviceByIdForSite } from '$lib/server/repositories/device.repository';
-import { getActiveCredential } from '$lib/server/repositories/telemetry.repository';
+import { enhance } from '@sourceregistry/sveltekit-enhance';
+import { SessionContext } from '$lib/server/context/session.context';
+import { DeviceRepository } from '$lib/server/repositories/device.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import {
 	isDeviceTerminalEligible,
 	startDeviceTerminalSession
@@ -11,17 +13,8 @@ const terminalUnavailableMessage =
 	'Terminal access is available only for managed RouterOS devices with SSH trust.';
 
 export const actions: Actions = {
-	terminal: async (event) => {
-		const { locals, params } = event;
-		const user = locals.user;
-
-		if (!user) {
-			return fail(401, {
-				action: 'terminal',
-				success: false,
-				message: 'Sign in to open a terminal.'
-			});
-		}
+	terminal: enhance.action(async (input) => {
+		const user = input.locals.user!;
 
 		if (!user.roles.includes('admin')) {
 			return fail(403, {
@@ -31,7 +24,7 @@ export const actions: Actions = {
 			});
 		}
 
-		const device = await getDeviceByIdForSite(params.device_id as string, params.site_id as string);
+		const device = await DeviceRepository.getByIdForSite(input.params.device_id as string, input.params.site_id as string);
 		if (!device) {
 			return fail(404, {
 				action: 'terminal',
@@ -40,7 +33,7 @@ export const actions: Actions = {
 			});
 		}
 
-		const writeCredential = await getActiveCredential(device.id, 'write');
+		const writeCredential = await TelemetryRepository.getActiveCredential(device.id, 'write');
 		if (
 			!isDeviceTerminalEligible({
 				userRoles: user.roles,
@@ -60,7 +53,7 @@ export const actions: Actions = {
 			action: 'terminal',
 			success: true,
 			url: websockets.use(
-				event,
+				input,
 				(socket) => {
 					void startDeviceTerminalSession({
 						socket,
@@ -75,20 +68,20 @@ export const actions: Actions = {
 				}
 			)
 		};
-	}
+	}, SessionContext.require)
 };
 
-export async function load({ locals, parent, params, depends }) {
+export const load = enhance.load(async ({ locals, parent, params, depends }) => {
 	const { site } = await parent();
 	const deviceId = params.device_id as string;
 	depends?.(`app:device:${deviceId}`);
 
-	const device = await getDeviceByIdForSite(deviceId, site.id);
+	const device = await DeviceRepository.getByIdForSite(deviceId, site.id);
 	if (!device) {
 		throw error(404, 'Device not found');
 	}
 
-	const writeCredential = await getActiveCredential(device.id, 'write');
+	const writeCredential = await TelemetryRepository.getActiveCredential(device.id, 'write');
 
 	return {
 		device,
@@ -99,4 +92,4 @@ export async function load({ locals, parent, params, depends }) {
 		}),
 		terminalUnavailableMessage
 	};
-}
+}, SessionContext.ensure);

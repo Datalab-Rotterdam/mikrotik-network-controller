@@ -1,5 +1,5 @@
 import { RouterOSSshClient } from '@sourceregistry/mikrotik-client/routeros';
-import { getDeviceById, getDeviceCredentials } from '$lib/server/repositories/telemetry.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { getControllerSshPrivateKeyPath } from '$lib/server/security/controller-ssh-keys';
 
 const TIMEOUT_MS = 20_000;
@@ -15,10 +15,10 @@ function assertSafeRouterId(routerId: string): void {
 }
 
 async function buildSshClient(deviceId: string): Promise<RouterOSSshClient> {
-	const device = await getDeviceById(deviceId);
+	const device = await TelemetryRepository.getDeviceById(deviceId);
 	if (!device) throw new Error(`Device ${deviceId} not found`);
 
-	const credentials = await getDeviceCredentials(deviceId);
+	const credentials = await TelemetryRepository.getCredentials(deviceId);
 	const writeCred = credentials.find((c) => c.purpose === 'write');
 	if (!writeCred) throw new Error('No write credential — device must be managed');
 

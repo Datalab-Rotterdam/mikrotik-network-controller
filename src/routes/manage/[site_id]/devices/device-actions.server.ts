@@ -1,14 +1,10 @@
 import { fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { getDeviceByIdForSite } from '$lib/server/repositories/device.repository';
-import { findSiteById } from '$lib/server/repositories/site.repository';
+import { DeviceRepository } from '$lib/server/repositories/device.repository';
+import { SiteRepository } from '$lib/server/repositories/site.repository';
 import { service as devicesService } from '$lib/server/services/devices.service';
 
 export async function provisionDeviceAction({ request, locals, params }: RequestEvent) {
-	if (!locals.user) {
-		throw redirect(303, '/manage/account/login');
-	}
-
-	const site = await findSiteById(params.site_id as string);
+	const site = await SiteRepository.findById(params.site_id as string);
 
 	if (!site) {
 		throw redirect(303, '/');
@@ -24,7 +20,7 @@ export async function provisionDeviceAction({ request, locals, params }: Request
 		});
 	}
 
-	const device = await getDeviceByIdForSite(deviceId, site.id);
+	const device = await DeviceRepository.getByIdForSite(deviceId, site.id);
 	if (!device) {
 		return fail(404, {
 			action: 'provision',
@@ -53,11 +49,7 @@ export async function provisionDeviceAction({ request, locals, params }: Request
 }
 
 export async function removeDeviceAction({ request, locals, params }: RequestEvent) {
-	if (!locals.user) {
-		throw redirect(303, '/manage/account/login');
-	}
-
-	const site = await findSiteById(params.site_id as string);
+	const site = await SiteRepository.findById(params.site_id as string);
 
 	if (!site) {
 		throw redirect(303, '/');
@@ -73,7 +65,7 @@ export async function removeDeviceAction({ request, locals, params }: RequestEve
 		});
 	}
 
-	const device = await getDeviceByIdForSite(deviceId, site.id);
+	const device = await DeviceRepository.getByIdForSite(deviceId, site.id);
 	if (!device) {
 		return fail(404, {
 			action: 'remove',
@@ -91,7 +83,7 @@ export async function removeDeviceAction({ request, locals, params }: RequestEve
 	}
 
 	try {
-		const result = await devicesService.local.removal.remove(deviceId, locals.user.id);
+		const result = await devicesService.local.removal.remove(deviceId, locals.user!.id);
 
 		return {
 			action: 'remove',

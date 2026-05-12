@@ -4,28 +4,30 @@ import { sites } from '$lib/server/db/schema';
 
 export type SiteRecord = typeof sites.$inferSelect;
 
-export async function listSites(): Promise<SiteRecord[]> {
-	return db.select().from(sites).orderBy(asc(sites.name));
-}
+export const SiteRepository = {
+	async list(): Promise<SiteRecord[]> {
+		return db.select().from(sites).orderBy(asc(sites.name));
+	},
 
-export async function findSiteById(id: string): Promise<SiteRecord | undefined> {
-	const [site] = await db.select().from(sites).where(eq(sites.id, id)).limit(1);
+	async findById(id: string): Promise<SiteRecord | undefined> {
+		const [site] = await db.select().from(sites).where(eq(sites.id, id)).limit(1);
 
-	return site;
-}
+		return site;
+	},
 
-export async function findSiteByName(name: string): Promise<SiteRecord | undefined> {
-	const [site] = await db.select().from(sites).where(eq(sites.name, name)).limit(1);
+	async findByName(name: string): Promise<SiteRecord | undefined> {
+		const [site] = await db.select().from(sites).where(eq(sites.name, name)).limit(1);
 
-	return site;
-}
+		return site;
+	},
 
-export async function createSite(name: string, location?: string): Promise<SiteRecord> {
-	const [site] = await db.insert(sites).values({ name, location: location || null }).returning();
+	async create(name: string, location?: string): Promise<SiteRecord> {
+		const [site] = await db.insert(sites).values({ name, location: location || null }).returning();
 
-	return site;
-}
+		return site;
+	},
 
-export async function ensureSiteByName(name: string, location?: string): Promise<SiteRecord> {
-	return (await findSiteByName(name)) ?? (await createSite(name, location));
-}
+	async ensureByName(name: string, location?: string): Promise<SiteRecord> {
+		return (await SiteRepository.findByName(name)) ?? (await SiteRepository.create(name, location));
+	}
+};

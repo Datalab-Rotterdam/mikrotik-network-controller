@@ -1,9 +1,9 @@
 import { redirect } from '@sveltejs/kit';
-import { ensureSiteByName, listSites } from '$lib/server/repositories/site.repository';
+import { SiteRepository } from '$lib/server/repositories/site.repository';
 
 export async function load() {
-	const [firstSite] = await listSites();
-	const site = firstSite ?? (await ensureSiteByName('Default'));
+	const [firstSite] = await SiteRepository.list();
+	const site = firstSite ?? (await SiteRepository.ensureByName('Default'));
 
 	throw redirect(303, `/manage/${site.id}`);
 }

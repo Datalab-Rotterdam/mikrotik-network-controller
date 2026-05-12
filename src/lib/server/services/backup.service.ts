@@ -2,16 +2,9 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile, readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { RouterOSClient } from '@sourceregistry/mikrotik-client/routeros';
-import { getDeviceCredentials } from '$lib/server/repositories/telemetry.repository';
-import { getDeviceById } from '$lib/server/repositories/telemetry.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { decryptSecret } from '$lib/server/security/secrets';
-import {
-	createBackupRecord,
-	deleteBackup,
-	getBackup,
-	getOldestBackupsForDevice,
-	listBackupsForDevice
-} from '$lib/server/repositories/backup.repository';
+import { BackupRepository } from '$lib/server/repositories/backup.repository';
 
 const DATA_DIR = '.data/backups';
 const CLIENT_TIMEOUT_MS = 15_000;
@@ -27,10 +20,10 @@ export async function runExportBackup(
 	deviceId: string,
 	jobId?: string
 ): Promise<string> {
-	const device = await getDeviceById(deviceId);
+	const device = await TelemetryRepository.getDeviceById(deviceId);
 	if (!device) throw new Error(`Device ${deviceId} not found`);
 
-	const credentials = await getDeviceCredentials(deviceId);
+	const credentials = await TelemetryRepository.getCredentials(deviceId);
 	// Prefer dedicated backup credential, then read_only (which has a real API password).
 	// Skip 'write' credential — during managed adoption it stores 'ssh-key:controller'
 	// which is an SSH-key marker, not a password usable for RouterOS API authentication.
@@ -63,7 +56,7 @@ export async function runExportBackup(
 		const sha256 = createHash('sha256').update(text).digest('hex');
 		const sizeBytes = Buffer.byteLength(text, 'utf-8');
 
-		const record = await createBackupRecord({
+		const record = await BackupRepository.create({
 			deviceId,
 			jobId: jobId ?? null,
 			kind: 'export',
@@ -84,23 +77,23 @@ export async function runExportBackup(
 }
 
 export async function readBackupContent(backupId: string): Promise<string> {
-	const record = await getBackup(backupId);
+	const record = await BackupRepository.get(backupId);
 	if (!record) throw new Error('Backup not found');
 	return readFile(record.filePath, 'utf-8');
 }
 
 async function pruneOldBackups(deviceId: string, keepCount: number): Promise<void> {
-	const toDelete = await getOldestBackupsForDevice(deviceId, keepCount);
+	const toDelete = await BackupRepository.getOldestByDevice(deviceId, keepCount);
 	for (const b of toDelete) {
 		try {
 			await unlink(b.filePath);
 		} catch {
 			// file may already be gone
 		}
-		await deleteBackup(b.id);
+		await BackupRepository.delete(b.id);
 	}
 }
 
 export async function getDeviceBackups(deviceId: string) {
-	return listBackupsForDevice(deviceId, 20);
+	return BackupRepository.listByDevice(deviceId, 20);
 }

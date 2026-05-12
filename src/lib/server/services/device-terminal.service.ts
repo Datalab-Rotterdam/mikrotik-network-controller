@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { ReferencedWebSocket } from '@sourceregistry/sveltekit-websockets/server';
-import { recordAuditEvent } from '$lib/server/repositories/audit.repository';
+import { AuditRepository } from '$lib/server/repositories/audit.repository';
 import {
 	getControllerSshKnownHostsPath,
 	getControllerSshPrivateKeyPath
@@ -135,7 +135,7 @@ export async function startDeviceTerminalSession(input: TerminalSessionInput): P
 			message: reason
 		});
 
-		void recordAuditEvent({
+		void AuditRepository.record({
 			actorUserId: input.userId,
 			targetDeviceId: input.device.id,
 			action: 'terminal.closed',
@@ -185,7 +185,7 @@ export async function startDeviceTerminalSession(input: TerminalSessionInput): P
 			}
 		);
 
-		await recordAuditEvent({
+		await AuditRepository.record({
 			actorUserId: input.userId,
 			targetDeviceId: input.device.id,
 			action: 'terminal.opened',
@@ -217,7 +217,7 @@ export async function startDeviceTerminalSession(input: TerminalSessionInput): P
 				status: 'failed',
 				message: error.message
 			});
-			void recordAuditEvent({
+			void AuditRepository.record({
 				actorUserId: input.userId,
 				targetDeviceId: input.device.id,
 				action: 'terminal.failed',
@@ -268,7 +268,7 @@ export async function startDeviceTerminalSession(input: TerminalSessionInput): P
 			status: 'failed',
 			message
 		});
-		await recordAuditEvent({
+		await AuditRepository.record({
 			actorUserId: input.userId,
 			targetDeviceId: input.device.id,
 			action: 'terminal.failed',

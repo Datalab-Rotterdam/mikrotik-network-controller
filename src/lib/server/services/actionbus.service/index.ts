@@ -3,8 +3,8 @@ import {ServiceManager, type Service} from '@sourceregistry/sveltekit-service-ma
 import {createActionBus} from '@sourceregistry/sveltekit-actionbus/server';
 import type {ActionChannel, ActionEventForChannel} from '@sourceregistry/sveltekit-actionbus';
 import env from '$lib/server/configurations/env.configuration';
-import {findValidSessionByTokenHash} from '$lib/server/repositories/session.repository';
-import {findUserById} from '$lib/server/repositories/user.repository';
+import {SessionRepository} from '$lib/server/repositories/session.repository';
+import {UserRepository} from '$lib/server/repositories/user.repository';
 import {hashSessionToken} from '$lib/server/security/session-token';
 import type {ActionEvent, DiscoveryActionEventMap, SiteActionEventMap} from '$lib/shared/action-events';
 
@@ -47,12 +47,12 @@ async function isAuthenticated(request: IncomingMessage | undefined): Promise<bo
         return false;
     }
 
-    const session = await findValidSessionByTokenHash(hashSessionToken(token));
+    const session = await SessionRepository.findValidByTokenHash(hashSessionToken(token));
     if (!session) {
         return false;
     }
 
-    const user = await findUserById(session.userId);
+    const user = await UserRepository.findById(session.userId);
     if (!user || user.disabledAt) {
         return false;
     }

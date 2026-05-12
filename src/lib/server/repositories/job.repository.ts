@@ -14,159 +14,161 @@ export interface CreateJobInput {
 	scheduledFor?: Date | null;
 }
 
-export async function createJob(input: CreateJobInput) {
-	const [job] = await db
-		.insert(jobs)
-		.values({
-			type: input.type,
-			deviceId: input.deviceId ?? null,
-			siteId: input.siteId ?? null,
-			requestedByUserId: input.requestedByUserId ?? null,
-			payload: input.payload ?? {},
-			maxAttempts: input.maxAttempts ?? 1,
-			scheduledFor: input.scheduledFor ?? null
-		})
-		.returning();
+export const JobRepository = {
+	async create(input: CreateJobInput) {
+		const [job] = await db
+			.insert(jobs)
+			.values({
+				type: input.type,
+				deviceId: input.deviceId ?? null,
+				siteId: input.siteId ?? null,
+				requestedByUserId: input.requestedByUserId ?? null,
+				payload: input.payload ?? {},
+				maxAttempts: input.maxAttempts ?? 1,
+				scheduledFor: input.scheduledFor ?? null
+			})
+			.returning();
 
-	return job;
-}
+		return job;
+	},
 
-export async function getJob(id: string) {
-	const result = await db.select().from(jobs).where(eq(jobs.id, id));
-	return result[0] ?? null;
-}
+	async get(id: string) {
+		const result = await db.select().from(jobs).where(eq(jobs.id, id));
+		return result[0] ?? null;
+	},
 
-export async function listRecentJobs(limit = 50) {
-	return db.select().from(jobs).orderBy(desc(jobs.createdAt)).limit(limit);
-}
+	async listRecent(limit = 50) {
+		return db.select().from(jobs).orderBy(desc(jobs.createdAt)).limit(limit);
+	},
 
-export async function listRecentJobsBySite(siteId: string, limit = 50) {
-	// Find all device IDs belonging to this site
-	const siteDevices = await db
-		.select({ id: devices.id })
-		.from(devices)
-		.where(eq(devices.siteId, siteId));
+	async listRecentBySite(siteId: string, limit = 50) {
+		// Find all device IDs belonging to this site
+		const siteDevices = await db
+			.select({ id: devices.id })
+			.from(devices)
+			.where(eq(devices.siteId, siteId));
 
-	const deviceIdList = siteDevices.map((d) => d.id);
+		const deviceIdList = siteDevices.map((d) => d.id);
 
-	// Match jobs by siteId, OR jobs with null siteId whose deviceId belongs to the site
-	const whereClause = deviceIdList.length > 0
-		? or(
-				eq(jobs.siteId, siteId),
-				and(isNull(jobs.siteId), inArray(jobs.deviceId, deviceIdList))
-			)
-		: eq(jobs.siteId, siteId);
+		// Match jobs by siteId, OR jobs with null siteId whose deviceId belongs to the site
+		const whereClause = deviceIdList.length > 0
+			? or(
+					eq(jobs.siteId, siteId),
+					and(isNull(jobs.siteId), inArray(jobs.deviceId, deviceIdList))
+				)
+			: eq(jobs.siteId, siteId);
 
-	return db
-		.select()
-		.from(jobs)
-		.where(whereClause)
-		.orderBy(desc(jobs.createdAt))
-		.limit(limit);
-}
+		return db
+			.select()
+			.from(jobs)
+			.where(whereClause)
+			.orderBy(desc(jobs.createdAt))
+			.limit(limit);
+	},
 
-export async function listRunningJobs() {
-	return db.select().from(jobs).where(eq(jobs.status, 'running'));
-}
+	async listRunning() {
+		return db.select().from(jobs).where(eq(jobs.status, 'running'));
+	},
 
-export async function listRunningJobsBySite(siteId: string) {
-	return db
-		.select()
-		.from(jobs)
-		.where(and(eq(jobs.siteId, siteId), eq(jobs.status, 'running')))
-		.orderBy(desc(jobs.createdAt));
-}
+	async listRunningBySite(siteId: string) {
+		return db
+			.select()
+			.from(jobs)
+			.where(and(eq(jobs.siteId, siteId), eq(jobs.status, 'running')))
+			.orderBy(desc(jobs.createdAt));
+	},
 
-export async function listJobsByDevice(deviceId: string, limit = 20) {
-	return db
-		.select()
-		.from(jobs)
-		.where(eq(jobs.deviceId, deviceId))
-		.orderBy(desc(jobs.createdAt))
-		.limit(limit);
-}
+	async listByDevice(deviceId: string, limit = 20) {
+		return db
+			.select()
+			.from(jobs)
+			.where(eq(jobs.deviceId, deviceId))
+			.orderBy(desc(jobs.createdAt))
+			.limit(limit);
+	},
 
-export async function getJobWithSteps(id: string) {
-	const job = await getJob(id);
+	async getWithSteps(id: string) {
+		const job = await JobRepository.get(id);
 
-	if (!job) {
-		return null;
+		if (!job) {
+			return null;
+		}
+
+		const steps = await db
+			.select()
+			.from(jobSteps)
+			.where(eq(jobSteps.jobId, id))
+			.orderBy(asc(jobSteps.index));
+
+		return {
+			...job,
+			steps
+		};
+	},
+
+	async update(
+		id: string,
+		patch: Partial<Omit<typeof jobs.$inferInsert, 'id' | 'createdAt'>>
+	) {
+		const [job] = await db
+			.update(jobs)
+			.set({
+				...patch,
+				updatedAt: new Date()
+			})
+			.where(eq(jobs.id, id))
+			.returning();
+
+		return job ?? null;
+	},
+
+	async markRunning(id: string) {
+		return JobRepository.update(id, {
+			status: 'running',
+			startedAt: new Date(),
+			lockedAt: new Date(),
+			lockedBy: process.pid.toString(),
+			attemptCount: 1
+		});
+	},
+
+	async markFinished(
+		id: string,
+		status: Extract<JobStatus, 'succeeded' | 'failed' | 'cancelled' | 'reverted' | 'revert_failed' | 'needs_attention'>,
+		patch: {
+			progress?: number;
+			result?: Record<string, unknown>;
+			errorMessage?: string | null;
+		} = {}
+	) {
+		const update: Parameters<typeof JobRepository.update>[1] = {
+			status,
+			finishedAt: new Date(),
+			lockedAt: null,
+			lockedBy: null
+		};
+
+		if (patch.progress !== undefined || status === 'succeeded') {
+			update.progress = patch.progress ?? 100;
+		}
+
+		if (patch.result !== undefined) {
+			update.result = patch.result;
+		}
+
+		if (patch.errorMessage !== undefined) {
+			update.errorMessage = patch.errorMessage;
+		}
+
+		return JobRepository.update(id, {
+			...update
+		});
+	},
+
+	async markRollingBack(id: string, errorMessage: string) {
+		return JobRepository.update(id, {
+			status: 'rolling_back',
+			errorMessage
+		});
 	}
-
-	const steps = await db
-		.select()
-		.from(jobSteps)
-		.where(eq(jobSteps.jobId, id))
-		.orderBy(asc(jobSteps.index));
-
-	return {
-		...job,
-		steps
-	};
-}
-
-export async function updateJob(
-	id: string,
-	patch: Partial<Omit<typeof jobs.$inferInsert, 'id' | 'createdAt'>>
-) {
-	const [job] = await db
-		.update(jobs)
-		.set({
-			...patch,
-			updatedAt: new Date()
-		})
-		.where(eq(jobs.id, id))
-		.returning();
-
-	return job ?? null;
-}
-
-export async function markJobRunning(id: string) {
-	return updateJob(id, {
-		status: 'running',
-		startedAt: new Date(),
-		lockedAt: new Date(),
-		lockedBy: process.pid.toString(),
-		attemptCount: 1
-	});
-}
-
-export async function markJobFinished(
-	id: string,
-	status: Extract<JobStatus, 'succeeded' | 'failed' | 'cancelled' | 'reverted' | 'revert_failed' | 'needs_attention'>,
-	patch: {
-		progress?: number;
-		result?: Record<string, unknown>;
-		errorMessage?: string | null;
-	} = {}
-) {
-	const update: Parameters<typeof updateJob>[1] = {
-		status,
-		finishedAt: new Date(),
-		lockedAt: null,
-		lockedBy: null
-	};
-
-	if (patch.progress !== undefined || status === 'succeeded') {
-		update.progress = patch.progress ?? 100;
-	}
-
-	if (patch.result !== undefined) {
-		update.result = patch.result;
-	}
-
-	if (patch.errorMessage !== undefined) {
-		update.errorMessage = patch.errorMessage;
-	}
-
-	return updateJob(id, {
-		...update
-	});
-}
-
-export async function markJobRollingBack(id: string, errorMessage: string) {
-	return updateJob(id, {
-		status: 'rolling_back',
-		errorMessage
-	});
-}
+};

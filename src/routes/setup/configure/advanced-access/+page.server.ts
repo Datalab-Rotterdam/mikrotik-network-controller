@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { createFirstAdmin, createLoginSession } from '$lib/server/services/auth.service';
-import { ensureSiteByName } from '$lib/server/repositories/site.repository';
+import { SiteRepository } from '$lib/server/repositories/site.repository';
 
 export const load = ({ url }) => {
 	const controllerName = url.searchParams.get('controllerName')?.trim();
@@ -47,7 +47,7 @@ export const actions = {
 
 		try {
 			const user = await createFirstAdmin({ email, displayName, password });
-			await ensureSiteByName(controllerName, country);
+			await SiteRepository.ensureByName(controllerName, country);
 			await createLoginSession(cookies, user.id);
 		} catch (error) {
 			return fail(400, {

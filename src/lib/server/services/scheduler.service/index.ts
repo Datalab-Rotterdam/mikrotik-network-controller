@@ -1,20 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { Router, type Service, ServiceManager } from '@sourceregistry/sveltekit-service-manager';
-import {
-	createJob,
-	getJob,
-	listRecentJobs,
-	listRunningJobs,
-	markJobFinished,
-	markJobRollingBack,
-	markJobRunning,
-	updateJob
-} from '$lib/server/repositories/job.repository';
-import {
-	createJobSteps,
-	listJobSteps,
-	updateJobStep
-} from '$lib/server/repositories/job-step.repository';
+import { JobRepository } from '$lib/server/repositories/job.repository';
+import { JobStepRepository } from '$lib/server/repositories/job-step.repository';
 import type {
 	SchedulerEventDetail,
 	SchedulerEventName,
@@ -69,7 +56,7 @@ async function rollbackCompletedSteps<TPayload extends Record<string, unknown>>(
 	handle: ScheduledTask,
 	jobId: string,
 	completedSteps: Array<{
-		row: Awaited<ReturnType<typeof createJobSteps>>[number];
+		row: Awaited<ReturnType<typeof JobStepRepository.createMany>>[number];
 		definition: TaskStep<TPayload>;
 	}>
 ): Promise<boolean> {
@@ -84,7 +71,7 @@ async function rollbackCompletedSteps<TPayload extends Record<string, unknown>>(
 		};
 
 		if (!completed.definition.revert || completed.definition.revertPolicy === 'none') {
-			await updateJobStep(completed.row.id, {
+			await JobStepRepository.update(completed.row.id, {
 				status: 'revert_skipped',
 				revertedAt: new Date()
 			});
@@ -92,7 +79,7 @@ async function rollbackCompletedSteps<TPayload extends Record<string, unknown>>(
 			continue;
 		}
 
-		await updateJobStep(completed.row.id, {
+		await JobStepRepository.update(completed.row.id, {
 			status: 'reverting',
 			revertedAt: new Date()
 		});
@@ -108,7 +95,7 @@ async function rollbackCompletedSteps<TPayload extends Record<string, unknown>>(
 				emit: (event, eventDetail) => handle.emitSchedulerEvent(event, eventDetail)
 			});
 
-			await updateJobStep(completed.row.id, {
+			await JobStepRepository.update(completed.row.id, {
 				status: 'reverted',
 				revertResult: resultToRecord(result),
 				revertedAt: new Date()
@@ -117,7 +104,7 @@ async function rollbackCompletedSteps<TPayload extends Record<string, unknown>>(
 		} catch (error) {
 			const message = errorMessage(error);
 			rollbackFailed = true;
-			await updateJobStep(completed.row.id, {
+			await JobStepRepository.update(completed.row.id, {
 				status: 'revert_failed',
 				revertErrorMessage: message,
 				revertedAt: new Date()
@@ -142,17 +129,17 @@ async function runTask<TPayload extends Record<string, unknown>>(
 ): Promise<void> {
 	const jobId = handle.id;
 	const payload = task.payload ?? ({} as TPayload);
-	const steps = await listJobSteps(jobId);
+	const steps = await JobStepRepository.list(jobId);
 	const completedSteps: Array<{
 		row: (typeof steps)[number];
 		definition: TaskStep<TPayload>;
 	}> = [];
 
-	await markJobRunning(jobId);
+	await JobRepository.markRunning(jobId);
 	handle.emitSchedulerEvent('job:started', { jobId });
 
 	if (task.steps.length === 0) {
-		await markJobFinished(jobId, 'succeeded', { progress: 100 });
+		await JobRepository.markFinished(jobId, 'succeeded', { progress: 100 });
 		handle.emitSchedulerEvent('job:succeeded', { jobId });
 		return;
 	}
@@ -170,7 +157,7 @@ async function runTask<TPayload extends Record<string, unknown>>(
 			stepName: row.name
 		};
 
-		await updateJobStep(row.id, {
+		await JobStepRepository.update(row.id, {
 			status: 'running',
 			startedAt: new Date()
 		});
@@ -186,7 +173,7 @@ async function runTask<TPayload extends Record<string, unknown>>(
 				emit: (event, eventDetail) => handle.emitSchedulerEvent(event, eventDetail)
 			});
 
-			await updateJobStep(row.id, {
+			await JobStepRepository.update(row.id, {
 				status: 'succeeded',
 				result: resultToRecord(result),
 				finishedAt: new Date()
@@ -195,7 +182,7 @@ async function runTask<TPayload extends Record<string, unknown>>(
 			completedSteps.push({ row, definition: step });
 
 			const progress = Math.round(((index + 1) / task.steps.length) * 100);
-			await updateJob(jobId, { progress });
+			await JobRepository.update(jobId, { progress });
 			handle.emitSchedulerEvent('step:succeeded', {
 				...detail,
 				data: resultToRecord(result)
@@ -203,7 +190,7 @@ async function runTask<TPayload extends Record<string, unknown>>(
 			continue;
 		} catch (error) {
 			const message = errorMessage(error);
-			await updateJobStep(row.id, {
+			await JobStepRepository.update(row.id, {
 				status: 'failed',
 				errorMessage: message,
 				finishedAt: new Date()
@@ -218,36 +205,35 @@ async function runTask<TPayload extends Record<string, unknown>>(
 			}
 
 			if (task.failurePolicy === 'stop') {
-				await markJobFinished(jobId, 'failed', { errorMessage: message });
+				await JobRepository.markFinished(jobId, 'failed', { errorMessage: message });
 				handle.emitSchedulerEvent('job:failed', { jobId, message });
 				return;
 			}
 
-			await markJobRollingBack(jobId, message);
+			await JobRepository.markRollingBack(jobId, message);
 			handle.emitSchedulerEvent('job:rolling_back', { jobId, message });
 
 			const rollbackFailed = await rollbackCompletedSteps(task, handle, jobId, completedSteps);
 			if (rollbackFailed) {
-				await markJobFinished(jobId, 'revert_failed', { errorMessage: message });
+				await JobRepository.markFinished(jobId, 'revert_failed', { errorMessage: message });
 				handle.emitSchedulerEvent('job:revert_failed', { jobId, message });
 				return;
 			}
 
-			await markJobFinished(jobId, 'reverted', { errorMessage: message });
+			await JobRepository.markFinished(jobId, 'reverted', { errorMessage: message });
 			handle.emitSchedulerEvent('job:reverted', { jobId, message });
 			return;
 		}
 	}
 
-	await markJobFinished(jobId, 'succeeded', { progress: 100 });
-	handle.emitSchedulerEvent('job:succeeded', { jobId });
+	await JobRepository.markFinished(jobId, 'succeeded', { progress: 100 });
 }
 
 const scheduler = {
 	async schedule<TPayload extends Record<string, unknown>>(
 		task: TaskDefinition<TPayload>
 	): Promise<ScheduledTask> {
-		const job = await createJob({
+		const job = await JobRepository.create({
 			type: task.name,
 			deviceId: task.deviceId ?? null,
 			siteId: task.siteId ?? null,
@@ -256,7 +242,7 @@ const scheduler = {
 			maxAttempts: task.maxAttempts ?? 1
 		});
 
-		await createJobSteps(
+		await JobStepRepository.createMany(
 			task.steps.map((step, index) => ({
 				jobId: job.id,
 				index,
@@ -276,7 +262,7 @@ const scheduler = {
 				handle
 			).catch(async (error) => {
 				const message = errorMessage(error);
-				await markJobFinished(job.id, 'failed', { errorMessage: message });
+				await JobRepository.markFinished(job.id, 'failed', { errorMessage: message });
 				handle.emitSchedulerEvent('job:failed', { jobId: job.id, message });
 			});
 		});
@@ -285,16 +271,16 @@ const scheduler = {
 	},
 
 	async get(id: string) {
-		const [job, steps] = await Promise.all([getJob(id), listJobSteps(id)]);
+		const [job, steps] = await Promise.all([JobRepository.get(id), JobStepRepository.list(id)]);
 		return job ? { ...job, steps } : null;
 	},
 
 	async listRecent(limit?: number) {
-		return listRecentJobs(limit);
+		return JobRepository.listRecent(limit);
 	},
 
 	async listRunning() {
-		return listRunningJobs();
+		return JobRepository.listRunning();
 	}
 };
 

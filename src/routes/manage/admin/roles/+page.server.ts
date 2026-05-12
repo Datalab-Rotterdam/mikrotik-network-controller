@@ -1,10 +1,5 @@
 import { fail, type Actions } from '@sveltejs/kit';
-import {
-	listRoles,
-	createRole,
-	updateRole,
-	deleteRole
-} from '$lib/server/repositories/user.repository';
+import { UserRepository } from '$lib/server/repositories/user.repository';
 
 const ALL_PERMISSIONS = [
 	'devices:read', 'devices:write', 'devices:adopt', 'devices:remove',
@@ -17,7 +12,7 @@ const ALL_PERMISSIONS = [
 ];
 
 export async function load() {
-	const roles = await listRoles();
+	const roles = await UserRepository.listRoles();
 	return { roles, allPermissions: ALL_PERMISSIONS };
 }
 
@@ -31,7 +26,7 @@ export const actions: Actions = {
 		if (!name) return fail(400, { error: 'Name required' });
 
 		try {
-			await createRole({ name, description, permissions });
+			await UserRepository.createRole({ name, description, permissions });
 			return { success: true };
 		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
@@ -48,7 +43,7 @@ export const actions: Actions = {
 
 		if (!id || !name) return fail(400, { error: 'Missing fields' });
 
-		await updateRole(id, { name, description, permissions });
+		await UserRepository.updateRole(id, { name, description, permissions });
 		return { success: true };
 	},
 
@@ -56,7 +51,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		if (!id) return fail(400, { error: 'Missing id' });
-		await deleteRole(id);
+		await UserRepository.deleteRole(id);
 		return { success: true };
 	}
 };

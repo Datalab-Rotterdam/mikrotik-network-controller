@@ -2,6 +2,9 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import favicon from "$lib/assets/favicon.svg";
+  import { DataTable, Tag, Input, SectionLabel } from "$lib/client/components/primitives";
+  import { ContentGrid } from "$lib/client/components/layout";
+  import { StatCard, Donut } from "$lib/client/components/ui";
   import Button from "$lib/client/components/primitives/Button.svelte";
 
   let { data } = $props();
@@ -62,100 +65,82 @@
   </header>
 
   <div class="exec-body">
-    <div class="org-totals">
-      <div class="total-card">
-        <span class="total-label">Sites</span>
-        <span class="total-value">{data.sites.length}</span>
-      </div>
-      <div class="total-card">
-        <span class="total-label">Total devices</span>
-        <span class="total-value">{totalDevices()}</span>
-      </div>
-      <div class="total-card success">
-        <span class="total-label">Online</span>
-        <span class="total-value">{totalOnline()}</span>
-      </div>
-      <div
-        class="total-card {totalDevices() - totalOnline() > 0 ? 'warning' : ''}"
-      >
-        <span class="total-label">Offline</span>
-        <span class="total-value">{totalDevices() - totalOnline()}</span>
-      </div>
-      <div class="total-card">
-        <span class="total-label">Active clients</span>
-        <span class="total-value">{totalClients()}</span>
-      </div>
-      <div class="total-card {totalAlerts() > 0 ? 'danger' : ''}">
-        <span class="total-label">Open alerts</span>
-        <span class="total-value">{totalAlerts()}</span>
-      </div>
-    </div>
+    <ContentGrid class="org-totals">
+      <StatCard label="Sites" value={data.sites.length} />
+      <StatCard label="Total devices" value={totalDevices()} />
+      <StatCard label="Online" value={totalOnline()} sub={`${totalDevices() - totalOnline()} offline`} />
+      <StatCard label="Offline" value={totalDevices() - totalOnline()} trend={{ up: totalDevices() - totalOnline() === 0, label: totalDevices() - totalOnline() === 0 ? 'All good' : 'Devices offline' }} />
+      <StatCard label="Active clients" value={totalClients()} />
+      <StatCard label="Open alerts" value={totalAlerts()} trend={{ up: totalAlerts() === 0, label: totalAlerts() === 0 ? 'Clean' : `${totalAlerts()} pending` }} />
+    </ContentGrid>
 
     <div class="section">
-      <h2 class="section-title">Sites</h2>
-      <table class="sites-table">
-        <thead>
-          <tr>
-            <th>Site</th>
-            <th>Location</th>
-            <th>Devices</th>
-            <th>Online</th>
-            <th>Offline</th>
-            <th>Clients</th>
-            <th>Open alerts</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each data.sites as site}
+      <SectionLabel>Sites</SectionLabel>
+      <div class="section">
+        <table class="sites-table">
+          <thead>
             <tr>
-              <td>
-                <div class="site-name-cell">
-                  <span class="health-dot {healthColor(site)}"></span>
-                  <strong>{site.name}</strong>
-                </div>
-              </td>
-              <td class="muted">{site.location ?? "—"}</td>
-              <td>{site.deviceTotal}</td>
-              <td
-                ><span class="count-pill success">{site.deviceOnline}</span></td
-              >
-              <td>
-                {#if site.deviceOffline > 0}
-                  <span class="count-pill warning">{site.deviceOffline}</span>
-                {:else}
-                  <span class="muted">0</span>
-                {/if}
-              </td>
-              <td>{site.activeClients}</td>
-              <td>
-                {#if site.openAlerts > 0}
-                  <span class="count-pill danger">{site.openAlerts}</span>
-                {:else}
-                  <span class="muted">0</span>
-                {/if}
-              </td>
-              <td class="actions-cell">
-                <a href="/manage/{site.id}" class="goto-btn">Open</a>
-              </td>
+              <th>Site</th>
+              <th>Location</th>
+              <th>Devices</th>
+              <th>Online</th>
+              <th>Offline</th>
+              <th>Clients</th>
+              <th>Open alerts</th>
+              <th></th>
             </tr>
-          {:else}
-            <tr><td colspan="8" class="empty-row">No sites configured.</td></tr>
-          {/each}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {#each data.sites as site}
+              <tr>
+                <td>
+                  <div class="site-name-cell">
+                    <span class="health-dot {healthColor(site)}"></span>
+                    <strong>{site.name}</strong>
+                  </div>
+                </td>
+                <td class="muted">{site.location ?? "—"}</td>
+                <td>{site.deviceTotal}</td>
+                <td><Tag variant="success" label={String(site.deviceOnline)} /></td>
+                <td>
+                  {#if site.deviceOffline > 0}
+                    <Tag variant="warning" label={String(site.deviceOffline)} />
+                  {:else}
+                    <span class="muted">0</span>
+                  {/if}
+                </td>
+                <td>{site.activeClients}</td>
+                <td>
+                  {#if site.openAlerts > 0}
+                    <Tag variant="danger" label={String(site.openAlerts)} />
+                  {:else}
+                    <span class="muted">0</span>
+                  {/if}
+                </td>
+                <td class="actions-cell">
+                  <a href="/manage/{site.id}" class="goto-btn">Open</a>
+                </td>
+              </tr>
+            {:else}
+              <tr><td colspan="8" class="empty-row">No sites configured.</td></tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <div class="section">
       <div class="search-header">
-        <h2 class="section-title">Client search</h2>
-        <input
-          class="search-input"
-          type="search"
-          placeholder="Search by MAC, IP, or hostname…"
-          bind:value={searchInput}
-          oninput={onSearchInput}
-        />
+        <SectionLabel>Client search</SectionLabel>
+        <div class="search-input-wrapper">
+          <Input
+            name="clientSearch"
+            type="search"
+            placeholder="Search by MAC, IP, or hostname…"
+            bind:value={searchInput}
+            oninput={onSearchInput}
+          />
+        </div>
       </div>
 
       {#if data.q && data.q.length >= 2}
@@ -181,19 +166,14 @@
                   <td>{c.hostname ?? "—"}</td>
                   <td>
                     {#if c.siteId}
-                      <a href="/manage/{c.siteId}/clients" class="site-link"
-                        >{c.siteName ?? c.siteId}</a
-                      >
+                      <a href="/manage/{c.siteId}/clients" class="site-link">{c.siteName ?? c.siteId}</a>
                     {:else}
                       <span class="muted">—</span>
                     {/if}
                   </td>
                   <td>
                     {#if c.siteId && c.deviceId}
-                      <a
-                        href="/manage/{c.siteId}/devices/{c.deviceId}"
-                        class="site-link">{c.deviceName ?? c.deviceId}</a
-                      >
+                      <a href="/manage/{c.siteId}/devices/{c.deviceId}" class="site-link">{c.deviceName ?? c.deviceId}</a>
                     {:else}
                       <span class="muted">{c.deviceName ?? "—"}</span>
                     {/if}
@@ -201,17 +181,12 @@
                   <td class="muted">{c.interfaceName ?? "—"}</td>
                   <td>
                     {#if c.isWireless}
-                      <span class="type-pill wireless">Wireless</span>
+                      <Tag variant="info" size="sm" label="Wireless" />
                     {:else}
-                      <span class="type-pill wired">Wired</span>
+                      <Tag variant="default" size="sm" label="Wired" />
                     {/if}
                   </td>
-                  <td class="muted"
-                    >{new Date(c.lastSeenAt).toLocaleString(undefined, {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}</td
-                  >
+                  <td class="muted">{new Date(c.lastSeenAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}</td>
                 </tr>
               {/each}
             </tbody>
@@ -226,7 +201,7 @@
           Enter at least 2 characters to search across all sites.
         </p>
       {/if}
-    </div>
+  </div>
   </div>
 </div>
 
@@ -264,19 +239,6 @@
     gap: 12px;
   }
 
-  .logout-link {
-    border: none;
-    padding: 0;
-    background: none;
-    color: var(--color-muted);
-    font-size: 13px;
-    cursor: pointer;
-
-    &:hover {
-      color: var(--color-text);
-    }
-  }
-
   .exec-body {
     display: grid;
     gap: 28px;
@@ -287,72 +249,12 @@
   }
 
   .org-totals {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 12px;
-  }
-
-  .total-card {
-    display: grid;
-    gap: 4px;
-    padding: 14px 16px;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-surface);
-
-    &.success {
-      border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
-      background: color-mix(
-        in srgb,
-        var(--color-success) 5%,
-        var(--color-surface)
-      );
-    }
-
-    &.warning {
-      border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
-      background: color-mix(
-        in srgb,
-        var(--color-warning) 5%,
-        var(--color-surface)
-      );
-    }
-
-    &.danger {
-      border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
-      background: color-mix(
-        in srgb,
-        var(--color-danger) 5%,
-        var(--color-surface)
-      );
-    }
-  }
-
-  .total-label {
-    color: var(--color-muted);
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .total-value {
-    color: var(--color-text);
-    font-size: 28px;
-    font-weight: 700;
-    line-height: 1;
+    // ContentGrid handles gap; StatCard handles inner layout
   }
 
   .section {
     display: grid;
     gap: 12px;
-  }
-
-  .section-title {
-    margin: 0;
-    color: var(--color-text);
-    font-size: 14px;
-    font-weight: 700;
   }
 
   .search-header {
@@ -364,56 +266,6 @@
 
   .search-input {
     width: 320px;
-    height: 34px;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    padding: 0 10px;
-    color: var(--color-text);
-    background: var(--color-surface);
-    font-size: 13px;
-    outline: none;
-
-    &:focus {
-      border-color: var(--color-brand);
-    }
-  }
-
-  .sites-table,
-  .clients-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    overflow: hidden;
-
-    th,
-    td {
-      height: 44px;
-      border-bottom: 1px solid var(--color-border);
-      padding: 0 14px;
-      color: var(--color-text);
-      text-align: left;
-    }
-
-    th {
-      color: var(--color-muted);
-      font-size: 12px;
-      font-weight: 700;
-      background: var(--color-surface);
-    }
-
-    td {
-      background: var(--color-page);
-    }
-
-    tr:last-child td {
-      border-bottom: 0;
-    }
-
-    tr:hover td {
-      background: color-mix(in srgb, var(--color-brand) 3%, var(--color-page));
-    }
   }
 
   .site-name-cell {
@@ -441,29 +293,6 @@
 
   .muted {
     color: var(--color-muted);
-  }
-
-  .count-pill {
-    display: inline-flex;
-    align-items: center;
-    height: 20px;
-    border-radius: 999px;
-    padding: 0 8px;
-    font-size: 11px;
-    font-weight: 700;
-
-    &.success {
-      color: var(--color-success);
-      background: color-mix(in srgb, var(--color-success) 12%, transparent);
-    }
-    &.warning {
-      color: var(--color-warning);
-      background: color-mix(in srgb, var(--color-warning) 12%, transparent);
-    }
-    &.danger {
-      color: var(--color-danger);
-      background: color-mix(in srgb, var(--color-danger) 12%, transparent);
-    }
   }
 
   .actions-cell {
@@ -503,27 +332,6 @@
     }
   }
 
-  .type-pill {
-    display: inline-flex;
-    align-items: center;
-    height: 18px;
-    border-radius: 3px;
-    padding: 0 6px;
-    font-size: 10px;
-    font-weight: 700;
-
-    &.wireless {
-      color: var(--color-brand);
-      background: color-mix(in srgb, var(--color-brand) 10%, transparent);
-    }
-
-    &.wired {
-      color: var(--color-muted);
-      background: color-mix(in srgb, var(--color-muted) 10%, transparent);
-    }
-  }
-
-  .empty-row,
   .no-results,
   .search-hint {
     color: var(--color-muted);
@@ -531,10 +339,5 @@
     text-align: center;
     padding: 20px 0;
     margin: 0;
-  }
-
-  .empty-row {
-    height: 60px;
-    vertical-align: middle;
   }
 </style>

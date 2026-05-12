@@ -1,21 +1,7 @@
 import type { Cookies } from '@sveltejs/kit';
 import env from '$lib/server/configurations/env.configuration';
-import {
-	assignRoleToUser,
-	countUsers,
-	createRole,
-	createUser,
-	findRoleByName,
-	findUserByEmail,
-	findUserById,
-	getUserRoleNames,
-	type UserRecord
-} from '$lib/server/repositories/user.repository';
-import {
-	createUserSession,
-	deleteSessionByTokenHash,
-	findValidSessionByTokenHash
-} from '$lib/server/repositories/session.repository';
+import { UserRepository, type UserRecord } from '$lib/server/repositories/user.repository';
+import { SessionRepository } from '$lib/server/repositories/session.repository';
 import { hashPassword, verifyPassword } from '$lib/server/security/password';
 import { createSessionToken, hashSessionToken } from '$lib/server/security/session-token';
 
@@ -43,7 +29,7 @@ function toAuthenticatedUser(user: UserRecord, roles: string[]): AuthenticatedUs
 }
 
 export async function hasAnyUsers(): Promise<boolean> {
-	return (await countUsers()) > 0;
+	return (await UserRepository.count()) > 0;
 }
 
 export async function createFirstAdmin(input: {
@@ -55,34 +41,34 @@ export async function createFirstAdmin(input: {
 		throw new Error('Initial setup has already been completed.');
 	}
 
-	const user = await createUser({
+	const user = await UserRepository.create({
 		email: input.email,
 		displayName: input.displayName,
 		passwordHash: hashPassword(input.password)
 	});
 
 	const adminRole =
-		(await findRoleByName('admin')) ??
-		(await createRole({
+		(await UserRepository.findRoleByName('admin')) ??
+		(await UserRepository.createRole({
 			name: 'admin',
 			description: 'Full controller administration access',
 			isSystem: true,
 			permissions: ['*']
 		}));
 
-	await assignRoleToUser(user.id, adminRole.id);
+	await UserRepository.assignRole(user.id, adminRole.id);
 
 	return toAuthenticatedUser(user, [adminRole.name]);
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthenticatedUser | undefined> {
-	const user = await findUserByEmail(email);
+	const user = await UserRepository.findByEmail(email);
 
 	if (!user || user.disabledAt || !verifyPassword(password, user.passwordHash)) {
 		return undefined;
 	}
 
-	return toAuthenticatedUser(user, await getUserRoleNames(user.id));
+	return toAuthenticatedUser(user, await UserRepository.getRoleNames(user.id));
 }
 
 export async function createLoginSession(cookies: Cookies, userId: string): Promise<void> {
@@ -90,7 +76,7 @@ export async function createLoginSession(cookies: Cookies, userId: string): Prom
 	const tokenHash = hashSessionToken(token);
 	const expiresAt = new Date(Date.now() + env.SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
 
-	await createUserSession(userId, tokenHash, expiresAt);
+	await SessionRepository.create(userId, tokenHash, expiresAt);
 	cookies.set(env.SESSION_COOKIE_NAME, token, {
 		...sessionCookieOptions,
 		expires: expiresAt
@@ -104,27 +90,27 @@ export async function resolveUserFromCookies(cookies: Cookies): Promise<Authenti
 		return null;
 	}
 
-	const session = await findValidSessionByTokenHash(hashSessionToken(token));
+	const session = await SessionRepository.findValidByTokenHash(hashSessionToken(token));
 
 	if (!session) {
 		cookies.delete(env.SESSION_COOKIE_NAME, { path: '/' });
 		return null;
 	}
 
-	const user = await findUserById(session.userId);
+	const user = await UserRepository.findById(session.userId);
 
 	if (!user || user.disabledAt) {
 		return null;
 	}
 
-	return toAuthenticatedUser(user, await getUserRoleNames(user.id));
+	return toAuthenticatedUser(user, await UserRepository.getRoleNames(user.id));
 }
 
 export async function logout(cookies: Cookies): Promise<void> {
 	const token = cookies.get(env.SESSION_COOKIE_NAME);
 
 	if (token) {
-		await deleteSessionByTokenHash(hashSessionToken(token));
+		await SessionRepository.deleteByTokenHash(hashSessionToken(token));
 	}
 
 	cookies.delete(env.SESSION_COOKIE_NAME, { path: '/' });

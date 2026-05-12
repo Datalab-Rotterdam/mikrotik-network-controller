@@ -2,16 +2,14 @@ import { websockets } from '@sourceregistry/sveltekit-websockets/server';
 import { Service } from '@sourceregistry/sveltekit-service-manager/server';
 import '$lib/server/services/actionbus.service';
 import discoveryService from '$lib/server/services/discovery.service';
-import { listDevices } from '$lib/server/repositories/device.repository';
+import { DeviceRepository } from '$lib/server/repositories/device.repository';
 import { adoptionEvents } from '$lib/server/services/adoption.service';
 import { deviceEvents } from '$lib/server/services/device-events.service';
 import { monitoringEvents } from '$lib/server/services/monitoring-events.service';
 import { alertEvaluatorEvents } from '$lib/server/services/alert-evaluator.service';
-import {
-	getJobWithSteps
-} from '$lib/server/repositories/job.repository';
-import { getLatestDeviceMetric } from '$lib/server/repositories/metrics.repository';
-import { getActiveClientCountBySite } from '$lib/server/repositories/clients.repository';
+import { JobRepository } from '$lib/server/repositories/job.repository';
+import { MetricsRepository } from '$lib/server/repositories/metrics.repository';
+import { ClientRepository } from '$lib/server/repositories/clients.repository';
 import {
 	schedulerEvents
 } from '$lib/server/services/scheduler.service';
@@ -79,7 +77,7 @@ function serializeDate(value: Date | string | null | undefined): string | null {
 }
 
 function serializeStep(
-	step: NonNullable<Awaited<ReturnType<typeof getJobWithSteps>>>['steps'][number]
+	step: NonNullable<Awaited<ReturnType<typeof JobRepository.getWithSteps>>>['steps'][number]
 ): ActionJobStep {
 	return {
 		id: step.id,
@@ -99,7 +97,7 @@ function serializeStep(
 	};
 }
 
-function serializeJob(job: NonNullable<Awaited<ReturnType<typeof getJobWithSteps>>>): ActionJob {
+function serializeJob(job: NonNullable<Awaited<ReturnType<typeof JobRepository.getWithSteps>>>): ActionJob {
 	return {
 		id: job.id,
 		type: job.type,
@@ -125,7 +123,7 @@ function serializeJob(job: NonNullable<Awaited<ReturnType<typeof getJobWithSteps
 }
 
 async function buildDiscoverySnapshot(): Promise<DiscoveryDevice[]> {
-	const allDevices = await listDevices();
+	const allDevices = await DeviceRepository.list();
 	const adoptedHosts = new Set(allDevices.map((device) => device.host));
 
 	return discoveryService.list()
@@ -164,7 +162,7 @@ async function sendSnapshot(socket: { send(data: string): void }): Promise<void>
 }
 
 async function handleNeighbor(device: DiscoveryDevice): Promise<void> {
-	const allDevices = await listDevices();
+	const allDevices = await DeviceRepository.list();
 	const adoptedHosts = new Set(allDevices.map((item) => item.host));
 
 	if (device.address && adoptedHosts.has(device.address)) {
@@ -215,7 +213,7 @@ async function handleMetricUpdated(detail: {
 	siteId: string | null;
 	collectedAt: Date;
 }): Promise<void> {
-	const metric = await getLatestDeviceMetric(detail.deviceId);
+	const metric = await MetricsRepository.getLatestForDevice(detail.deviceId);
 	if (!metric) return;
 
 	const event: MetricUpdatedEvent = {
@@ -238,7 +236,7 @@ async function handleMetricUpdated(detail: {
 async function handleClientUpdated(detail: { siteId: string | null }): Promise<void> {
 	if (!detail.siteId) return;
 
-	const activeCount = await getActiveClientCountBySite(detail.siteId);
+	const activeCount = await ClientRepository.getActiveCountBySite(detail.siteId);
 	const event: ClientUpdatedEvent = {
 		type: 'client.updated',
 		payload: {
@@ -251,7 +249,7 @@ async function handleClientUpdated(detail: { siteId: string | null }): Promise<v
 }
 
 async function handleSchedulerEvent(detail: { jobId: string }): Promise<void> {
-	const job = await getJobWithSteps(detail.jobId);
+	const job = await JobRepository.getWithSteps(detail.jobId);
 	if (!job) {
 		return;
 	}

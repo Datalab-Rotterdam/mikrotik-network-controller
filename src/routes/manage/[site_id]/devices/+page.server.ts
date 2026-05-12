@@ -1,20 +1,17 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { findSiteById } from '$lib/server/repositories/site.repository';
+import { SiteRepository } from '$lib/server/repositories/site.repository';
 import { service as devicesService } from '$lib/server/services/devices.service';
 import { loadSiteDeviceState } from '$lib/server/services/site-device.service';
 import { provisionDeviceAction, removeDeviceAction } from './device-actions.server';
-import { getFirmwareVersionsForDevices } from '$lib/server/repositories/firmware.repository';
+import { FirmwareRepository } from '$lib/server/repositories/firmware.repository';
 import { createFirmwareCheckTask, createFirmwareUpgradeTask } from '$lib/server/services/firmware.service';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
 import { enhance } from "@sourceregistry/sveltekit-enhance";
+import { SessionContext } from '$lib/server/context/session.context';
 
 export const actions: Actions = {
-	adopt: enhance.action(async ({ request, locals, params, url }) => {
-		if (!locals.user) {
-			throw redirect(303, '/manage/account/login');
-		}
-
-		const site = await findSiteById(params.site_id as string);
+	adopt: enhance.action(async ({ request, params, url, context }) => {
+		const site = await SiteRepository.findById(params.site_id as string);
 
 		if (!site) {
 			throw redirect(303, '/');
@@ -55,7 +52,7 @@ export const actions: Actions = {
 			try {
 				const result = await devicesService.local.adoption.prepareBootstrap({
 					siteId: site.id,
-					requestedByUserId: locals.user.id,
+					requestedByUserId: context.user.id,
 					controllerBaseUrl: url.origin,
 					managementCidrs
 				});
@@ -104,7 +101,7 @@ export const actions: Actions = {
 				siteId: site.id,
 				apiPort: apiPortValue,
 				platform,
-				requestedByUserId: locals.user.id,
+				requestedByUserId: context.user.id,
 				managementCidrs
 			});
 
@@ -120,10 +117,10 @@ export const actions: Actions = {
 				message: error instanceof Error ? error.message : 'Adoption failed.',
 			});
 		}
-	}),
-	provision: provisionDeviceAction,
-	remove: removeDeviceAction,
-	firmwareCheck: async ({ request, params }) => {
+	}, SessionContext.require),
+	provision: enhance.action(provisionDeviceAction, SessionContext.require),
+	remove: enhance.action(removeDeviceAction, SessionContext.require),
+	firmwareCheck: enhance.action(async ({ request, params }) => {
 		const siteId = params.site_id as string;
 		const data = await request.formData();
 		const deviceId = String(data.get('deviceId') ?? '');
@@ -134,8 +131,8 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(500, { message: String(e) });
 		}
-	},
-	firmwareUpgrade: async ({ request, params }) => {
+	}, SessionContext.require),
+	firmwareUpgrade: enhance.action(async ({ request, params }) => {
 		const siteId = params.site_id as string;
 		const data = await request.formData();
 		const deviceId = String(data.get('deviceId') ?? '');
@@ -146,17 +143,17 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(500, { message: String(e) });
 		}
-	}
+	}, SessionContext.require)
 };
 
-export async function load({ parent, url, depends }) {
+export const load = enhance.load(async ({ parent, url, depends }) => {
 	const { site } = await parent();
 	depends?.(`app:site-devices:${site.id}`);
 
 	const host = url.searchParams.get('adopt') ?? url.searchParams.get('host') ?? '';
 	const { devices, interfaces, deviceInterfaces, discoveredDevices, deviceImages } = await loadSiteDeviceState(site.id);
 
-	const firmwareRows = await getFirmwareVersionsForDevices(devices.map((d) => d.id));
+	const firmwareRows = await FirmwareRepository.getVersionsForDevices(devices.map((d) => d.id));
 	const firmwareByDeviceId = Object.fromEntries(firmwareRows.map((f) => [f.deviceId, f]));
 
 	return {
@@ -181,4 +178,4 @@ export async function load({ parent, url, depends }) {
 			}
 		}
 	};
-}
+}, SessionContext.ensure);

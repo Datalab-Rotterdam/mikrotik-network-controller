@@ -1,8 +1,8 @@
 import { RouterOSClient, RouterOSSshClient } from '@sourceregistry/mikrotik-client/routeros';
-import { getDeviceById, getDeviceCredentials } from '$lib/server/repositories/telemetry.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { decryptSecret } from '$lib/server/security/secrets';
 import { getControllerSshPrivateKeyPath } from '$lib/server/security/controller-ssh-keys';
-import { upsertFirmwareVersion, getFirmwareVersion } from '$lib/server/repositories/firmware.repository';
+import { FirmwareRepository } from '$lib/server/repositories/firmware.repository';
 import type { TaskDefinition } from '$lib/server/services/scheduler.service/types';
 
 const CLIENT_TIMEOUT_MS = 15_000;
@@ -15,10 +15,10 @@ type UpdateCheckResult = {
 };
 
 export async function checkFirmwareUpdate(deviceId: string): Promise<UpdateCheckResult> {
-	const device = await getDeviceById(deviceId);
+	const device = await TelemetryRepository.getDeviceById(deviceId);
 	if (!device) throw new Error(`Device ${deviceId} not found`);
 
-	const credentials = await getDeviceCredentials(deviceId);
+	const credentials = await TelemetryRepository.getCredentials(deviceId);
 	const cred =
 		credentials.find((c) => c.purpose === 'read_only') ??
 		credentials.find((c) => c.purpose === 'write');
@@ -58,7 +58,7 @@ export async function checkFirmwareUpdate(deviceId: string): Promise<UpdateCheck
 			latestVersion !== currentVersion &&
 			(statusStr.includes('new') || statusStr.includes('available') || latestVersion !== currentVersion);
 
-		await upsertFirmwareVersion({ deviceId, currentVersion, latestVersion, channel, updateAvailable });
+		await FirmwareRepository.upsertVersion({ deviceId, currentVersion, latestVersion, channel, updateAvailable });
 
 		return { currentVersion, latestVersion, channel, updateAvailable };
 	} finally {
@@ -107,7 +107,7 @@ export function createFirmwareUpgradeTask(
 			{
 				name: 'Verify update available',
 				async execute() {
-					const fw = await getFirmwareVersion(deviceId);
+					const fw = await FirmwareRepository.getVersion(deviceId);
 					if (!fw?.updateAvailable) {
 						throw new Error('No firmware update available — run a firmware check first');
 					}
@@ -120,10 +120,10 @@ export function createFirmwareUpgradeTask(
 			{
 				name: 'Download firmware package',
 				async execute() {
-					const device = await getDeviceById(deviceId);
+					const device = await TelemetryRepository.getDeviceById(deviceId);
 					if (!device) throw new Error(`Device ${deviceId} not found`);
 
-					const credentials = await getDeviceCredentials(deviceId);
+					const credentials = await TelemetryRepository.getCredentials(deviceId);
 					const managedCred = credentials.find((c) => c.purpose === 'write');
 					if (!managedCred) throw new Error('SSH trust credential required for firmware upgrade');
 
@@ -145,10 +145,10 @@ export function createFirmwareUpgradeTask(
 				name: 'Wait for device to come back online',
 				async execute() {
 					// RouterOS reboots after install; wait up to 3 min for it to return
-					const device = await getDeviceById(deviceId);
+					const device = await TelemetryRepository.getDeviceById(deviceId);
 					if (!device) throw new Error(`Device ${deviceId} not found`);
 
-					const credentials = await getDeviceCredentials(deviceId);
+					const credentials = await TelemetryRepository.getCredentials(deviceId);
 					const cred =
 						credentials.find((c) => c.purpose === 'read_only') ??
 						credentials.find((c) => c.purpose === 'write');
@@ -171,7 +171,7 @@ export function createFirmwareUpgradeTask(
 							const [res] = await client.print('/system/resource', {}) as Array<Record<string, string>>;
 							await client.close().catch(() => {});
 							const newVersion = res?.version ?? null;
-							await upsertFirmwareVersion({
+							await FirmwareRepository.upsertVersion({
 								deviceId,
 								currentVersion: newVersion,
 								latestVersion: newVersion,

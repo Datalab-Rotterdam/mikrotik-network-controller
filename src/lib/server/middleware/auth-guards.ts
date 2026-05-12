@@ -24,7 +24,7 @@ export async function requireSetupComplete(
     hasUsers: () => Promise<boolean>
 ): Promise<void> {
     const setupComplete = await hasUsers();
-    if (!setupComplete) {
+    if (!setupComplete && event.url.pathname !== '/setup' && !event.url.pathname.startsWith('/setup/')) {
         throw redirect(303, '/setup');
     }
 }
@@ -37,7 +37,7 @@ export async function blockSetupIfComplete(
     hasUsers: () => Promise<boolean>
 ): Promise<void> {
     const setupComplete = await hasUsers();
-    if (setupComplete && event.url.pathname === '/setup') {
+    if (!setupComplete && event.url.pathname !== '/setup' && !event.url.pathname.startsWith('/setup/')) {
         const user = await resolveUserFromCookies(event.cookies);
         throw redirect(303, user ? '/' : '/manage/account/login');
     }

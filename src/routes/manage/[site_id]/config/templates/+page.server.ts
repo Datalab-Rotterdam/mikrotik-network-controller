@@ -1,33 +1,29 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import {
-	listTemplates,
-	getTemplate,
-	createTemplate,
-	updateTemplate,
-	deleteTemplate,
-} from '$lib/server/repositories/templates.repository';
+import { enhance } from '@sourceregistry/sveltekit-enhance';
+import { SessionContext } from '$lib/server/context/session.context';
+import { TemplateRepository } from '$lib/server/repositories/templates.repository';
 import { extractPlaceholders, renderTemplate, diffConfigs } from '$lib/server/services/template-renderer.service';
 import type { TemplateVariable } from '$lib/server/services/template-renderer.service';
-import { listDevices } from '$lib/server/repositories/telemetry.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
 import { createConfigDeployTask } from '$lib/server/services/devices.service/tasks';
 
-export async function load({ parent, params, depends }) {
+export const load = enhance.load(async ({ parent, params, depends }) => {
 	const { site } = await parent();
 	depends(`app:config-templates:${site.id}`);
 
 	const [templates, devices] = await Promise.all([
-		listTemplates(site.id),
-		listDevices(site.id)
+		TemplateRepository.list(site.id),
+		TelemetryRepository.listDevices(site.id)
 	]);
 
 	const selectedId = (params as Record<string, string>).template_id ?? null;
 
 	return { templates, selectedId, devices };
-}
+}, SessionContext.ensure);
 
 export const actions: Actions = {
-	create: async ({ request, params }) => {
+	create: enhance.action(async ({ request, params }) => {
 		const siteId = params.site_id as string;
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();
@@ -45,11 +41,11 @@ export const actions: Actions = {
 			required: false
 		}));
 
-		const template = await createTemplate({ siteId, name, description, platform, content, variables });
+		const template = await TemplateRepository.create({ siteId, name, description, platform, content, variables });
 		return { success: true, templateId: template.id };
-	},
+	}, SessionContext.require),
 
-	update: async ({ request }) => {
+	update: enhance.action(async ({ request }) => {
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		const name = String(data.get('name') ?? '').trim();
@@ -76,20 +72,20 @@ export const actions: Actions = {
 			}
 		}
 
-		const template = await updateTemplate(id, { name, description, platform, content, variables });
+		const template = await TemplateRepository.update(id, { name, description, platform, content, variables });
 		if (!template) return fail(404, { error: 'Template not found' });
 		return { success: true };
-	},
+	}, SessionContext.require),
 
-	delete: async ({ request }) => {
+	delete: enhance.action(async ({ request }) => {
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		if (!id) return fail(400, { error: 'Missing template id' });
-		await deleteTemplate(id);
+		await TemplateRepository.delete(id);
 		return { success: true };
-	},
+	}, SessionContext.require),
 
-	dryRun: async ({ request, locals }) => {
+	dryRun: enhance.action(async ({ request, locals }) => {
 		const data = await request.formData();
 		const templateId = String(data.get('templateId') ?? '');
 		const variableValuesJson = String(data.get('variableValues') ?? '{}');
@@ -103,7 +99,7 @@ export const actions: Actions = {
 			variableValues = {};
 		}
 
-		const template = await getTemplate(templateId);
+		const template = await TemplateRepository.get(templateId);
 		if (!template) return fail(404, { error: 'Template not found' });
 
 		const { content: rendered, missingRequired } = renderTemplate(
@@ -119,10 +115,9 @@ export const actions: Actions = {
 		const diffOutput = diffConfigs('', rendered);
 
 		return { success: true, renderedContent: rendered, diff: diffOutput };
-	},
+	}, SessionContext.require),
 
-	deploy: async ({ request, locals, params }) => {
-		if (!locals.user) throw redirect(303, '/manage/account/login');
+	deploy: enhance.action(async ({ request, context, params }) => {
 
 		const data = await request.formData();
 		const templateId = String(data.get('templateId') ?? '');
@@ -153,5 +148,5 @@ export const actions: Actions = {
 				error: e instanceof Error ? e.message : 'Deployment failed'
 			});
 		}
-	}
+	}, SessionContext.require)
 };

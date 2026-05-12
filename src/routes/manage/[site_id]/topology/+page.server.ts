@@ -1,12 +1,14 @@
+import { enhance } from '@sourceregistry/sveltekit-enhance';
+import { SessionContext } from '$lib/server/context/session.context';
 import { loadSiteDeviceState } from '$lib/server/services/site-device.service';
-import { getTopologyForSite } from '$lib/server/repositories/topology.repository';
+import { TopologyRepository } from '$lib/server/repositories/topology.repository';
 
-export async function load({ parent, depends }) {
+export const load = enhance.load(async ({ parent, depends }) => {
 	const { site } = await parent();
-	depends(`app:topology:${site.id}`);
-
+	depends('app:topology:' + site.id);
+	
 	const [{ devices, interfaces, discoveredDevices, deviceImages }, topologyLinks] =
-		await Promise.all([loadSiteDeviceState(site.id), getTopologyForSite(site.id)]);
+		await Promise.all([loadSiteDeviceState(site.id), TopologyRepository.getBySite(site.id)]);
 
 	return {
 		site,
@@ -16,4 +18,4 @@ export async function load({ parent, depends }) {
 		deviceImages,
 		topologyLinks
 	};
-}
+}, SessionContext.ensure);

@@ -1,4 +1,4 @@
-import { getChannelsForRule } from '$lib/server/repositories/alerts.repository';
+import { AlertRepository } from '$lib/server/repositories/alerts.repository';
 import { alertEvaluatorEvents } from '$lib/server/services/alert-evaluator.service';
 
 type WebhookConfig = {
@@ -87,7 +87,7 @@ async function notifyChannels(
 	message: string,
 	metadata: Record<string, unknown>
 ): Promise<void> {
-	const channels = await getChannelsForRule(ruleId);
+	const channels = await AlertRepository.getChannelsForRule(ruleId);
 
 	await Promise.allSettled(
 		channels

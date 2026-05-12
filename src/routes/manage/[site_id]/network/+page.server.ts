@@ -1,13 +1,15 @@
-import { listDevices } from '$lib/server/repositories/device.repository';
+import { enhance } from '@sourceregistry/sveltekit-enhance';
+import { SessionContext } from '$lib/server/context/session.context';
+import { DeviceRepository } from '$lib/server/repositories/device.repository';
 import { FirewallRepository } from '$lib/server/repositories/firewall.repository';
 import { VlanRepository } from '$lib/server/repositories/vlan.repository';
 
-export async function load({ params, parent }) {
+export const load = enhance.load(async ({parent }) => {
 	const { site } = await parent();
 	const siteId = site.id;
 
 	const [devices, firewallRules, vlans] = await Promise.all([
-		listDevices(siteId),
+		DeviceRepository.list(siteId),
 		FirewallRepository.listBySite(siteId),
 		VlanRepository.listBySite(siteId)
 	]);
@@ -17,4 +19,4 @@ export async function load({ params, parent }) {
 	);
 
 	return { devices, firewallRules, vlans, deviceMap };
-}
+}, SessionContext.ensure);

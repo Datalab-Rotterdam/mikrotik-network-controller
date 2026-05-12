@@ -1,6 +1,7 @@
 <script lang="ts">
   import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
   import Input from "$lib/client/components/primitives/Input.svelte";
+  import { PageShell } from "$lib/client/components/layout";
 
   let { data } = $props();
 
@@ -37,37 +38,34 @@
   }
 </script>
 
-<PageHeader
-  title="Clients"
-  subtitle="{data.clients.length} active client{data.clients.length !== 1
-    ? 's'
-    : ''} across {data.siteDevices.length} device{data.siteDevices.length !== 1
-    ? 's'
-    : ''}"
-/>
-
-<div class="toolbar">
-  <div class="filter-tabs" role="tablist" aria-label="Client type filter">
-    {#each ["all", "wired", "wireless"] as Filter[] as tab}
-      <button
-        role="tab"
-        aria-selected={filter === tab}
-        class:active={filter === tab}
-        onclick={() => (filter = tab)}
-      >
-        {tab === "all" ? "All" : tab === "wired" ? "Wired" : "Wireless"}
-      </button>
-    {/each}
-  </div>
-
-  <Input
-    type="search"
-    name="clientSearch"
-    placeholder="Search MAC, IP, hostname…"
-    value={search}
-    oninput={(e: Event) => (search = (e.target as HTMLInputElement).value)}
+<PageShell>
+  <PageHeader
+    title="Clients"
+    subtitle={`${data.clients.length} active client${data.clients.length !== 1 ? 's' : ''} across ${data.siteDevices.length} device${data.siteDevices.length !== 1 ? 's' : ''}`}
   />
-</div>
+
+  <div class="toolbar">
+    <div class="filter-tabs" role="tablist" aria-label="Client type filter">
+      {#each ["all", "wired", "wireless"] as tab}
+        <button
+          role="tab"
+          aria-selected={filter === tab}
+          class:active={filter === tab}
+          onclick={() => (filter = tab as Filter)}
+        >
+          {tab === "all" ? "All" : tab === "wired" ? "Wired" : "Wireless"}
+        </button>
+      {/each}
+    </div>
+
+    <Input
+      type="search"
+      name="clientSearch"
+      placeholder="Search MAC, IP, hostname…"
+      value={search}
+      oninput={(e: Event) => (search = (e.target as HTMLInputElement).value)}
+    />
+  </div>
 
 <div class="panel">
   {#if data.clients.length === 0}
@@ -138,6 +136,7 @@
     </table>
   {/if}
 </div>
+</PageShell>
 
 <style lang="scss">
   .toolbar {

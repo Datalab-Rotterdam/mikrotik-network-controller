@@ -1,6 +1,8 @@
 <script lang="ts">
   import TabLayout from "$lib/client/components/layout/TabLayout.svelte";
   import { page } from "$app/state";
+  import { PageShell } from "$lib/client/components/layout";
+  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
 
   type NetworkTab = "firewall" | "vlans";
   type TabItem<T extends string = string> = { id: T; label: string; icon?: string };
@@ -50,26 +52,28 @@
   }
 </script>
 
-<section class="network-page">
-  <div class="page-header">
-    <div>
-      <h1>Network</h1>
-      <p>{data.devices.length} devices · {data.firewallRules.length} firewall rules · {data.vlans.length} VLANs</p>
-    </div>
-    <div class="header-filter">
-      <label for="device-filter" class="filter-label">Filter by device</label>
-      <select
-        id="device-filter"
-        class="device-select"
-        bind:value={deviceFilter}
-      >
-        <option value="">All devices</option>
-        {#each data.devices as device}
-          <option value={device.id}>{device.identity ?? device.name}</option>
-        {/each}
-      </select>
-    </div>
+{#snippet networkActions()}
+  <div class="header-filter">
+    <label for="device-filter" class="filter-label">Filter by device</label>
+    <select
+      id="device-filter"
+      class="device-select"
+      bind:value={deviceFilter}
+    >
+      <option value="">All devices</option>
+      {#each data.devices as device}
+        <option value={device.id}>{device.identity ?? device.name}</option>
+      {/each}
+    </select>
   </div>
+{/snippet}
+
+<PageShell>
+  <PageHeader
+    title="Network"
+    subtitle={`${data.devices.length} devices · ${data.firewallRules.length} firewall rules · ${data.vlans.length} VLANs`}
+    actions={networkActions}
+  />
 
   <TabLayout {tabs} {activeTab} getHref={tabHref} ariaLabel="Network sections">
     {#if activeTab === "firewall"}
@@ -172,59 +176,9 @@
       </section>
     {/if}
   </TabLayout>
-</section>
+</PageShell>
 
 <style lang="scss">
-  .network-page {
-    display: grid;
-    gap: 14px;
-  }
-
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-
-  h1 {
-    margin: 0;
-    color: #30373d;
-    font-size: 20px;
-    font-weight: 650;
-  }
-
-  .page-header p {
-    margin: 4px 0 0;
-    color: #8a949c;
-    font-size: 13px;
-  }
-
-  .header-filter {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .filter-label {
-    color: #8a949c;
-    font-size: 12px;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .device-select {
-    height: 34px;
-    min-width: 180px;
-    border: 1px solid #dce4e9;
-    border-radius: 4px;
-    padding: 0 8px;
-    color: #30373d;
-    background: #fbfdff;
-    font-size: 13px;
-  }
-
   .content-section {
     display: grid;
     gap: 14px;

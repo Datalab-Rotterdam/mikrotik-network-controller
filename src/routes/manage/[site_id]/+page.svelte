@@ -1,6 +1,9 @@
 <script lang="ts">
   import { useActionSocket } from "$lib/client/actions/use-action-socket";
   import type { ActionEvent } from "$lib/shared/action-events";
+  import { ContentGrid, PageShell } from "$lib/client/components/layout";
+  import { StatCard } from "$lib/client/components/ui";
+  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
 
   let { data } = $props();
 
@@ -99,11 +102,7 @@
   }
 </script>
 
-<div class="dashboard-toolbar">
-  <div>
-    <h1>Dashboard</h1>
-    <p>Fleet health, adoption progress, and recent controller activity.</p>
-  </div>
+{#snippet dashboardActions()}
   <a
     class="icon-action"
     href={`/manage/${data.site.id}/devices?adopt=`}
@@ -114,21 +113,27 @@
       <path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z" />
     </svg>
   </a>
-</div>
+{/snippet}
 
-<section class="metric-row" aria-label="Network summary">
-  {#each metrics as metric}
-    <div class="metric-cell">
-      <span>{metric.label}</span>
-      <strong>{metric.value}</strong>
-    </div>
-  {/each}
-</section>
+<PageShell>
+  <PageHeader
+    title="Dashboard"
+    subtitle={`${data.summary.deviceCount} devices · ${liveOnlineCount} online · ${liveClientCount} clients`}
+    actions={dashboardActions}
+  />
 
-{#if data.siteDevices.length > 0}
-  <section class="health-row" aria-label="Device health">
-    {#each data.siteDevices as device}
-      {@const metric = liveMetrics.get(device.id)}
+  <section aria-label="Network summary">
+    <ContentGrid>
+      {#each metrics as metric}
+        <StatCard label={metric.label} value={metric.value} />
+      {/each}
+    </ContentGrid>
+  </section>
+
+  {#if data.siteDevices.length > 0}
+    <section class="health-row" aria-label="Device health">
+      {#each data.siteDevices as device}
+        {@const metric = liveMetrics.get(device.id)}
       {@const usedMem = memPercent(
         metric?.freeMemoryBytes ?? null,
         metric?.totalMemoryBytes ?? null,
@@ -234,35 +239,9 @@
     {/if}
   </div>
 </section>
+</PageShell>
 
 <style lang="scss">
-  .dashboard-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    min-height: 50px;
-    margin: -18px -14px 18px;
-    padding: 0 18px;
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-surface);
-  }
-
-  h1 {
-    margin: 0;
-    color: var(--color-muted);
-    font-size: 20px;
-    font-weight: 500;
-    line-height: 1.2;
-  }
-
-  p {
-    margin: 3px 0 0;
-    color: var(--color-muted);
-    font-size: 13px;
-    line-height: 1.4;
-  }
-
   .icon-action {
     display: grid;
     place-items: center;
@@ -283,41 +262,6 @@
     &:focus-visible {
       outline: 2px solid var(--color-link);
       outline-offset: 2px;
-    }
-  }
-
-  .metric-row {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    margin-bottom: 14px;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    background: var(--color-surface);
-    overflow: hidden;
-  }
-
-  .metric-cell {
-    display: grid;
-    gap: 6px;
-    min-height: 72px;
-    padding: 14px 16px;
-    border-right: 1px solid var(--color-border);
-
-    &:last-child {
-      border-right: 0;
-    }
-
-    span {
-      color: var(--color-muted);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    strong {
-      color: var(--color-text);
-      font-size: 26px;
-      line-height: 1;
     }
   }
 

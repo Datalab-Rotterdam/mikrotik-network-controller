@@ -10,7 +10,9 @@
     value = "",
     placeholder,
     required = false,
+    compact = false,
     error,
+
     ...rest
   }: {
     label?: string;
@@ -20,10 +22,11 @@
     placeholder?: string;
     required?: boolean;
     error?: string;
+    compact?: boolean;
   } & HTMLSelectAttributes = $props();
 </script>
 
-<label class="field" class:has-error={Boolean(error)}>
+<label class="field" class:compact class:has-error={Boolean(error)}>
   {#if label}
     <span>{label}</span>
   {/if}
@@ -43,33 +46,38 @@
 <style lang="scss">
   .field {
     display: grid;
-    gap: 6px;
+    gap: 7px;
     color: #282a29;
     font-size: 14px;
     font-weight: 650;
-  }
 
-  .field select {
-    width: 100%;
-    border: 1px solid var(--color-brand-light);
-    border-radius: 6px;
-    padding: 10px 12px;
-    color: var(--color-brand);
-    background: var(--color-surface);
-  }
+    select {
+      width: 100%;
+      border: 1px solid var(--color-brand-light);
+      border-radius: 6px;
+      padding: 11px 12px;
+      color: var(--color-brand);
+      background: var(--color-surface);
+    }
 
-  .field select:focus {
-    border-color: var(--color-brand);
-    outline: 3px solid rgba(14, 14, 16, 0.14);
-  }
+    select:focus {
+      border-color: var(--color-brand);
+      outline: 3px solid rgba(14, 14, 16, 0.14);
+    }
+	}
 
-  .field.has-error select {
-    border-color: var(--color-danger);
-  }
+	.field.compact {
+		gap: 4px;
+		color: #72777a;
+		font-size: 12px;
+		font-weight: 500;
 
-  .error-text {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--color-danger);
-  }
-</style>
+		select {
+			min-height: 31px;
+			border-color: #f0f1f3;
+			border-radius: 3px;
+			padding: 5px 10px;
+			background: #f4f5f6;
+		}
+	}
+  </style>

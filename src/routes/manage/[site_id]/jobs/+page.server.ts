@@ -1,7 +1,6 @@
-import {
-	getJobWithSteps,
-	listRecentJobsBySite
-} from '$lib/server/repositories/job.repository';
+import { enhance } from '@sourceregistry/sveltekit-enhance';
+import { JobRepository } from '$lib/server/repositories/job.repository';
+import { SessionContext } from '$lib/server/context/session.context';
 import type { ActionJob, ActionJobStep } from '$lib/shared/action-events';
 
 function serializeDate(value: Date | string | null | undefined): string | null {
@@ -13,7 +12,7 @@ function serializeDate(value: Date | string | null | undefined): string | null {
 }
 
 function serializeStep(
-	step: NonNullable<Awaited<ReturnType<typeof getJobWithSteps>>>['steps'][number]
+	step: NonNullable<Awaited<ReturnType<typeof JobRepository.getWithSteps>>>['steps'][number]
 ): ActionJobStep {
 	return {
 		id: step.id,
@@ -33,7 +32,7 @@ function serializeStep(
 	};
 }
 
-function serializeJob(job: NonNullable<Awaited<ReturnType<typeof getJobWithSteps>>>): ActionJob {
+function serializeJob(job: NonNullable<Awaited<ReturnType<typeof JobRepository.getWithSteps>>>): ActionJob {
 	return {
 		id: job.id,
 		type: job.type,
@@ -58,15 +57,15 @@ function serializeJob(job: NonNullable<Awaited<ReturnType<typeof getJobWithSteps
 	};
 }
 
-export async function load({ parent, url }) {
+export const load = enhance.load(async ({ parent, url }) => {
 	const { site } = await parent();
-	const recentJobs = await listRecentJobsBySite(site.id, 50);
-	const hydratedJobs = await Promise.all(recentJobs.map((job) => getJobWithSteps(job.id)));
+	const recentJobs = await JobRepository.listRecentBySite(site.id, 50);
+	const hydratedJobs = await Promise.all(recentJobs.map((job) => JobRepository.getWithSteps(job.id)));
 
 	return {
 		jobs: hydratedJobs
-			.filter((job): job is NonNullable<Awaited<ReturnType<typeof getJobWithSteps>>> => Boolean(job))
+			.filter((job): job is NonNullable<Awaited<ReturnType<typeof JobRepository.getWithSteps>>> => Boolean(job))
 			.map(serializeJob),
 		selectedJobId: url.searchParams.get('job') ?? ''
 	};
-}
+}, SessionContext.ensure);

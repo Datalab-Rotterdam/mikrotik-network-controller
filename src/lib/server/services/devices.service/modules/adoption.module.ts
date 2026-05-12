@@ -1,7 +1,7 @@
 import { type AckInput, type DeviceRecord, type EnrollInput } from '$lib/server/services/devices.service/shared';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
-import { getDeviceByHost, updateDeviceLastSeen } from '$lib/server/repositories/telemetry.repository';
-import { replaceCredential, updateDeviceState, upsertAdoptedDevice } from '$lib/server/repositories/device.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
+import { DeviceRepository } from '$lib/server/repositories/device.repository';
 import { encryptSecret } from '$lib/server/security/secrets';
 import { getControllerSshPublicKey } from '$lib/server/security/controller-ssh-keys';
 import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
@@ -64,9 +64,9 @@ export default {
             throw new Error('serial, model and identity are required');
         }
 
-        const existing = await getDeviceByHost(input.serial);
+        const existing = await TelemetryRepository.getDeviceByHost(input.serial);
 
-        const stored = await upsertAdoptedDevice({
+        const stored = await DeviceRepository.upsertAdopted({
             siteId: existing?.siteId ?? null,
             name: input.identity,
             platform: 'routeros',
@@ -127,27 +127,27 @@ export default {
         return getControllerSshPublicKey();
     },
     async ack(input: AckInput) {
-        const device = await getDeviceByHost(input.serial);
+        const device = await TelemetryRepository.getDeviceByHost(input.serial);
 
         if (!device) {
             throw new Error(`Unknown device: ${input.serial}`);
         }
 
-        await replaceCredential({
+        await DeviceRepository.replaceCredential({
             deviceId: device.id,
             purpose: 'read_only',
             username: input.restUser,
             secretEncrypted: encryptSecret(input.restPassword)
         });
 
-        await replaceCredential({
+        await DeviceRepository.replaceCredential({
             deviceId: device.id,
             purpose: 'write',
             username: input.managedUser,
             secretEncrypted: encryptSecret('ssh-key:controller')
         });
 
-        await updateDeviceState(device.id, {
+        await DeviceRepository.updateState(device.id, {
             adoptionMode: 'managed',
             adoptionState: 'fully_managed',
             connectionStatus: 'online'
@@ -160,17 +160,17 @@ export default {
         };
     },
     async adopt(serial: string) {
-        const device = await getDeviceByHost(serial);
+        const device = await TelemetryRepository.getDeviceByHost(serial);
 
         if (!device) {
             throw new Error(`Unknown device: ${serial}`);
         }
 
-        await updateDeviceState(device.id, {
+        await DeviceRepository.updateState(device.id, {
             adoptionState: 'inventoried',
             connectionStatus: 'online'
         });
-        await updateDeviceLastSeen(device.id);
+        await TelemetryRepository.updateLastSeen(device.id);
         await emitDeviceUpdated(device.id, 'adoption');
 
         return {

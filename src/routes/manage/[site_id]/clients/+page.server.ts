@@ -1,11 +1,16 @@
-import { getActiveSiteClients } from '$lib/server/repositories/clients.repository';
-import { listDevices } from '$lib/server/repositories/device.repository';
+import { enhance } from '@sourceregistry/sveltekit-enhance';
+import { ClientRepository } from '$lib/server/repositories/clients.repository';
+import { DeviceRepository } from '$lib/server/repositories/device.repository';
+import { SessionContext } from '$lib/server/context/session.context';
 
-export async function load({ params }) {
-	const [clients, siteDevices] = await Promise.all([
-		getActiveSiteClients(params.site_id),
-		listDevices(params.site_id)
-	]);
+export const load = enhance.load(
+	async ({ params }) => {
+		const [clients, siteDevices] = await Promise.all([
+			ClientRepository.getActiveBySite(params.site_id),
+			DeviceRepository.list(params.site_id)
+		]);
 
-	return { clients, siteDevices };
-}
+		return { clients, siteDevices };
+	},
+	SessionContext.ensure
+);

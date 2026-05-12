@@ -1,9 +1,9 @@
-import { listDeviceInterfaces, listDevices } from '$lib/server/repositories/device.repository';
+import { DeviceRepository } from '$lib/server/repositories/device.repository';
 import discoveryService from '$lib/server/services/discovery.service';
 import { resolveDeviceImage } from '$lib/server/services/device-image-catalog.service';
 
-export type DeviceRow = Awaited<ReturnType<typeof listDevices>>[number];
-export type DeviceInterfaceRow = Awaited<ReturnType<typeof listDeviceInterfaces>>[number];
+export type DeviceRow = Awaited<ReturnType<typeof DeviceRepository.list>>[number];
+export type DeviceInterfaceRow = Awaited<ReturnType<typeof DeviceRepository.listInterfaces>>[number];
 
 type DiscoveryDevice = {
 	id: string;
@@ -62,8 +62,8 @@ function buildDeviceImages(
 export async function loadSiteDeviceState(siteId: string, options: SiteDeviceServiceOptions = {}): Promise<SiteDeviceState> {
 	const {
 		discovery = discoveryService,
-		listDevicesFn = listDevices,
-		listDeviceInterfacesFn = listDeviceInterfaces,
+		listDevicesFn = DeviceRepository.list,
+		listDeviceInterfacesFn = DeviceRepository.listInterfaces,
 		resolveDeviceImageFn = resolveDeviceImage
 	} = options;
 

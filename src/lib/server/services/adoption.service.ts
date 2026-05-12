@@ -4,14 +4,10 @@ import {
 	decodeSwitchOSHexString
 } from '@sourceregistry/mikrotik-client/switchos';
 import { EventEmitter } from 'node:events';
-import { createAdoptionAttempt, updateAdoptionAttempt } from '$lib/server/repositories/adoption.repository';
-import { recordAuditEvent } from '$lib/server/repositories/audit.repository';
-import {
-	replaceDeviceInterfaces,
-	replaceReadOnlyCredential,
-	upsertAdoptedDevice
-} from '$lib/server/repositories/device.repository';
-import { ensureSiteByName } from '$lib/server/repositories/site.repository';
+import { AdoptionRepository } from '$lib/server/repositories/adoption.repository';
+import { AuditRepository } from '$lib/server/repositories/audit.repository';
+import { DeviceRepository } from '$lib/server/repositories/device.repository';
+import { SiteRepository } from '$lib/server/repositories/site.repository';
 import { encryptSecret } from '$lib/server/security/secrets';
 import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
 
@@ -140,8 +136,8 @@ export function assertSupportedAdoptionInventory(input: AdoptDeviceInput, invent
 }
 
 export async function createCredentialAdoptionAttempt(input: AdoptDeviceInput, mode: 'read_only' | 'managed' = 'read_only') {
-	const site = await ensureSiteByName(input.siteName || 'Default');
-	const attempt = await createAdoptionAttempt({
+	const site = await SiteRepository.ensureByName(input.siteName || 'Default');
+	const attempt = await AdoptionRepository.create({
 		siteId: site.id,
 		requestedByUserId: input.requestedByUserId,
 		status: 'validating_credentials',
@@ -158,7 +154,7 @@ export async function createCredentialAdoptionAttempt(input: AdoptDeviceInput, m
 }
 
 export async function markCredentialAdoptionSyncing(attemptId: string): Promise<void> {
-	await updateAdoptionAttempt(attemptId, {
+	await AdoptionRepository.update(attemptId, {
 		status: 'syncing_inventory',
 		progress: {
 			steps: ['created', 'validating_credentials', 'syncing_inventory']
@@ -168,7 +164,7 @@ export async function markCredentialAdoptionSyncing(attemptId: string): Promise<
 
 export async function upsertAdoptionInventory(input: AdoptDeviceInput, siteId: string, inventory: RouterOSInventory) {
 	const now = new Date();
-	const device = await upsertAdoptedDevice({
+	const device = await DeviceRepository.upsertAdopted({
 		siteId,
 		name: inventory.identity,
 		platform: input.platform,
@@ -191,7 +187,7 @@ export async function upsertAdoptionInventory(input: AdoptDeviceInput, siteId: s
 		lastSyncAt: now
 	});
 
-	await replaceDeviceInterfaces(
+	await DeviceRepository.replaceInterfaces(
 		device.id,
 		inventory.interfaces
 			.filter((networkInterface) => networkInterface.name)
@@ -211,7 +207,7 @@ export async function upsertAdoptionInventory(input: AdoptDeviceInput, siteId: s
 }
 
 export async function storeAdoptionReadOnlyCredential(input: AdoptDeviceInput, deviceId: string): Promise<void> {
-	await replaceReadOnlyCredential({
+	await DeviceRepository.replaceReadOnlyCredential({
 		deviceId,
 		username: input.username,
 		secretEncrypted: encryptSecret(input.password)
@@ -221,13 +217,13 @@ export async function storeAdoptionReadOnlyCredential(input: AdoptDeviceInput, d
 export async function finishCredentialAdoption(input: AdoptDeviceInput, context: {
 	attemptId: string;
 	device: Awaited<ReturnType<typeof upsertAdoptionInventory>>;
-	site: Awaited<ReturnType<typeof ensureSiteByName>>;
+	site: Awaited<ReturnType<typeof SiteRepository.ensureByName>>;
 	inventory: RouterOSInventory;
 	mode?: 'read_only' | 'managed';
 }): Promise<void> {
 	const mode = context.mode ?? 'read_only';
 
-	await updateAdoptionAttempt(context.attemptId, {
+	await AdoptionRepository.update(context.attemptId, {
 		deviceId: context.device.id,
 		status: 'succeeded',
 		finishedAt: new Date(),
@@ -247,7 +243,7 @@ export async function finishCredentialAdoption(input: AdoptDeviceInput, context:
 		timestamp: new Date().toISOString()
 	});
 
-	await recordAuditEvent({
+	await AuditRepository.record({
 		actorUserId: input.requestedByUserId,
 		targetDeviceId: context.device.id,
 		action: mode === 'managed' ? 'device.adopted.managed' : 'device.adopted.read_only',
@@ -261,7 +257,7 @@ export async function finishCredentialAdoption(input: AdoptDeviceInput, context:
 }
 
 export async function failCredentialAdoption(input: AdoptDeviceInput, attemptId: string, error: unknown): Promise<void> {
-	await updateAdoptionAttempt(attemptId, {
+	await AdoptionRepository.update(attemptId, {
 		status: 'failed',
 		errorMessage: error instanceof Error ? error.message : 'Unknown adoption error.',
 		finishedAt: new Date(),
@@ -270,7 +266,7 @@ export async function failCredentialAdoption(input: AdoptDeviceInput, attemptId:
 		}
 	});
 
-	await recordAuditEvent({
+	await AuditRepository.record({
 		actorUserId: input.requestedByUserId,
 		action: 'device.adoption.failed',
 		message: `Failed to adopt ${input.host}`,

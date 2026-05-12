@@ -10,6 +10,8 @@
   } from "$lib/client/stores/jobs";
   import { enhance } from "$app/forms";
   import Button from "$lib/client/components/primitives/Button.svelte";
+  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
+  import { PageShell } from "$lib/client/components/layout";
   import DevicePortLayout from "$lib/client/components/ui/DevicePortLayout.svelte";
   import TabLayout from "$lib/client/components/layout/TabLayout.svelte";
   import TrafficSparkline from "$lib/client/components/ui/TrafficSparkline.svelte";
@@ -195,8 +197,8 @@
   }
 </script>
 
-<section class="device-page">
-  <div class="device-toolbar">
+<PageShell>
+  <div class="device-page-header">
     <a
       class="back-link"
       href={`${basePath}/devices`}
@@ -209,10 +211,10 @@
         />
       </svg>
     </a>
-    <div>
-      <h1>{deviceName}</h1>
-      <p>{device.model || "MikroTik device"}</p>
-    </div>
+    <PageHeader
+      title={deviceName}
+      subtitle={device.model || "MikroTik device"}
+    />
   </div>
 
   <div class="device-hero">
@@ -822,23 +824,13 @@
       </section>
     {/if}
   </TabLayout>
-</section>
+</PageShell>
 
 <style lang="scss">
-  .device-page {
-    display: grid;
-    gap: 14px;
-  }
-
-  .device-toolbar {
+  .device-page-header {
     display: flex;
     align-items: center;
     gap: 12px;
-    min-height: 50px;
-    margin: -18px -14px 0;
-    padding: 0 18px;
-    border-bottom: 1px solid #eef1f3;
-    background: var(--color-surface);
   }
 
   .back-link {

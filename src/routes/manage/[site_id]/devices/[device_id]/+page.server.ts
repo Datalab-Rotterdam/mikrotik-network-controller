@@ -1,10 +1,10 @@
 import { error, fail, type Actions } from '@sveltejs/kit';
-import { getDeviceByIdForSite } from '$lib/server/repositories/device.repository';
-import { getJobWithSteps, listJobsByDevice } from '$lib/server/repositories/job.repository';
-import { getActiveCredential, listDeviceInterfaces } from '$lib/server/repositories/telemetry.repository';
+import { DeviceRepository } from '$lib/server/repositories/device.repository';
+import { JobRepository } from '$lib/server/repositories/job.repository';
+import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { resolveDeviceImage } from '$lib/server/services/device-image-catalog.service';
 import { isDeviceTerminalEligible } from '$lib/server/services/device-terminal.service';
-import { getInterfaceMetricsHistory } from '$lib/server/repositories/metrics.repository';
+import { MetricsRepository } from '$lib/server/repositories/metrics.repository';
 import { getDeviceBackups } from '$lib/server/services/backup.service';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
 import {
@@ -15,16 +15,18 @@ import {
 	createDeleteVlanTask
 } from '$lib/server/services/devices.service/tasks';
 import { createFirmwareCheckTask, createFirmwareUpgradeTask } from '$lib/server/services/firmware.service';
-import { getFirmwareVersion } from '$lib/server/repositories/firmware.repository';
+import { FirmwareRepository } from '$lib/server/repositories/firmware.repository';
 import { FirewallRepository } from '$lib/server/repositories/firewall.repository';
 import { VlanRepository } from '$lib/server/repositories/vlan.repository';
 import type { ActionJob, ActionJobStep } from '$lib/shared/action-events';
 import { provisionDeviceAction, removeDeviceAction } from '../device-actions.server';
+import { enhance } from '@sourceregistry/sveltekit-enhance';
+import { SessionContext } from '$lib/server/context/session.context';
 
 export const actions: Actions = {
-	provision: provisionDeviceAction,
-	remove: removeDeviceAction,
-	backup: async ({ params }) => {
+	provision: enhance.action(provisionDeviceAction, SessionContext.require),
+	remove: enhance.action(removeDeviceAction, SessionContext.require),
+	backup: enhance.action(async ({ params }) => {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
 		try {
@@ -33,8 +35,8 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
 		}
-	},
-	firmwareCheck: async ({ params }) => {
+	}, SessionContext.require),
+	firmwareCheck: enhance.action(async ({ params }) => {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
 		try {
@@ -43,8 +45,8 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
 		}
-	},
-	firmwareUpgrade: async ({ params }) => {
+	}, SessionContext.require),
+	firmwareUpgrade: enhance.action(async ({ params }) => {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
 		try {
@@ -53,8 +55,8 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
 		}
-	},
-	addFirewallRule: async ({ request, params }) => {
+	}, SessionContext.require),
+	addFirewallRule: enhance.action(async ({ request, params }) => {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
 		const form = await request.formData();
@@ -83,8 +85,8 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
 		}
-	},
-	deleteFirewallRule: async ({ request, params }) => {
+	}, SessionContext.require),
+	deleteFirewallRule: enhance.action(async ({ request, params }) => {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
 		const form = await request.formData();
@@ -98,8 +100,8 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
 		}
-	},
-	addVlan: async ({ request, params }) => {
+	}, SessionContext.require),
+	addVlan: enhance.action(async ({ request, params }) => {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
 		const form = await request.formData();
@@ -119,8 +121,8 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
 		}
-	},
-	deleteVlan: async ({ request, params }) => {
+	}, SessionContext.require),
+	deleteVlan: enhance.action(async ({ request, params }) => {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
 		const form = await request.formData();
@@ -134,7 +136,7 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
 		}
-	}
+	}, SessionContext.require)
 };
 
 function serializeDate(value: Date | string | null | undefined): string | null {
@@ -146,7 +148,7 @@ function serializeDate(value: Date | string | null | undefined): string | null {
 }
 
 function serializeStep(
-	step: NonNullable<Awaited<ReturnType<typeof getJobWithSteps>>>['steps'][number]
+	step: NonNullable<Awaited<ReturnType<typeof JobRepository.getWithSteps>>>['steps'][number]
 ): ActionJobStep {
 	return {
 		id: step.id,
@@ -166,7 +168,7 @@ function serializeStep(
 	};
 }
 
-function serializeJob(job: NonNullable<Awaited<ReturnType<typeof getJobWithSteps>>>): ActionJob {
+function serializeJob(job: NonNullable<Awaited<ReturnType<typeof JobRepository.getWithSteps>>>): ActionJob {
 	return {
 		id: job.id,
 		type: job.type,
@@ -235,23 +237,23 @@ export async function load({ locals, parent, params, depends }) {
 	depends?.(`app:site-devices:${site.id}`);
 	depends?.(`app:device:${deviceId}`);
 
-	const device = await getDeviceByIdForSite(deviceId, site.id);
+	const device = await DeviceRepository.getByIdForSite(deviceId, site.id);
 
 	if (!device) {
 		throw error(404, 'Device not found');
 	}
 
 	const [interfaces, recentJobs, writeCredential, rawIfaceMetrics, backups, firmware, firewallRules, vlans] = await Promise.all([
-		listDeviceInterfaces(device.id),
-		listJobsByDevice(device.id, 20),
-		getActiveCredential(device.id, 'write'),
-		getInterfaceMetricsHistory(device.id, 60 * 60 * 1000), // last 1h
+		TelemetryRepository.listInterfaces(device.id),
+		JobRepository.listByDevice(device.id, 20),
+		TelemetryRepository.getActiveCredential(device.id, 'write'),
+		MetricsRepository.getInterfaceHistory(device.id, 60 * 60 * 1000), // last 1h
 		getDeviceBackups(device.id),
-		getFirmwareVersion(device.id),
+		FirmwareRepository.getVersion(device.id),
 		FirewallRepository.listByDevice(device.id),
 		VlanRepository.listByDevice(device.id)
 	]);
-	const hydratedJobs = await Promise.all(recentJobs.map((job) => getJobWithSteps(job.id)));
+	const hydratedJobs = await Promise.all(recentJobs.map((job) => JobRepository.getWithSteps(job.id)));
 
 	// Group interface metrics by name and compute per-interval deltas
 	const ifaceTraffic = computeIfaceTraffic(rawIfaceMetrics);
@@ -271,7 +273,7 @@ export async function load({ locals, parent, params, depends }) {
 			writeCredential
 		}),
 		jobs: hydratedJobs
-			.filter((job): job is NonNullable<Awaited<ReturnType<typeof getJobWithSteps>>> => Boolean(job))
+			.filter((job): job is NonNullable<Awaited<ReturnType<typeof JobRepository.getWithSteps>>> => Boolean(job))
 			.map(serializeJob)
 	};
 }
