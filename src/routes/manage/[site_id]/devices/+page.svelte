@@ -7,6 +7,7 @@
   import TableSkeleton from "$lib/client/components/primitives/TableSkeleton.svelte";
   import EmptyState from "$lib/client/components/primitives/EmptyState.svelte";
   import StatusBadge from "$lib/client/components/primitives/StatusBadge.svelte";
+  import Tooltip from "$lib/client/components/primitives/Tooltip.svelte";
   import SidePanel from "$lib/client/components/layout/SidePanel.svelte";
   import DevicePortLayout from "$lib/client/components/ui/DevicePortLayout.svelte";
   import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
@@ -67,34 +68,40 @@
   onMount(() => {
     initializeDiscoveryDeviceSnapshot(data.discoveredDevices);
 
-    const devices = data.devices.map((device) => ({
-      id: device.id,
-      type: (device.platform === "switchos" ? "switch" : "router") as
-        | "router"
-        | "switch",
-      name: device.identity ?? device.name,
-      status: device.connectionStatus,
-      model: device.model ?? "",
-      version: device.routerOsVersion ?? "",
-      ipAddress: device.host,
-      platform: device.platform,
-      adopted: true,
-      adoptionMode: device.adoptionMode,
-      adoptionState: device.adoptionState,
-      image: data.deviceImages[device.id],
-      interfaces: data.deviceInterfaces[device.id] ?? [],
-      macAddress: "",
-      details: {
+    const devices = data.devices.map((device) => {
+      const ifaces = data.deviceInterfaces[device.id] ?? [];
+      const primaryInterface =
+        ifaces.find((i) => i.running === true) ?? ifaces[0];
+      return {
+        id: device.id,
+        type: (device.platform === "switchos" ? "switch" : "router") as
+          | "router"
+          | "switch",
+        name: device.name ?? device.identity,
         identity: device.identity ?? "",
-        serialNumber: device.serialNumber ?? "",
-        architecture: device.architecture ?? "",
-        uptimeSeconds: device.uptimeSeconds ?? undefined,
-        lastSeenAt: device.lastSeenAt,
-        lastSyncAt: device.lastSyncAt,
-        capabilities: device.capabilities,
-        tags: device.tags,
-      },
-    }));
+        status: device.connectionStatus,
+        model: device.model ?? "",
+        version: device.routerOsVersion ?? "",
+        ipAddress: device.host,
+        platform: device.platform,
+        adopted: true,
+        adoptionMode: device.adoptionMode,
+        adoptionState: device.adoptionState,
+        image: data.deviceImages[device.id],
+        interfaces: ifaces,
+        macAddress: primaryInterface?.macAddress ?? "",
+        details: {
+          identity: device.identity ?? "",
+          serialNumber: device.serialNumber ?? "",
+          architecture: device.architecture ?? "",
+          uptimeSeconds: device.uptimeSeconds ?? undefined,
+          lastSeenAt: device.lastSeenAt,
+          lastSyncAt: device.lastSyncAt,
+          capabilities: device.capabilities,
+          tags: device.tags,
+        },
+      };
+    });
 
     const discovered = data.discoveredDevices
       .filter((device) => device.address)
@@ -159,33 +166,39 @@
   );
 
   const adoptedRows = $derived(
-    data.devices.map((device) => ({
-      id: device.id,
-      type: device.platform === "switchos" ? "switch" : "router",
-      name: device.identity ?? device.name,
-      status: device.connectionStatus,
-      model: device.model ?? "",
-      version: device.routerOsVersion ?? "",
-      ipAddress: device.host,
-      platform: device.platform,
-      adopted: true,
-      adoptionMode: device.adoptionMode,
-      adoptionState: device.adoptionState,
-      image: data.deviceImages[device.id],
-      interfaces: data.deviceInterfaces[device.id] ?? [],
-      macAddress: "",
-      firmware: data.firmwareByDeviceId[device.id] ?? null,
-      details: {
+    data.devices.map((device) => {
+      const ifaces = data.deviceInterfaces[device.id] ?? [];
+      const primaryInterface =
+        ifaces.find((i) => i.running === true) ?? ifaces[0];
+      return {
+        id: device.id,
+        type: device.platform === "switchos" ? "switch" : "router",
+        name: device.name ?? device.identity,
         identity: device.identity ?? "",
-        serialNumber: device.serialNumber ?? "",
-        architecture: device.architecture ?? "",
-        uptimeSeconds: device.uptimeSeconds,
-        lastSeenAt: device.lastSeenAt,
-        lastSyncAt: device.lastSyncAt,
-        capabilities: device.capabilities,
-        tags: device.tags,
-      },
-    })),
+        status: device.connectionStatus,
+        model: device.model ?? "",
+        version: device.routerOsVersion ?? "",
+        ipAddress: device.host,
+        platform: device.platform,
+        adopted: true,
+        adoptionMode: device.adoptionMode,
+        adoptionState: device.adoptionState,
+        image: data.deviceImages[device.id],
+        interfaces: ifaces,
+        macAddress: primaryInterface?.macAddress ?? "",
+        firmware: data.firmwareByDeviceId[device.id] ?? null,
+        details: {
+          identity: device.identity ?? "",
+          serialNumber: device.serialNumber ?? "",
+          architecture: device.architecture ?? "",
+          uptimeSeconds: device.uptimeSeconds,
+          lastSeenAt: device.lastSeenAt,
+          lastSyncAt: device.lastSyncAt,
+          capabilities: device.capabilities,
+          tags: device.tags,
+        },
+      };
+    }),
   );
 
   const rows = $derived([...adoptedRows, ...discoveredRows]);
@@ -303,7 +316,10 @@
           processDeviceAdopted(event.payload);
         } else if (event.type === "device.removed") {
           removeDevice(event.payload.deviceId);
-        } else if (event.type === "device.updated" && event.payload.connectionStatus) {
+        } else if (
+          event.type === "device.updated" &&
+          event.payload.connectionStatus
+        ) {
           updateDevice(event.payload.deviceId, {
             status: event.payload.connectionStatus,
           });
@@ -384,9 +400,7 @@
   />
 
   <div class="tabs" aria-label="Device filters">
-    <a href={`${basePath}/devices`} aria-current="page"
-      >All ({rows.length})</a
-    >
+    <a href={`${basePath}/devices`} aria-current="page">All ({rows.length})</a>
     <a href={`${basePath}/devices`}>WiFi (0)</a>
     <a href={`${basePath}/devices`}>Wired ({rows.length})</a>
     <a href={`${basePath}/devices`}>Adopted ({adoptedCount})</a>
@@ -395,24 +409,25 @@
 
   <div class="devices-table-wrap">
     {#if $devicesState.loading}
-      <TableSkeleton columns={7} rows={6} />
+      <TableSkeleton columns={8} rows={6} />
     {:else if rows.length}
       <table class="devices-table">
         <thead>
           <tr>
-            <th class="col-state" style="width: 10px;"></th>
-            <th class="col-type" style="width: 64px;">Type</th>
+            <th class="col-state" style="width: 16px;"></th>
+            <th class="col-type" style="width: 36px;"></th>
             <th class="col-name">Name</th>
             <th class="col-status">Status</th>
-            <th class="col-ip">IP Address</th>
-            <th class="col-version">RouterOS</th>
+            <th class="col-mac">MAC Address</th>
             <th class="col-model">Model</th>
+            <th class="col-version">Version</th>
+            <th class="col-ip">IP Address</th>
           </tr>
         </thead>
         <tbody>
           {#if adoptedRows.length}
             <tr class="section-header">
-              <td colspan="7">Adopted ({adoptedRows.length})</td>
+              <td colspan="8">Adopted ({adoptedRows.length})</td>
             </tr>
           {/if}
           {#each adoptedRows as device}
@@ -425,19 +440,45 @@
               onclick={(event) => openDevice(event, device.id)}
               onkeydown={(event) => openDeviceFromKeyboard(event, device.id)}
             >
+              <!-- Status circle -->
               <td class="col-state">
-                <span class:adopted={true} class="device-dot"></span>
+                <span
+                  class="device-dot"
+                  class:online={device.status === "online"}
+                  class:offline={device.status === "offline"}
+                  class:error={device.status === "auth_failed" ||
+                    device.status === "blocked"}
+                ></span>
               </td>
+              <!-- Type icon -->
               <td class="col-type">
-                <span class="device-type">
-                  <img src={device.image.src} alt="" width="28" height="28" />
-                </span>
+                <img
+                  src={device.image.src}
+                  alt=""
+                  width="24"
+                  height="24"
+                  class="device-type-icon"
+                />
               </td>
-              <td class="col-name">{device.name}</td>
+              <!-- Name with identity tooltip -->
+              <td class="col-name">
+                {#if device.identity}
+                  <Tooltip text={device.identity}>
+                    <span class="device-name-text">{device.name}</span>
+                  </Tooltip>
+                {:else}
+                  <span class="device-name-text">{device.name}</span>
+                {/if}
+              </td>
+              <!-- Status label -->
               <td class="col-status">
                 <StatusBadge status={normalizeStatus(device.status)} />
               </td>
-              <td class="col-ip">{device.ipAddress}</td>
+              <!-- MAC address -->
+              <td class="col-mac">{device.macAddress || "—"}</td>
+              <!-- Model -->
+              <td class="col-model">{device.model || "—"}</td>
+              <!-- Version -->
               <td class="col-version">
                 <span class="version-cell">
                   {device.version || "—"}
@@ -446,12 +487,13 @@
                   {/if}
                 </span>
               </td>
-              <td class="col-model">{device.model}</td>
+              <!-- IP address -->
+              <td class="col-ip">{device.ipAddress}</td>
             </tr>
           {/each}
           {#if discoveredRows.length}
             <tr class="section-header">
-              <td colspan="7">Discovered ({discoveredRows.length})</td>
+              <td colspan="8">Discovered ({discoveredRows.length})</td>
             </tr>
           {/if}
           {#each discoveredRows as device}
@@ -464,25 +506,40 @@
               onclick={(event) => openDevice(event, device.id)}
               onkeydown={(event) => openDeviceFromKeyboard(event, device.id)}
             >
+              <!-- Status circle (discovered = yellow) -->
               <td class="col-state">
-                <span class="device-dot"></span>
+                <span class="device-dot discovered"></span>
               </td>
+              <!-- Type icon -->
               <td class="col-type">
-                <span class="device-type">
-                  <img src={device.image.src} alt="" width="28" height="28" />
-                </span>
+                <img
+                  src={device.image.src}
+                  alt=""
+                  width="24"
+                  height="24"
+                  class="device-type-icon"
+                />
               </td>
-              <td class="col-name">{device.name}</td>
+              <!-- Name -->
+              <td class="col-name">
+                <span class="device-name-text">{device.name}</span>
+              </td>
+              <!-- Status label with adopt link -->
               <td class="col-status">
                 <a class="adopt-action" href={adoptHref(device)}>
                   <StatusBadge status="discovered" />
                 </a>
               </td>
-              <td class="col-ip">{device.ipAddress}</td>
+              <!-- MAC address -->
+              <td class="col-mac">{device.macAddress || "—"}</td>
+              <!-- Model -->
+              <td class="col-model">{device.model || "—"}</td>
+              <!-- Version -->
               <td class="col-version">
                 <span class="version-cell">{device.version || "—"}</span>
               </td>
-              <td class="col-model">{device.model}</td>
+              <!-- IP address -->
+              <td class="col-ip">{device.ipAddress}</td>
             </tr>
           {/each}
         </tbody>
@@ -500,6 +557,11 @@
     {/if}
   </div>
 
+  <code>
+    <p>
+      {JSON.stringify(data, null, 2)}
+    </p>
+  </code>
   <SidePanel
     open={adoptionPanelOpen}
     title="Adopt device"
@@ -1091,29 +1153,42 @@
     text-decoration: none;
   }
 
-  .device-type {
-    display: inline-grid;
-    grid-template-columns: 8px 32px;
-    align-items: center;
-    gap: 6px;
-    color: #9aa3aa;
-  }
-
-  .device-type img {
-    width: 28px;
-    height: 28px;
+  .device-type-icon {
+    width: 24px;
+    height: 24px;
     object-fit: contain;
   }
 
-  .device-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--color-warning, #f59e0b);
+  .device-name-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
   }
 
-  .device-dot.adopted {
+  .device-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-muted, #9aa3aa);
+  }
+
+  .device-dot.online {
     background: var(--color-success, #16a34a);
+  }
+
+  .device-dot.offline {
+    background: var(--color-muted, #9aa3aa);
+  }
+
+  .device-dot.error {
+    background: var(--color-danger, #dc2626);
+  }
+
+  .device-dot.discovered {
+    background: var(--color-warning, #f59e0b);
   }
 
   .advanced-settings {

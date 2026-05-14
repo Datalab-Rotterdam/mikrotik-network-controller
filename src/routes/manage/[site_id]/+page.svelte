@@ -147,7 +147,7 @@
             class={`status-dot ${statusClass(device.connectionStatus)}`}
             aria-hidden="true"
           ></span>
-          <span class="device-name">{device.identity ?? device.name}</span>
+          <span class="device-name">{device.name ?? device.identity}</span>
         </div>
         {#if metric}
           <div class="health-gauges">

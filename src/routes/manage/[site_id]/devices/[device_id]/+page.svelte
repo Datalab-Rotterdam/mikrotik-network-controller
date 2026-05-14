@@ -17,7 +17,13 @@
   import TrafficSparkline from "$lib/client/components/ui/TrafficSparkline.svelte";
   import type { JobStatus } from "$lib/shared/action-events";
 
-  type DeviceTab = "overview" | "firewall" | "vlans" | "activity" | "backups" | "advanced";
+  type DeviceTab =
+    | "overview"
+    | "firewall"
+    | "vlans"
+    | "activity"
+    | "backups"
+    | "advanced";
   type TabItem<T extends string = string> = {
     id: T;
     label: string;
@@ -28,7 +34,7 @@
 
   const basePath = $derived(`/manage/${data.site.id}`);
   const device = $derived(data.device);
-  const deviceName = $derived(device.identity ?? device.name);
+  const deviceName = $derived(device.name ?? device.identity);
   const capabilities = $derived(device.capabilities ?? []);
   const tags = $derived(device.tags ?? []);
   const deviceJobs = $derived(
@@ -224,7 +230,33 @@
         <span class={`status-pill status-${device.connectionStatus}`}
           >{formatLabel(device.connectionStatus)}</span
         >
-        <h2>{deviceName}</h2>
+        <div class="device-name-row">
+          <form
+            method="POST"
+            action="?/rename"
+            use:enhance={() =>
+              async ({ update }) => {
+                await update();
+              }}
+            class="rename-form"
+          >
+            <input
+              type="text"
+              name="name"
+              value={device.name}
+              maxlength="120"
+              class="rename-input"
+              placeholder="Device name"
+            />
+            {#if provisioned}
+              <label class="rename-checkbox">
+                <input type="checkbox" name="manageIdentity" value="on" />
+                <span>Also update MikroTik identity</span>
+              </label>
+            {/if}
+            <Button type="submit" size="sm" variant="ghost">Rename</Button>
+          </form>
+        </div>
         <p>{device.host}:{device.apiPort}</p>
       </div>
     </div>
@@ -476,7 +508,10 @@
           <span>{data.firewallRules.length} rules</span>
         </div>
         {#if data.firewallRules.length === 0}
-          <div class="empty-state">No firewall rules collected yet. Rules sync during the next monitoring tick.</div>
+          <div class="empty-state">
+            No firewall rules collected yet. Rules sync during the next
+            monitoring tick.
+          </div>
         {:else}
           <div class="table-wrap">
             <table>
@@ -497,10 +532,22 @@
                 {#each data.firewallRules as rule, i}
                   <tr class:disabled-row={rule.disabled}>
                     <td class="mono-cell">{i + 1}</td>
-                    <td><span class="chain-badge chain-{rule.chain}">{rule.chain}</span></td>
-                    <td><span class="action-badge action-{rule.action}">{rule.action}</span></td>
-                    <td class="mono-cell">{rule.srcAddress || rule.inInterface || "—"}</td>
-                    <td class="mono-cell">{rule.dstAddress || rule.outInterface || "—"}</td>
+                    <td
+                      ><span class="chain-badge chain-{rule.chain}"
+                        >{rule.chain}</span
+                      ></td
+                    >
+                    <td
+                      ><span class="action-badge action-{rule.action}"
+                        >{rule.action}</span
+                      ></td
+                    >
+                    <td class="mono-cell"
+                      >{rule.srcAddress || rule.inInterface || "—"}</td
+                    >
+                    <td class="mono-cell"
+                      >{rule.dstAddress || rule.outInterface || "—"}</td
+                    >
                     <td>{rule.protocol || "any"}</td>
                     <td class="comment-cell">{rule.comment || "—"}</td>
                     <td>
@@ -513,13 +560,28 @@
                     {#if provisioned}
                       <td class="action-cell">
                         {#if rule.routerId}
-                          <form method="POST" action="?/deleteFirewallRule" use:enhance>
-                            <input type="hidden" name="routerId" value={rule.routerId} />
+                          <form
+                            method="POST"
+                            action="?/deleteFirewallRule"
+                            use:enhance
+                          >
+                            <input
+                              type="hidden"
+                              name="routerId"
+                              value={rule.routerId}
+                            />
                             <button
                               type="submit"
                               class="row-delete-btn"
-                              onclick={(e) => { if (!confirm("Delete this firewall rule from the device?")) e.preventDefault(); }}
-                            >✕</button>
+                              onclick={(e) => {
+                                if (
+                                  !confirm(
+                                    "Delete this firewall rule from the device?",
+                                  )
+                                )
+                                  e.preventDefault();
+                              }}>✕</button
+                            >
                           </form>
                         {/if}
                       </td>
@@ -533,7 +595,12 @@
         {#if provisioned}
           <div class="add-rule-section">
             <p class="add-rule-label">Add rule</p>
-            <form method="POST" action="?/addFirewallRule" use:enhance class="add-form">
+            <form
+              method="POST"
+              action="?/addFirewallRule"
+              use:enhance
+              class="add-form"
+            >
               <div class="add-form-grid">
                 <label class="form-field">
                   <span>Chain *</span>
@@ -557,15 +624,27 @@
                 </label>
                 <label class="form-field">
                   <span>Src Address</span>
-                  <input type="text" name="srcAddress" placeholder="10.0.0.0/8" />
+                  <input
+                    type="text"
+                    name="srcAddress"
+                    placeholder="10.0.0.0/8"
+                  />
                 </label>
                 <label class="form-field">
                   <span>Dst Address</span>
-                  <input type="text" name="dstAddress" placeholder="192.168.1.0/24" />
+                  <input
+                    type="text"
+                    name="dstAddress"
+                    placeholder="192.168.1.0/24"
+                  />
                 </label>
                 <label class="form-field">
                   <span>Protocol</span>
-                  <input type="text" name="protocol" placeholder="tcp / udp / icmp" />
+                  <input
+                    type="text"
+                    name="protocol"
+                    placeholder="tcp / udp / icmp"
+                  />
                 </label>
                 <label class="form-field">
                   <span>In Interface</span>
@@ -573,7 +652,11 @@
                 </label>
                 <label class="form-field">
                   <span>Src Port</span>
-                  <input type="text" name="srcPort" placeholder="80 / 8080-8090" />
+                  <input
+                    type="text"
+                    name="srcPort"
+                    placeholder="80 / 8080-8090"
+                  />
                 </label>
                 <label class="form-field">
                   <span>Dst Port</span>
@@ -581,7 +664,11 @@
                 </label>
                 <label class="form-field form-field-wide">
                   <span>Comment</span>
-                  <input type="text" name="comment" placeholder="Optional description" />
+                  <input
+                    type="text"
+                    name="comment"
+                    placeholder="Optional description"
+                  />
                 </label>
               </div>
               <Button type="submit" size="sm">Add rule</Button>
@@ -598,7 +685,9 @@
           <span>{data.vlans.length} configured</span>
         </div>
         {#if data.vlans.length === 0}
-          <div class="empty-state">No VLANs collected yet. VLANs sync during the next monitoring tick.</div>
+          <div class="empty-state">
+            No VLANs collected yet. VLANs sync during the next monitoring tick.
+          </div>
         {:else}
           <div class="table-wrap">
             <table>
@@ -622,12 +711,23 @@
                       <td class="action-cell">
                         {#if vlan.routerId}
                           <form method="POST" action="?/deleteVlan" use:enhance>
-                            <input type="hidden" name="routerId" value={vlan.routerId} />
+                            <input
+                              type="hidden"
+                              name="routerId"
+                              value={vlan.routerId}
+                            />
                             <button
                               type="submit"
                               class="row-delete-btn"
-                              onclick={(e) => { if (!confirm(`Delete VLAN ${vlan.vlanId} (${vlan.name}) from the device?`)) e.preventDefault(); }}
-                            >✕</button>
+                              onclick={(e) => {
+                                if (
+                                  !confirm(
+                                    `Delete VLAN ${vlan.vlanId} (${vlan.name}) from the device?`,
+                                  )
+                                )
+                                  e.preventDefault();
+                              }}>✕</button
+                            >
                           </form>
                         {/if}
                       </td>
@@ -645,19 +745,40 @@
               <div class="add-form-grid">
                 <label class="form-field">
                   <span>VLAN ID * (1–4094)</span>
-                  <input type="number" name="vlanId" min="1" max="4094" required placeholder="100" />
+                  <input
+                    type="number"
+                    name="vlanId"
+                    min="1"
+                    max="4094"
+                    required
+                    placeholder="100"
+                  />
                 </label>
                 <label class="form-field">
                   <span>Name *</span>
-                  <input type="text" name="name" required placeholder="vlan-mgmt" />
+                  <input
+                    type="text"
+                    name="name"
+                    required
+                    placeholder="vlan-mgmt"
+                  />
                 </label>
                 <label class="form-field">
                   <span>Interface *</span>
-                  <input type="text" name="interfaceName" required placeholder="ether1" />
+                  <input
+                    type="text"
+                    name="interfaceName"
+                    required
+                    placeholder="ether1"
+                  />
                 </label>
                 <label class="form-field">
                   <span>Comment</span>
-                  <input type="text" name="comment" placeholder="Optional description" />
+                  <input
+                    type="text"
+                    name="comment"
+                    placeholder="Optional description"
+                  />
                 </label>
               </div>
               <Button type="submit" size="sm">Add VLAN</Button>
@@ -1390,17 +1511,41 @@
     letter-spacing: 0.03em;
   }
 
-  .chain-input { background: #e8f4fd; color: #1565c0; }
-  .chain-forward { background: #e8f0fe; color: #3949ab; }
-  .chain-output { background: #f3e8fd; color: #6a1b9a; }
+  .chain-input {
+    background: #e8f4fd;
+    color: #1565c0;
+  }
+  .chain-forward {
+    background: #e8f0fe;
+    color: #3949ab;
+  }
+  .chain-output {
+    background: #f3e8fd;
+    color: #6a1b9a;
+  }
 
-  .action-accept { background: #e8f5e9; color: #2e7d32; }
-  .action-drop { background: #fce4ec; color: #b71c1c; }
-  .action-reject { background: #fff3e0; color: #e65100; }
-  .action-log { background: #f3f4f6; color: #374151; }
+  .action-accept {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+  .action-drop {
+    background: #fce4ec;
+    color: #b71c1c;
+  }
+  .action-reject {
+    background: #fff3e0;
+    color: #e65100;
+  }
+  .action-log {
+    background: #f3f4f6;
+    color: #374151;
+  }
   .action-jump,
   .action-return,
-  .action-passthrough { background: #fafafa; color: #6b7280; }
+  .action-passthrough {
+    background: #fafafa;
+    color: #6b7280;
+  }
 
   .disabled-row td {
     opacity: 0.45;
@@ -1497,5 +1642,54 @@
   .form-field select:focus {
     outline: none;
     border-color: var(--color-brand);
+  }
+
+  .device-name-row {
+    margin-top: 8px;
+  }
+
+  .rename-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .rename-input {
+    height: 34px;
+    border: 1px solid #dce4e9;
+    border-radius: 4px;
+    padding: 0 10px;
+    color: #30373d;
+    background: #fbfdff;
+    font-size: 16px;
+    font-weight: 600;
+    width: 220px;
+    box-sizing: border-box;
+  }
+
+  .rename-input:focus {
+    outline: none;
+    border-color: var(--color-brand);
+    background: #fff;
+  }
+
+  .rename-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+
+  .rename-checkbox span {
+    color: #7d8790;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .rename-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--color-brand);
+    cursor: pointer;
   }
 </style>

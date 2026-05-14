@@ -110,7 +110,7 @@
                   href={`/manage/${data.site.id}/devices/${device.id}`}
                   class="device-link"
                 >
-                  {device.identity ?? device.name}
+                  {device.name ?? device.identity}
                 </a>
               {:else}
                 —

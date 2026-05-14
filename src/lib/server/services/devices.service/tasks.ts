@@ -57,6 +57,77 @@ export function createBackupDeviceTask(deviceId: string, siteId?: string): TaskD
 	};
 }
 
+export function createRenameDeviceTask(input: {
+	deviceId: string;
+	name: string;
+	siteId?: string;
+}): TaskDefinition<{ deviceId: string; name: string; previousIdentity: string | null }> {
+	const { deviceId, name, siteId } = input;
+
+	return {
+		name: 'devices.rename-identity',
+		deviceId,
+		siteId: siteId ?? null,
+		payload: { deviceId, name, previousIdentity: null },
+		failurePolicy: 'rollback',
+		steps: [
+			{
+				name: 'Update MikroTik identity',
+				async execute({ payload }) {
+					const device = await DeviceRepository.getByIdForSite(deviceId, siteId ?? '');
+					if (!device) throw new Error('Device not found');
+
+					const credentials = await TelemetryRepository.getActiveCredential(device.id, 'read_only');
+					if (!credentials) throw new Error('No credentials available');
+
+					const client = new RouterOSClient({
+						host: device.host,
+						port: device.apiPort,
+						username: credentials.username,
+						password: decryptSecret(credentials.secretEncrypted)
+					});
+
+					try {
+						await client.system.identity.set(payload.name);
+						return {
+							message: `Identity updated to ${payload.name}`,
+							data: { previousIdentity: device.identity }
+						};
+					} finally {
+						await client.close();
+					}
+				},
+				async revert({ payload }) {
+					const previousIdentity = payload.previousIdentity;
+					if (!previousIdentity) {
+						return { message: 'No previous identity available' };
+					}
+
+					const device = await DeviceRepository.getByIdForSite(deviceId, siteId ?? '');
+					if (!device) return { message: 'Device not found for revert' };
+
+					const credentials = await TelemetryRepository.getActiveCredential(device.id, 'read_only');
+					if (!credentials) return { message: 'No credentials available for revert' };
+
+					const client = new RouterOSClient({
+						host: device.host,
+						port: device.apiPort,
+						username: credentials.username,
+						password: decryptSecret(credentials.secretEncrypted)
+					});
+
+					try {
+						await client.system.identity.set(previousIdentity);
+						return { message: `Identity reverted to ${previousIdentity}` };
+					} finally {
+						await client.close();
+					}
+				}
+			}
+		]
+	};
+}
+
 export function createConfigDeployTask(input: {
 	deviceId: string;
 	templateId: string;
@@ -1000,17 +1071,17 @@ export function createRotateRestSecretTask(deviceId: string): TaskDefinition<{ d
 						throw new Error('Credential validation step did not complete');
 					}
 
-await DeviceRepository.replaceCredential({
-					deviceId: device.id,
-					purpose: 'read_only',
-					username: restCredential.username,
-					secretEncrypted: encryptSecret(nextSecret)
-				});
+					await DeviceRepository.replaceCredential({
+						deviceId: device.id,
+						purpose: 'read_only',
+						username: restCredential.username,
+						secretEncrypted: encryptSecret(nextSecret)
+					});
 
-				await TelemetryRepository.updateLastSeen(device.id);
-				await emitDeviceUpdated(device.id, 'credentials');
+					await TelemetryRepository.updateLastSeen(device.id);
+					await emitDeviceUpdated(device.id, 'credentials');
 
-				return { message: 'REST credential stored' };
+					return { message: 'REST credential stored' };
 				},
 				async revert() {
 					if (!device || !restCredential || !previousSecret) {

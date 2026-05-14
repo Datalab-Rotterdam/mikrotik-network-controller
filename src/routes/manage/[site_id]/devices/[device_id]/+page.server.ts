@@ -9,6 +9,7 @@ import { getDeviceBackups } from '$lib/server/services/backup.service';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
 import {
 	createBackupDeviceTask,
+	createRenameDeviceTask,
 	createAddFirewallRuleTask,
 	createDeleteFirewallRuleTask,
 	createAddVlanTask,
@@ -26,6 +27,32 @@ import { SessionContext } from '$lib/server/context/session.context';
 export const actions: Actions = {
 	provision: enhance.action(provisionDeviceAction, SessionContext.require),
 	remove: enhance.action(removeDeviceAction, SessionContext.require),
+	rename: enhance.action(async ({ request, params }) => {
+		const siteId = params.site_id as string;
+		const deviceId = params.device_id as string;
+		const form = await request.formData();
+		const name = (form.get('name') as string).trim();
+		const manageIdentity = form.get('manageIdentity') === 'on';
+		if (!name || name.length < 1 || name.length > 120)
+			return fail(400, { success: false, message: 'Name is required (max 120 characters)' });
+		try {
+			// Update the controller-side name immediately
+			await DeviceRepository.updateName(deviceId, name);
+
+			// Schedule MikroTik identity change if requested
+			let jobId: string | undefined;
+			if (manageIdentity) {
+				const job = await Service('scheduler').schedule(
+					createRenameDeviceTask({ deviceId, name, siteId })
+				);
+				jobId = job.id;
+			}
+
+			return { success: true, message: `Renamed to "${name}"`, jobId };
+		} catch (e) {
+			return fail(500, { success: false, message: String(e) });
+		}
+	}, SessionContext.require),
 	backup: enhance.action(async ({ params }) => {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;

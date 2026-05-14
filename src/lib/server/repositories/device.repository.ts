@@ -198,6 +198,13 @@ export const DeviceRepository = {
 			.where(eq(devices.id, deviceId));
 	},
 
+	async updateName(deviceId: string, name: string): Promise<void> {
+		await db
+			.update(devices)
+			.set({ name, updatedAt: new Date() })
+			.where(eq(devices.id, deviceId));
+	},
+
 	async listInterfaces(siteId?: string) {
 		const query = db
 			.select({

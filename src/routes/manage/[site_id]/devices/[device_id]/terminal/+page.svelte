@@ -5,7 +5,7 @@
 
 	const basePath = $derived(`/manage/${data.site.id}`);
 	const device = $derived(data.device);
-	const deviceName = $derived(device.identity ?? device.name);
+	const deviceName = $derived(device.name ?? device.identity);
 
 	function formatLabel(value: string | null | undefined) {
 		if (!value) {

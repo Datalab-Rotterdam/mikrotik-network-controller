@@ -86,7 +86,7 @@
       id: device.id,
       nodeId: `device-${device.id}`,
       imageSrc: data.deviceImages[device.id]?.src ?? "/favicon.svg",
-      name: device.identity ?? device.name,
+      name: device.name ?? device.identity,
       model: device.model ?? "",
       status: device.connectionStatus,
       kind: deviceKind(device.platform, device.model),

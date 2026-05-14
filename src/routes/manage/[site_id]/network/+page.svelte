@@ -62,7 +62,7 @@
     >
       <option value="">All devices</option>
       {#each data.devices as device}
-        <option value={device.id}>{device.identity ?? device.name}</option>
+        <option value={device.id}>{device.name ?? device.identity}</option>
       {/each}
     </select>
   </div>
