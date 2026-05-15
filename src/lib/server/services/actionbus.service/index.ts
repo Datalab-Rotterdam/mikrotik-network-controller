@@ -6,11 +6,7 @@ import env from '$lib/server/configurations/env.configuration';
 import {SessionRepository} from '$lib/server/repositories/session.repository';
 import {UserRepository} from '$lib/server/repositories/user.repository';
 import {hashSessionToken} from '$lib/server/security/session-token';
-import type {ActionEvent, DiscoveryActionEventMap, SiteActionEventMap} from '$lib/shared/action-events';
 
-export type SiteActionEvent = SiteActionEventMap[keyof SiteActionEventMap];
-export type DiscoveryActionEvent = DiscoveryActionEventMap[keyof DiscoveryActionEventMap];
-export type SiteActionChannel = `site:${string}`;
 
 function parseCookieHeader(header: string | undefined): Record<string, string> {
     if (!header) {
@@ -60,7 +56,7 @@ async function isAuthenticated(request: IncomingMessage | undefined): Promise<bo
     return true;
 }
 
-export function isSiteActionChannel(channel: string): channel is SiteActionChannel {
+export function isSiteActionChannel(channel: string): channel is `site:${string}` {
     return channel.startsWith('site:') && channel.length > 'site:'.length;
 }
 
@@ -75,31 +71,8 @@ const server = createActionBus({
     }
 });
 
-export function siteChannel(siteId: string): SiteActionChannel {
+export function siteChannel(siteId: string): `site:${string}` {
     return `site:${siteId}`;
-}
-
-export function channelsForEvent(event: ActionEvent): ActionChannel[] {
-    switch (event.type) {
-        case 'discovery.snapshot':
-        case 'discovery.neighbor':
-            return ['discovery'];
-        case 'job.snapshot':
-        case 'job.updated':
-        case 'device.adopted':
-        case 'device.updated':
-        case 'device.removed':
-        case 'metric.updated':
-        case 'client.updated':
-        case 'alert.fired':
-        case 'alert.resolved':
-        case 'topology.updated': {
-            const siteId = 'siteId' in event.payload ? event.payload.siteId : null;
-            return siteId ? [siteChannel(siteId)] : [];
-        }
-        default:
-            return [];
-    }
 }
 
 export const service = {
@@ -107,24 +80,6 @@ export const service = {
     local: {
         publish<Channel extends ActionChannel>(channel: Channel, event: ActionEventForChannel<Channel>): void {
             server.broadcast(channel, event);
-        },
-        publishSite(siteId: string | null | undefined, event: SiteActionEvent): void {
-            if (!siteId) {
-                return;
-            }
-
-            server.broadcast(
-                siteChannel(siteId),
-                event as unknown as ActionEventForChannel<SiteActionChannel>
-            );
-        },
-        publishDiscovery(event: DiscoveryActionEvent): void {
-            server.broadcast('discovery', event as unknown as ActionEventForChannel<'discovery'>);
-        },
-        publishEvent(event: ActionEvent): void {
-            for (const channel of channelsForEvent(event)) {
-                server.broadcast(channel, event as unknown as ActionEventForChannel<typeof channel>);
-            }
         }
     },
     cleanup: () => server.destroy()

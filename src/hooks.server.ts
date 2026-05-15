@@ -1,18 +1,21 @@
 import '$lib/server/services/actionbus.service';
-import '$lib/server/websockets.server';
-import { startMonitoring } from '$lib/server/services/monitoring.service';
-import { startNotificationService } from '$lib/server/services/notification.service';
+import '$lib/server/services/auth.service';
+import '$lib/server/services/discovery.service';
+import '$lib/server/services/monitoring.service';
+import '$lib/server/services/notification.service';
+import '$lib/server/services/syslog.service';
+import { Service } from '@sourceregistry/sveltekit-service-manager/server';
 import { redirect, type Handle } from '@sveltejs/kit';
-import { hasAnyUsers } from '$lib/server/services/auth.service';
 import { requireAuth, requireSetupComplete, blockSetupIfComplete } from '$lib/server/middleware/auth-guards';
 import { ApiKeyRepository } from '$lib/server/repositories/api-keys.repository';
 import { UserRepository } from '$lib/server/repositories/user.repository';
 
-startMonitoring();
-startNotificationService();
+Service('monitoring').start();
+Service('notification').start();
+Service('syslog').start();
 
 const loginRoute = '/manage/account/login';
-const publicRoutes = [loginRoute, '/setup'];
+const publicRoutes = [loginRoute, '/setup', '/dev'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const pathname = event.url.pathname;
@@ -33,8 +36,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	// Run middleware guards
-	await requireSetupComplete(event, hasAnyUsers);
-	await blockSetupIfComplete(event, hasAnyUsers);
+	await requireSetupComplete(event, () => Service('auth').hasAnyUsers());
+	await blockSetupIfComplete(event, () => Service('auth').hasAnyUsers());
 
 	// Legacy /login redirect
 	if (pathname === '/login') {

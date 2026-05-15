@@ -31,7 +31,9 @@ describe('controller SSH key material', () => {
 
 		await expect(readFile(privateKeyPath, 'utf8')).resolves.toContain('PRIVATE KEY');
 		await expect(readFile(publicKeyPath, 'utf8')).resolves.toContain('ssh-rsa ');
-		expect(privateKeyStats.mode & 0o777).toBe(0o600);
+		if (process.platform !== 'win32') {
+			expect(privateKeyStats.mode & 0o777).toBe(0o600);
+		}
 		expect(keyPair.publicKey).toMatch(/^ssh-rsa [A-Za-z0-9+/=]+ controller@mikrotik-network-controller$/);
 	});
 });

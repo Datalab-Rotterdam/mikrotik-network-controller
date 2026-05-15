@@ -29,24 +29,17 @@ export type SnapshotMessage = {
 	};
 };
 
-export type DiscoverySnapshotMessage = {
-	type: 'discovery.snapshot';
-	payload: {
-		discoveredDevices: DiscoveryDevice[];
-	};
-};
-
 export type NeighborMessage = {
-	type: 'discovery.neighbor';
+	type: 'neighbor' | 'discovery.neighbor';
 	payload: DiscoveryDevice;
 };
 
-export type DeviceAdoptedMessage = {
-	type: 'device.adopted';
+export type AdoptedMessage = {
+	type: 'adopted' | 'device.adopted';
 	payload: DeviceAdoptedPayload;
 };
 
-export type DiscoveryWebSocketMessage = SnapshotMessage | DiscoverySnapshotMessage | NeighborMessage | DeviceAdoptedMessage;
+export type DiscoveryWebSocketMessage = SnapshotMessage | NeighborMessage | AdoptedMessage;
 
 export const discoverySocketEvent = writable<DiscoveryWebSocketMessage | null>(null);
 export const discoveredDevices: Writable<DiscoveryDevice[]> = writable([]);
@@ -69,11 +62,11 @@ export function processDiscoveryWebSocketMessage(message: unknown): void {
 
 	switch (event.type) {
 		case 'snapshot':
-		case 'discovery.snapshot':
 			if ('discoveredDevices' in payload) {
 				setDiscoveredDevices(payload.discoveredDevices);
 			}
 			return;
+		case 'neighbor':
 		case 'discovery.neighbor':
 			discoveredDevices.update((devices) => {
 				const updatedDevices = devices.filter(
@@ -82,9 +75,13 @@ export function processDiscoveryWebSocketMessage(message: unknown): void {
 				return [...updatedDevices, { ...event.payload }];
 			});
 			return;
+		case 'adopted':
 		case 'device.adopted':
 			discoveredDevices.update((devices) =>
-				devices.filter((device) => device.address !== event.payload.host && device.id !== event.payload.deviceId)
+				devices.filter(
+					(device) =>
+						device.address !== event.payload.host && device.id !== event.payload.deviceId
+				)
 			);
 			return;
 		default:

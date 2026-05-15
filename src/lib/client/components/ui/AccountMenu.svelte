@@ -1,5 +1,6 @@
 <script lang="ts">
   import Dropdown from "../primitives/Dropdown.svelte";
+  import Icon from "../primitives/Icon.svelte";
 
   type User = {
     email: string;
@@ -29,12 +30,7 @@
 
     <form method="POST" action="/manage/account/logout">
       <button type="submit">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-          <path
-            fill="currentColor"
-            d="M10 17v-2h4v-2h-4v-2l-4 3 4 3Zm-6 4h8v-2H6V5h6V3H4v18Zm11-4 5-5-5-5v3h-5v4h5v3Z"
-          />
-        </svg>
+        <Icon name="logout" size={16} />
         Sign out
       </button>
     </form>

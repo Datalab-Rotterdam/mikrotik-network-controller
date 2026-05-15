@@ -1,9 +1,9 @@
+import rotateRestSecretTask from "$lib/server/services/devices.service/tasks/rotate-rest-secret.task";
 import { Service } from '@sourceregistry/sveltekit-service-manager';
-import { createRotateRestSecretTask } from '../tasks';
 
 export default {
     async rotateRestSecret(deviceId: string) {
-        const task = await Service('scheduler').schedule(createRotateRestSecretTask(deviceId));
+        const task = await Service('scheduler').schedule(rotateRestSecretTask(deviceId));
 
         return {
             ok: true,

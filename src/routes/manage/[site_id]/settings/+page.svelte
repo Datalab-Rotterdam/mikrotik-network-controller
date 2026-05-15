@@ -1,11 +1,11 @@
 <script lang="ts">
-  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
+  import {PageHeader} from "$lib/client/components/layout/Page";
   import Card from "$lib/client/components/primitives/Card.svelte";
   import ResponsiveGrid from "$lib/client/components/layout/ResponsiveGrid.svelte";
-  import { PageShell } from "$lib/client/components/layout";
+  import { Page } from "$lib/client/components/layout";
 </script>
 
-<PageShell>
+<Page>
   <PageHeader
     title="Settings"
     subtitle="Controller security, local operation, and access management."
@@ -29,7 +29,7 @@
       <strong>Local</strong>
     </Card>
   </ResponsiveGrid>
-</PageShell>
+</Page>
 
 <style>
   .metric-label {
@@ -45,9 +45,4 @@
     font-size: 30px;
   }
 
-  .card {
-    border: 1px solid var(--color-border);
-    display: grid;
-    gap: 0;
-  }
 </style>

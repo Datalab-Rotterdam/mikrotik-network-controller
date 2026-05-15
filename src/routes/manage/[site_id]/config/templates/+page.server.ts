@@ -1,12 +1,12 @@
-import { fail, redirect, type Actions } from '@sveltejs/kit';
+import configDeployTask from "$lib/server/services/devices.service/tasks/config-deploy.task";
+import { fail, type Actions } from '@sveltejs/kit';
 import { enhance } from '@sourceregistry/sveltekit-enhance';
 import { SessionContext } from '$lib/server/context/session.context';
 import { TemplateRepository } from '$lib/server/repositories/templates.repository';
-import { extractPlaceholders, renderTemplate, diffConfigs } from '$lib/server/services/template-renderer.service';
-import type { TemplateVariable } from '$lib/server/services/template-renderer.service';
+import { extractPlaceholders, renderTemplate, diffConfigs } from '$lib/server/services/devices.service/template-renderer';
+import type { TemplateVariable } from '$lib/server/services/devices.service/template-renderer';
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
-import { createConfigDeployTask } from '$lib/server/services/devices.service/tasks';
 
 export const load = enhance.load(async ({ parent, params, depends }) => {
 	const { site } = await parent();
@@ -138,7 +138,7 @@ export const actions: Actions = {
 
 		try {
 			const job = await Service('scheduler').schedule(
-				createConfigDeployTask({ deviceId, templateId, variableValues, siteId })
+				configDeployTask({ deviceId, templateId, variableValues, siteId })
 			);
 
 			return { success: true, message: 'Deployment queued', jobId: job.id };

@@ -10,12 +10,14 @@
   } from "$lib/client/stores/jobs";
   import { enhance } from "$app/forms";
   import Button from "$lib/client/components/primitives/Button.svelte";
-  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
-  import { PageShell } from "$lib/client/components/layout";
+  import Icon from "$lib/client/components/primitives/Icon.svelte";
+  import {PageHeader} from "$lib/client/components/layout/Page";
+  import { Page } from "$lib/client/components/layout";
   import DevicePortLayout from "$lib/client/components/ui/DevicePortLayout.svelte";
   import TabLayout from "$lib/client/components/layout/TabLayout.svelte";
   import TrafficSparkline from "$lib/client/components/ui/TrafficSparkline.svelte";
   import type { JobStatus } from "$lib/shared/action-events";
+  import type { IconName } from "$lib/client/components/primitives/icons";
 
   type DeviceTab =
     | "overview"
@@ -27,7 +29,7 @@
   type TabItem<T extends string = string> = {
     id: T;
     label: string;
-    icon?: string;
+    icon?: IconName;
   };
 
   let { data, form } = $props();
@@ -46,36 +48,12 @@
       device.adoptionMode === "managed",
   );
   const tabs: TabItem<DeviceTab>[] = [
-    {
-      id: "overview",
-      label: "Overview",
-      icon: "M7 3h2v18H7V3Zm8 0h2v18h-2V3ZM3 8h2v8H3V8Zm16 0h2v8h-2V8Z",
-    },
-    {
-      id: "activity",
-      label: "Activity",
-      icon: "M5 19h14v2H5v-2Zm1-8h3v6H6v-6Zm5-8h3v14h-3V3Zm5 5h3v9h-3V8Z",
-    },
-    {
-      id: "firewall",
-      label: "Firewall",
-      icon: "M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4Zm0 2.2 7 3.1V11c0 4.5-3 8.7-7 10-4-1.3-7-5.5-7-10V6.3l7-3.1Z",
-    },
-    {
-      id: "vlans",
-      label: "VLANs",
-      icon: "M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z",
-    },
-    {
-      id: "backups",
-      label: "Backups",
-      icon: "M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2Zm1 14.93V17h-2v-.07A6 6 0 0 1 6.07 11H7v2h-.93A4 4 0 0 0 11 16.93V16h2v.93A4 4 0 0 0 16.93 13H17v-2h.93A6 6 0 0 1 13 16.93ZM12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z",
-    },
-    {
-      id: "advanced",
-      label: "Advanced",
-      icon: "m19.4 13.5.1-1.5-.1-1.5 2-1.5-2-3.5-2.4 1a8.8 8.8 0 0 0-2.6-1.5L14 2h-4l-.4 2.5A8.8 8.8 0 0 0 7 6L4.6 5 2.6 8.5l2 1.5-.1 1.5.1 1.5-2 1.5 2 3.5 2.4-1a8.8 8.8 0 0 0 2.6 1.5L10 22h4l.4-2.5A8.8 8.8 0 0 0 17 18l2.4 1 2-3.5-2-1.5ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z",
-    },
+    { id: "overview", label: "Overview", icon: "bar-chart" },
+    { id: "activity", label: "Activity", icon: "activity" },
+    { id: "firewall", label: "Firewall", icon: "shield" },
+    { id: "vlans", label: "VLANs", icon: "lines" },
+    { id: "backups", label: "Backups", icon: "backup" },
+    { id: "advanced", label: "Advanced", icon: "gear" },
   ];
   const validTabIds = new Set<DeviceTab>(tabs.map((tab) => tab.id));
   const activeTab = $derived(
@@ -203,19 +181,14 @@
   }
 </script>
 
-<PageShell>
+<Page>
   <div class="device-page-header">
     <a
       class="back-link"
       href={`${basePath}/devices`}
       aria-label="Back to devices"
     >
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-        <path
-          fill="currentColor"
-          d="m10.8 5.4 1.4 1.4L8 11h11v2H8l4.2 4.2-1.4 1.4L4.2 12l6.6-6.6Z"
-        />
-      </svg>
+      <Icon name="arrow-left" size={18} />
     </a>
     <PageHeader
       title={deviceName}
@@ -279,7 +252,7 @@
       </div>
     </div>
     <div class="hero-actions">
-      {#if !provisioned}
+      {#if !provisioned && device.connectionStatus === 'online'}
         <form method="POST" action="?/provision">
           <input type="hidden" name="deviceId" value={device.id} />
           <Button type="submit">Provision</Button>
@@ -320,10 +293,12 @@
             <span>Architecture</span>
             <strong>{device.architecture || "-"}</strong>
           </div>
-          <div class="info-row">
-            <span>Uptime</span>
-            <strong>{formatUptime(device.uptimeSeconds)}</strong>
-          </div>
+          {#if device.connectionStatus === 'online'}
+            <div class="info-row">
+              <span>Uptime</span>
+              <strong>{formatUptime(device.uptimeSeconds)}</strong>
+            </div>
+          {/if}
           <div class="info-row">
             <span>Last Seen</span>
             <strong>{formatDate(device.lastSeenAt)}</strong>
@@ -366,17 +341,19 @@
           <h2>Interfaces</h2>
           <span>{data.interfaces.length}</span>
         </div>
-        <DevicePortLayout
-          model={device.model ?? deviceName}
-          interfaces={data.interfaces}
-          variant="full"
-        />
+        {#if device.connectionStatus === 'online'}
+          <DevicePortLayout
+            model={device.model ?? deviceName}
+            interfaces={data.interfaces}
+            variant="full"
+          />
+        {/if}
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>Name</th>
-                <th>State</th>
+                {#if device.connectionStatus === 'online'}<th>State</th>{/if}
                 <th>Type</th>
                 <th>MAC Address</th>
                 <th>Comment</th>
@@ -387,18 +364,20 @@
                 {#each data.interfaces as networkInterface}
                   <tr>
                     <td>{networkInterface.name}</td>
-                    <td>
-                      <span
-                        class:online={networkInterface.running}
-                        class="interface-state"
-                      >
-                        {networkInterface.disabled
-                          ? "Disabled"
-                          : networkInterface.running
-                            ? "Running"
-                            : "Inactive"}
-                      </span>
-                    </td>
+                    {#if device.connectionStatus === 'online'}
+                      <td>
+                        <span
+                          class:online={networkInterface.running}
+                          class="interface-state"
+                        >
+                          {networkInterface.disabled
+                            ? "Disabled"
+                            : networkInterface.running
+                              ? "Running"
+                              : "Inactive"}
+                        </span>
+                      </td>
+                    {/if}
                     <td>{networkInterface.type || "-"}</td>
                     <td>{networkInterface.macAddress || "-"}</td>
                     <td>{networkInterface.comment || "-"}</td>
@@ -406,7 +385,7 @@
                 {/each}
               {:else}
                 <tr>
-                  <td colspan="5">
+                  <td colspan={device.connectionStatus === 'online' ? 5 : 4}>
                     <div class="empty-state">No interfaces collected yet.</div>
                   </td>
                 </tr>
@@ -416,7 +395,7 @@
         </div>
       </section>
 
-      {#if Object.keys(data.ifaceTraffic).length > 0}
+      {#if device.connectionStatus === 'online' && Object.keys(data.ifaceTraffic).length > 0}
         <section class="content-section">
           <div class="section-heading">
             <h2>Traffic</h2>
@@ -435,7 +414,7 @@
           </div>
         </section>
       {/if}
-      {#if data.device.platform === "routeros"}
+      {#if device.connectionStatus === 'online' && data.device.platform === "routeros"}
         <section class="content-section">
           <div class="section-heading">
             <h2>Firmware</h2>
@@ -902,17 +881,7 @@
                 type="button"
                 onclick={openTerminalWindow}
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="17"
-                  height="17"
-                  aria-hidden="true"
-                >
-                  <path
-                    fill="currentColor"
-                    d="M4 5h16v14H4V5Zm2 2v10h12V7H6Zm1.4 2.4L8.8 8l3.2 3.2-3.2 3.2-1.4-1.4 1.8-1.8-1.8-1.8ZM12 14h4v2h-4v-2Z"
-                  />
-                </svg>
+                <Icon name="terminal" size={17} />
                 <span>Open terminal</span>
               </button>
             {:else}
@@ -922,6 +891,23 @@
               </p>
             {/if}
           </div>
+          {#if data.sites.length > 1}
+            <div class="advanced-block">
+              <strong>Move to new site</strong>
+              <p>Transfer this device to a different site. You will be redirected there after the move.</p>
+              <form method="POST" action="?/moveToSite" use:enhance>
+                <div class="migrate-row">
+                  <select name="targetSiteId" class="migrate-select" required>
+                    <option value="" disabled selected>Select site…</option>
+                    {#each data.sites.filter((s) => s.id !== data.site.id) as site}
+                      <option value={site.id}>{site.name}</option>
+                    {/each}
+                  </select>
+                  <Button variant="secondary" size="sm" type="submit">Move</Button>
+                </div>
+              </form>
+            </div>
+          {/if}
           <div class="advanced-block danger-block">
             <strong>Remove device</strong>
             <p>
@@ -945,7 +931,7 @@
       </section>
     {/if}
   </TabLayout>
-</PageShell>
+</Page>
 
 <style lang="scss">
   .device-page-header {
@@ -1348,6 +1334,23 @@
     color: #8a949c;
     font-size: 13px;
     line-height: 1.45;
+  }
+
+  .migrate-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+  }
+
+  .migrate-select {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border, var(--color-line));
+    border-radius: var(--radius-md, 6px);
+    font-size: 13px;
+    background: var(--color-surface);
+    color: var(--color-text);
   }
 
   .danger-block {

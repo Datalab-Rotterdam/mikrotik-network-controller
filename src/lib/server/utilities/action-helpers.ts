@@ -117,6 +117,15 @@ export function requirePort(value: number): number {
 }
 
 /**
+ * Validate a TCP port number.
+ */
+export function validateTcpPort(port: number): void {
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new Error('API port must be a valid TCP port');
+    }
+}
+
+/**
  * Wrap an async action handler with standardized error handling.
  */
 export async function withActionError<T extends Record<string, unknown>>(

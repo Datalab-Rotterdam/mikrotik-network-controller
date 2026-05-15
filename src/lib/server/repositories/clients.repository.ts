@@ -76,9 +76,12 @@ export const ClientRepository = {
 				signalStrength: deviceClients.signalStrength,
 				firstSeenAt: deviceClients.firstSeenAt,
 				lastSeenAt: deviceClients.lastSeenAt,
-				active: deviceClients.active
+				active: deviceClients.active,
+				deviceName: devices.name,
+				deviceIdentity: devices.identity
 			})
 			.from(deviceClients)
+			.leftJoin(devices, eq(deviceClients.deviceId, devices.id))
 			.where(and(eq(deviceClients.siteId, siteId), eq(deviceClients.active, true)))
 			.orderBy(deviceClients.lastSeenAt);
 	},
@@ -89,6 +92,13 @@ export const ClientRepository = {
 			.from(deviceClients)
 			.where(and(eq(deviceClients.siteId, siteId), eq(deviceClients.active, true)));
 		return row?.value ?? 0;
+	},
+
+	async updateSiteForDevice(deviceId: string, siteId: string): Promise<void> {
+		await db
+			.update(deviceClients)
+			.set({ siteId, updatedAt: new Date() })
+			.where(eq(deviceClients.deviceId, deviceId));
 	},
 
 	async searchClients(query: string, limit = 50) {

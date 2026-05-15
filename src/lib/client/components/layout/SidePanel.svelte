@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import Icon from '../primitives/Icon.svelte';
 
 	let {
 		children,
@@ -16,6 +17,15 @@
 		open?: boolean;
 		onClose?: () => void;
 	} = $props();
+
+	$effect(() => {
+		if (open) {
+			document.body.style.overflow = 'hidden';
+			return () => {
+				document.body.style.overflow = '';
+			};
+		}
+	});
 </script>
 
 {#if open}
@@ -29,9 +39,7 @@
 				{/if}
 			</div>
 			<a class="close-panel" href={closeHref} aria-label="Close panel" onclick={onClose}>
-				<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-					<path fill="currentColor" d="m6.4 5 12.6 12.6-1.4 1.4L5 6.4 6.4 5Zm12.6 1.4L6.4 19 5 17.6 17.6 5 19 6.4Z" />
-				</svg>
+				<Icon name="close" size={18} />
 			</a>
 		</div>
 		<div class="panel-body">
@@ -49,14 +57,16 @@
 		position: fixed;
 		top: 48px;
 		right: 0;
-		z-index: 31;
+		z-index: 81;
 		display: grid;
 		grid-template-rows: auto minmax(0, 1fr);
 		width: min(calc(100vw - 50px), 390px);
-		height: calc(100vh - 48px);
+		height: calc(100dvh - 48px);
+		max-height: calc(100dvh - 48px);
 		background: var(--color-surface);
 		box-shadow: -18px 0 42px rgba(14, 14, 16, 0.14);
 		animation: slide-in 160ms ease-out;
+		overflow: hidden;
 	}
 
 	.panel-header {
@@ -98,6 +108,10 @@
 	.panel-body {
 		min-height: 0;
 		overflow-y: auto;
+		overflow-x: hidden;
+		overscroll-behavior: contain;
+		-webkit-overflow-scrolling: touch;
+		touch-action: pan-y;
 		padding: 16px;
 	}
 
@@ -115,15 +129,17 @@
 			display: block;
 			position: fixed;
 			inset: 48px 0 0 50px;
-			z-index: 30;
-			background: rgba(14, 14, 16, 0.22);
+			z-index: 80;
+			background: rgba(14, 14, 16, 0.34);
+			backdrop-filter: blur(1px);
 		}
 
 		.side-panel {
 			top: auto;
 			bottom: 0;
 			width: calc(100vw - 50px);
-			height: min(calc(88vh - 48px), 680px);
+			height: min(calc(100dvh - 48px), 680px);
+			max-height: calc(100dvh - 48px);
 			border-radius: 10px 10px 0 0;
 			box-shadow: 0 -18px 42px rgba(14, 14, 16, 0.16);
 			animation-name: slide-up;

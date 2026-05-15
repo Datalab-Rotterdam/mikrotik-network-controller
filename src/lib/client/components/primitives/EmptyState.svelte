@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import Icon from "./Icon.svelte";
+  import type { IconName } from "./icons";
 
   let {
     icon,
@@ -7,7 +9,7 @@
     description,
     children,
   }: {
-    icon: string;
+    icon: IconName;
     title: string;
     description: string;
     children?: Snippet;
@@ -17,9 +19,7 @@
 <div class="empty-state">
   <div class="empty-state-content">
     <div class="empty-state-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="48" height="48">
-        <path fill="currentColor" d={icon} />
-      </svg>
+      <Icon name={icon} size={48} />
     </div>
     <strong class="empty-state-title">{title}</strong>
     <p class="empty-state-description">{description}</p>

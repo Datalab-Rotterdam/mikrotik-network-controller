@@ -5,7 +5,7 @@
   import Card from "$lib/client/components/primitives/Card.svelte";
   import Checkbox from "$lib/client/components/primitives/Checkbox.svelte";
   import Input from "$lib/client/components/primitives/Input.svelte";
-  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
+  import {PageHeader} from "$lib/client/components/layout/Page";
 
   let { data, form } = $props();
 

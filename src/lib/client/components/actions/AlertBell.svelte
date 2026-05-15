@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { useActionSocket } from '$lib/client/actions/use-action-socket';
 	import type { ActionEvent } from '$lib/shared/action-events';
+	import Icon from '$lib/client/components/primitives/Icon.svelte';
 
 	let {
 		alertsHref,
@@ -27,12 +28,7 @@
 	aria-label="Alerts{count > 0 ? ` (${count} active)` : ''}"
 	title="Alerts"
 >
-	<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-		<path
-			fill="currentColor"
-			d="M12 2a7 7 0 0 1 7 7c0 2.4-.8 4.7-2.2 6.4L18 17H6l1.2-1.6A10 10 0 0 1 5 9a7 7 0 0 1 7-7Zm0 18a2 2 0 0 1-2-2h4a2 2 0 0 1-2 2Z"
-		/>
-	</svg>
+	<Icon name="bell" size={20} />
 	{#if count > 0}
 		<span class="bell-badge" aria-hidden="true">{count > 99 ? '99+' : count}</span>
 	{/if}

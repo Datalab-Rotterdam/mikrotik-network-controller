@@ -1,9 +1,9 @@
+import provisionDeviceTask from "$lib/server/services/devices.service/tasks/provision-device.task";
 import { Service } from '@sourceregistry/sveltekit-service-manager';
-import { createProvisionDeviceTask } from '../tasks';
 
 export default {
     async provision(deviceId: string) {
-        const task = await Service('scheduler').schedule(createProvisionDeviceTask(deviceId));
+        const task = await Service('scheduler').schedule(provisionDeviceTask(deviceId));
 
         return {
             ok: true,

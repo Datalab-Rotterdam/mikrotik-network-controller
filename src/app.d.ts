@@ -2,8 +2,13 @@
 // for information about these interfaces
 import type {DevicesService} from "$lib/server/services/devices.service";
 import type {SchedulerService} from "$lib/server/services/scheduler.service";
-import type {Action} from "@sourceregistry/sveltekit-actionbus";
+import type {AlertsService} from "$lib/server/services/alerts.service";
+import type {AuthService} from "$lib/server/services/auth.service";
+import type {DiscoveryService} from "$lib/server/services/discovery.service";
+import type {MonitoringService} from "$lib/server/services/monitoring.service";
+import type {NotificationService} from "$lib/server/services/notification.service";
 import type {ActionBusService} from "$lib/server/services/actionbus.service";
+import type {SyslogService} from "$lib/server/services/syslog.service";
 import type {
 	ActionDeviceAdoptedPayload,
 	ActionDeviceRemovedPayload,
@@ -14,6 +19,7 @@ import type {
 	AlertResolvedPayload,
 	ClientUpdatedPayload,
 	DeviceMetricPayload,
+	SyslogEventPayload,
 	TopologyUpdatedPayload
 } from "$lib/shared/action-events";
 
@@ -30,36 +36,43 @@ declare global {
         }
 
         interface Services {
+            alerts: AlertsService
+            auth: AuthService
+            discovery: DiscoveryService
             devices: DevicesService
+            monitoring: MonitoringService
+            notification: NotificationService
             scheduler: SchedulerService
             actionbus: ActionBusService
+            syslog: SyslogService
         }
 
         interface ActionEvents {
             'site:${string}': {
-                'job.snapshot': Action<{
+                'job.snapshot': {
                     siteId: string;
                     jobs: ActionJob[];
-                }>;
-                'job.updated': Action<{
+                };
+                'job.updated': {
                     siteId: string | null;
                     job: ActionJob;
-                }>;
-                'device.adopted': Action<ActionDeviceAdoptedPayload>;
-                'device.updated': Action<ActionDeviceUpdatedPayload>;
-                'device.removed': Action<ActionDeviceRemovedPayload>;
-                'metric.updated': Action<DeviceMetricPayload>;
-                'client.updated': Action<ClientUpdatedPayload>;
-                'alert.fired': Action<AlertFiredPayload>;
-                'alert.resolved': Action<AlertResolvedPayload>;
-                'topology.updated': Action<TopologyUpdatedPayload>;
+                };
+                'device.adopted': ActionDeviceAdoptedPayload;
+                'device.updated': ActionDeviceUpdatedPayload;
+                'device.removed': ActionDeviceRemovedPayload;
+                'metric.updated': DeviceMetricPayload;
+                'client.updated': ClientUpdatedPayload;
+                'alert.fired': AlertFiredPayload;
+                'alert.resolved': AlertResolvedPayload;
+                'topology.updated': TopologyUpdatedPayload;
+                'syslog.event': SyslogEventPayload;
             };
             discovery: {
-                'discovery.snapshot': Action<{
+                'snapshot': {
                     discoveredDevices: ActionDiscoveryDevice[];
-                }>;
-                'discovery.neighbor': Action<ActionDiscoveryDevice>;
-                'device.adopted': Action<ActionDeviceAdoptedPayload>;
+                };
+                'neighbor': ActionDiscoveryDevice;
+                'adopted': ActionDeviceAdoptedPayload;
             };
         }
 

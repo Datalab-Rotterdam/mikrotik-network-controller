@@ -1,11 +1,13 @@
 import { type AckInput, type DeviceRecord, type EnrollInput } from '$lib/server/services/devices.service/shared';
+import adoptCredentialsTask from "$lib/server/services/devices.service/tasks/adopt-credentials.task";
+import managedAdoptCredentialsTask from "$lib/server/services/devices.service/tasks/managed-adopt-credentials.task";
+import prepareBootstrapTask from "$lib/server/services/devices.service/tasks/prepare.bootstrap.task";
 import { Service } from '@sourceregistry/sveltekit-service-manager';
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { DeviceRepository } from '$lib/server/repositories/device.repository';
 import { encryptSecret } from '$lib/server/security/secrets';
 import { getControllerSshPublicKey } from '$lib/server/security/controller-ssh-keys';
-import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
-import { createAdoptCredentialsTask, createManagedAdoptCredentialsTask, createPrepareBootstrapTask } from '../tasks';
+import { emitDeviceUpdated } from '$lib/server/services/devices.service/events';
 
 
 export default {
@@ -20,7 +22,7 @@ export default {
         requestedByUserId: string;
         managementCidrs?: string;
     }) {
-        const task = await Service('scheduler').schedule(createManagedAdoptCredentialsTask(input));
+        const task = await Service('scheduler').schedule(managedAdoptCredentialsTask(input));
 
         return {
             ok: true,
@@ -37,7 +39,7 @@ export default {
         platform: 'routeros' | 'switchos';
         requestedByUserId: string;
     }) {
-        const task = await Service('scheduler').schedule(createAdoptCredentialsTask(input));
+        const task = await Service('scheduler').schedule(adoptCredentialsTask(input));
 
         return {
             ok: true,
@@ -52,7 +54,7 @@ export default {
         bootstrapToken?: string;
         wwwSslCertificateName?: string;
     }) {
-        const task = await Service('scheduler').schedule(createPrepareBootstrapTask(input));
+        const task = await Service('scheduler').schedule(prepareBootstrapTask(input));
 
         return {
             ok: true,

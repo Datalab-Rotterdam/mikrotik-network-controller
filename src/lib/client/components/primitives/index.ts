@@ -1,4 +1,6 @@
 export { default as Alert } from './Alert.svelte';
+export { default as Icon } from './Icon.svelte';
+export type { IconName } from './icons';
 export { default as Breadcrumb } from './Breadcrumb.svelte';
 export { default as Button } from './Button.svelte';
 export { default as Card } from './Card.svelte';
@@ -11,7 +13,6 @@ export { default as Form } from './Form.svelte';
 export { default as InfoRow } from './InfoRow.svelte';
 export { default as Input } from './Input.svelte';
 export { default as Modal } from './Modal.svelte';
-export { default as PageHeader } from './PageHeader.svelte';
 export { default as Pagination } from './Pagination.svelte';
 export { default as ProgressBar } from './ProgressBar.svelte';
 export { default as SectionLabel } from './SectionLabel.svelte';

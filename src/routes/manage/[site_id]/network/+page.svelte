@@ -1,25 +1,17 @@
 <script lang="ts">
   import TabLayout from "$lib/client/components/layout/TabLayout.svelte";
   import { page } from "$app/state";
-  import { PageShell } from "$lib/client/components/layout";
-  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
+  import { Page, PageHeader } from "$lib/client/components/layout";
+  import type { IconName } from "$lib/client/components/primitives/icons";
 
   type NetworkTab = "firewall" | "vlans";
-  type TabItem<T extends string = string> = { id: T; label: string; icon?: string };
+  type TabItem<T extends string = string> = { id: T; label: string; icon?: IconName };
 
   let { data } = $props();
 
   const tabs: TabItem<NetworkTab>[] = [
-    {
-      id: "firewall",
-      label: "Firewall",
-      icon: "M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4Zm0 2.2 7 3.1V11c0 4.5-3 8.7-7 10-4-1.3-7-5.5-7-10V6.3l7-3.1Z",
-    },
-    {
-      id: "vlans",
-      label: "VLANs",
-      icon: "M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z",
-    },
+    { id: "firewall", label: "Firewall", icon: "shield" },
+    { id: "vlans", label: "VLANs", icon: "lines" },
   ];
 
   const validTabIds = new Set<NetworkTab>(tabs.map((t) => t.id));
@@ -68,7 +60,7 @@
   </div>
 {/snippet}
 
-<PageShell>
+<Page>
   <PageHeader
     title="Network"
     subtitle={`${data.devices.length} devices · ${data.firewallRules.length} firewall rules · ${data.vlans.length} VLANs`}
@@ -176,7 +168,7 @@
       </section>
     {/if}
   </TabLayout>
-</PageShell>
+</Page>
 
 <style lang="scss">
   .content-section {

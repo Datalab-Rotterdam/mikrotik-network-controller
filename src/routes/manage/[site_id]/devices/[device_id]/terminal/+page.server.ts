@@ -7,7 +7,7 @@ import { TelemetryRepository } from '$lib/server/repositories/telemetry.reposito
 import {
 	isDeviceTerminalEligible,
 	startDeviceTerminalSession
-} from '$lib/server/services/device-terminal.service';
+} from '$lib/server/services/devices.service/terminal';
 
 const terminalUnavailableMessage =
 	'Terminal access is available only for managed RouterOS devices with SSH trust.';

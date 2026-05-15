@@ -88,14 +88,10 @@
 				gap: 4px;
 				font-size: 11px;
 				font-weight: var(--font-weight-semibold, 650);
-				color: var(--color-danger-light, #efb8b8);
+				color: var(--color-danger, #8a1f1f);
 
 				&.up {
 					color: var(--color-success, #16a34a);
-				}
-
-				:not(&.up) {
-					color: var(--color-danger, #8a1f1f);
 				}
 			}
 		}

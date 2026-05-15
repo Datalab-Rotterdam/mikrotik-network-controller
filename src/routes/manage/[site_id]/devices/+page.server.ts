@@ -1,10 +1,11 @@
+import checkFirmwareTask from "$lib/server/services/devices.service/tasks/check-firmware.task";
+import firmwareUpgradeTask from "$lib/server/services/devices.service/tasks/firmware-upgrade.task";
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { SiteRepository } from '$lib/server/repositories/site.repository';
 import { service as devicesService } from '$lib/server/services/devices.service';
-import { loadSiteDeviceState } from '$lib/server/services/site-device.service';
+import { loadSiteDeviceState } from '$lib/server/services/devices.service/site-state';
 import { provisionDeviceAction, removeDeviceAction } from './device-actions.server';
 import { FirmwareRepository } from '$lib/server/repositories/firmware.repository';
-import { createFirmwareCheckTask, createFirmwareUpgradeTask } from '$lib/server/services/firmware.service';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
 import { enhance } from "@sourceregistry/sveltekit-enhance";
 import { SessionContext } from '$lib/server/context/session.context';
@@ -126,7 +127,7 @@ export const actions: Actions = {
 		const deviceId = String(data.get('deviceId') ?? '');
 		if (!deviceId) return fail(400, { message: 'Missing deviceId' });
 		try {
-			const job = await Service('scheduler').schedule(createFirmwareCheckTask(deviceId, siteId));
+			const job = await Service('scheduler').schedule(checkFirmwareTask(deviceId, siteId));
 			return { success: true, message: 'Firmware check queued', jobId: job.id };
 		} catch (e) {
 			return fail(500, { message: String(e) });
@@ -138,7 +139,7 @@ export const actions: Actions = {
 		const deviceId = String(data.get('deviceId') ?? '');
 		if (!deviceId) return fail(400, { message: 'Missing deviceId' });
 		try {
-			const job = await Service('scheduler').schedule(createFirmwareUpgradeTask(deviceId, siteId));
+			const job = await Service('scheduler').schedule(firmwareUpgradeTask(deviceId, siteId));
 			return { success: true, message: 'Firmware upgrade queued', jobId: job.id };
 		} catch (e) {
 			return fail(500, { message: String(e) });

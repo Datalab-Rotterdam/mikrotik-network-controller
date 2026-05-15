@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { createFirstAdmin, createLoginSession } from '$lib/server/services/auth.service';
+import { Service } from '@sourceregistry/sveltekit-service-manager/server';
+import '$lib/server/services/auth.service';
 import { SiteRepository } from '$lib/server/repositories/site.repository';
 
 export const load = ({ url }) => {
@@ -46,9 +47,9 @@ export const actions = {
 		}
 
 		try {
-			const user = await createFirstAdmin({ email, displayName, password });
+			const user = await Service('auth').createFirstAdmin({ email, displayName, password });
 			await SiteRepository.ensureByName(controllerName, country);
-			await createLoginSession(cookies, user.id);
+			await Service('auth').createLoginSession(cookies, user.id);
 		} catch (error) {
 			return fail(400, {
 				message: error instanceof Error ? error.message : 'Unable to complete setup.',

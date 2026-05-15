@@ -12,10 +12,8 @@
   import { onMount } from "svelte";
   import { invalidate } from "$app/navigation";
   import SidePanel from "$lib/client/components/layout/SidePanel.svelte";
-  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
-  import { PageShell } from "$lib/client/components/layout";
+  import { Page, PageHeader } from "$lib/client/components/layout";
   import TopologyDeviceNode from "$lib/client/components/ui/TopologyDeviceNode.svelte";
-  import DiscoveryUpdatesWebSocket from "$lib/client/components/ui/DiscoveryUpdatesWebSocket.svelte";
   import { useActionSocket } from "$lib/client/actions/use-action-socket";
   import {
     discoveredDevices,
@@ -277,8 +275,6 @@
   }
 </script>
 
-<DiscoveryUpdatesWebSocket />
-
 {#snippet topologyActions()}
   <div class="topology-stats" aria-label="Topology summary">
     <span>{adoptedCount} adopted</span>
@@ -288,7 +284,7 @@
   </div>
 {/snippet}
 
-<PageShell>
+<Page>
   <PageHeader
     title="Topology"
     subtitle="Adopted RouterOS and SwitchOS devices, plus discovered MikroTik neighbors."
@@ -408,7 +404,7 @@
       </div>
     </SidePanel>
   {/if}
-</PageShell>
+</Page>
 
 <style lang="scss">
   .topology-page {
@@ -443,7 +439,8 @@
 
   .topology-shell {
     flex: 1 1 auto;
-    min-height: 420px;
+    height: 0;
+    min-height: 480px;
     border: 1px solid var(--color-border);
     border-radius: 6px;
     overflow: hidden;
@@ -468,31 +465,32 @@
     border: 0;
     padding: 0;
     background: transparent;
+    z-index: 1;
   }
 
   .topology-shell :global(.svelte-flow__node.selected .device-node) {
-    border-color: var(--color-link, #0f6fff);
     box-shadow:
-      0 0 0 3px color-mix(in srgb, var(--color-link, #0f6fff) 12%, transparent),
-      0 8px 18px color-mix(in srgb, var(--color-text) 8%, transparent);
-  }
-
-  .topology-shell :global(.svelte-flow__node.selected .device-node.thumbnail) {
-    box-shadow: none;
-  }
-
-  .topology-shell :global(.svelte-flow__node.selected .device-node.thumbnail img) {
-    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--color-link, #0f6fff) 22%, transparent));
-  }
-
-  .topology-shell :global(.svelte-flow__node.selected .device-node.thumbnail strong) {
-    text-decoration: underline;
-    text-underline-offset: 3px;
+      0 0 0 3px color-mix(in srgb, var(--color-link, #0f6fff) 20%, transparent),
+      0 8px 20px color-mix(in srgb, var(--color-text) 10%, transparent);
   }
 
   .topology-shell :global(.svelte-flow__edge-text) {
     fill: var(--color-muted);
     font-size: 11px;
+  }
+
+  .topology-shell :global(.svelte-flow__handle) {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Edges always behind nodes */
+  .topology-shell :global(.svelte-flow__edges) {
+    z-index: 0 !important;
+  }
+
+  .topology-shell :global(.svelte-flow__nodes) {
+    z-index: 1 !important;
   }
 
   /* Side panel content */

@@ -1,3 +1,5 @@
+import type {SchedulerEventMap} from "$lib/server/services/scheduler.service";
+
 export type TaskFailurePolicy = 'rollback' | 'stop' | 'continue';
 
 export type StepRevertPolicy = 'required' | 'best_effort' | 'none';
@@ -38,21 +40,7 @@ export interface TaskDefinition<TPayload extends Record<string, unknown> = Recor
 	steps: TaskStep<TPayload>[];
 }
 
-export type SchedulerEventName =
-	| 'job:queued'
-	| 'job:started'
-	| 'job:succeeded'
-	| 'job:failed'
-	| 'job:rolling_back'
-	| 'job:reverted'
-	| 'job:revert_failed'
-	| 'step:started'
-	| 'step:succeeded'
-	| 'step:failed'
-	| 'step:reverting'
-	| 'step:reverted'
-	| 'step:revert_failed'
-	| 'step:revert_skipped';
+export type SchedulerEventName = keyof SchedulerEventMap
 
 export interface SchedulerEventDetail {
 	jobId: string;

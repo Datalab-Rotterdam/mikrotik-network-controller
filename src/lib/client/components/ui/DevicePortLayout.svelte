@@ -8,11 +8,13 @@
 	let {
 		model,
 		interfaces,
-		variant = 'full'
+		variant = 'full',
+		onPortSelect
 	}: {
 		model?: string | null;
 		interfaces: DevicePortInterface[];
 		variant?: 'compact' | 'full';
+		onPortSelect?: (port: DevicePortInterface | null) => void;
 	} = $props();
 
 	let selectedPortKey = $state<string | null>(null);
@@ -34,6 +36,7 @@
 
 	function selectPort(port: ResolvedPort) {
 		selectedPortKey = port.key;
+		onPortSelect?.(port.interface ?? null);
 	}
 
 	function formatState(port: ResolvedPort) {

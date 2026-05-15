@@ -1,5 +1,6 @@
 <script lang="ts">
   import Dropdown from "../primitives/Dropdown.svelte";
+  import Icon from "../primitives/Icon.svelte";
 
   type Site = {
     id: string;
@@ -25,9 +26,7 @@
 <Dropdown rootClass="site-switcher" panelClass="site-menu">
   {#snippet trigger()}
     <span>{activeSite.name}</span>
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <path fill="currentColor" d="m7 10 5 5 5-5H7Z" />
-    </svg>
+    <Icon name="chevron-down" size={16} />
   {/snippet}
 
   <div class="site-content">
@@ -36,12 +35,7 @@
         <a class:active={site.id === activeSite.id} href={hrefFor(site)}>
           <span>{site.name}</span>
           {#if site.id === activeSite.id}
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="m9 16.2-3.5-3.5L4 14.2l5 5L20 8.3 18.5 7 9 16.2Z"
-              />
-            </svg>
+            <Icon name="check" size={14} />
           {/if}
         </a>
       {/each}
@@ -53,9 +47,7 @@
         <input name="name" placeholder="Site name" required />
       </label>
       <button type="submit" aria-label="Add site">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-          <path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z" />
-        </svg>
+        <Icon name="plus" size={16} />
       </button>
     </form>
   </div>

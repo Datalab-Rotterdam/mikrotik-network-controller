@@ -1,144 +1,154 @@
 <script lang="ts">
 	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
 
-type DeviceNodeData = {
-	imageSrc: string;
-	name: string;
-	model: string;
-	status: string;
-	kind: 'router' | 'switch';
-	adopted: boolean;
-};
+	type DeviceNodeData = {
+		imageSrc: string;
+		name: string;
+		model: string;
+		status: string;
+		kind: 'router' | 'switch';
+		adopted: boolean;
+	};
 
-	let {
-		data,
-	}: NodeProps = $props();
+	let { data }: NodeProps = $props();
+	const node = $derived(data as DeviceNodeData);
 
-const node = $derived(data as DeviceNodeData);
-const hasThumbnail = $derived(node.imageSrc !== '/favicon.svg');
+	const hasImage = $derived(Boolean(node.imageSrc) && node.imageSrc !== '/favicon.svg');
+	const isOnline = $derived(node.status === 'online');
+
+	const statusColor = $derived(
+		node.status === 'online'
+			? 'online'
+			: node.status === 'offline'
+				? 'offline'
+				: node.status === 'auth_failed'
+					? 'warn'
+					: 'discovered'
+	);
 </script>
 
-<!-- Target handles on all sides for center-originating edges -->
-<Handle type="target" position={Position.Left} />
-<Handle type="target" position={Position.Right} />
-<Handle type="target" position={Position.Top} />
-<Handle type="target" position={Position.Bottom} />
-<div class="device-node" class:thumbnail={hasThumbnail} class:switch={node.kind === 'switch'} class:discovered={!node.adopted}>
-	<div class="device-image">
-		<img src={node.imageSrc} alt="" width="130" height="84" />
-	</div>
-	<div class="device-copy">
-		<strong>{node.name}</strong>
-		{#if !hasThumbnail}
-			<span>{node.model || (node.kind === 'switch' ? 'MikroTik switch' : 'MikroTik router')}</span>
-			<em>{node.status}</em>
+<!-- Handles centered so edges originate from node center -->
+<Handle
+	type="target"
+	position={Position.Top}
+	style="left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0; pointer-events: none;"
+/>
+<Handle
+	type="source"
+	position={Position.Bottom}
+	style="left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0; pointer-events: none;"
+/>
+
+<div class="device-node" class:offline={!isOnline} data-status={statusColor}>
+	<div class="icon-wrap" class:has-image={hasImage}>
+		{#if hasImage}
+			<img src={node.imageSrc} alt={node.name} class="device-img" />
+		{:else if node.kind === 'switch'}
+			<svg viewBox="0 0 48 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+				<rect x="2" y="8" width="44" height="16" rx="4" stroke="currentColor" stroke-width="2" fill="none"/>
+				<circle cx="12" cy="16" r="2.5" fill="currentColor"/>
+				<circle cx="24" cy="16" r="2.5" fill="currentColor"/>
+				<circle cx="36" cy="16" r="2.5" fill="currentColor"/>
+				<line x1="12" y1="8" x2="12" y2="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+				<line x1="24" y1="8" x2="24" y2="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+				<line x1="36" y1="24" x2="36" y2="29" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+				<rect x="40" y="13" width="3" height="6" rx="1" fill="currentColor" opacity="0.5"/>
+			</svg>
+		{:else}
+			<svg viewBox="0 0 48 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+				<rect x="2" y="8" width="44" height="16" rx="4" stroke="currentColor" stroke-width="2" fill="none"/>
+				<line x1="24" y1="8" x2="24" y2="2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+				<line x1="16" y1="2" x2="32" y2="2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+				<line x1="16" y1="2" x2="16" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+				<line x1="32" y1="2" x2="32" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+				<circle cx="36" cy="16" r="2.5" fill="currentColor"/>
+				<circle cx="42" cy="16" r="1.5" fill="currentColor" opacity="0.6"/>
+				<rect x="6" y="13" width="3" height="6" rx="1" fill="currentColor" opacity="0.4"/>
+				<rect x="11" y="13" width="3" height="6" rx="1" fill="currentColor" opacity="0.4"/>
+			</svg>
 		{/if}
+		<span class="status-dot" aria-label={node.status}></span>
 	</div>
+	<strong class="node-name">{node.name}</strong>
 </div>
-<!-- Source handles on all sides for center-originating edges -->
-<Handle type="source" position={Position.Left} />
-<Handle type="source" position={Position.Right} />
-<Handle type="source" position={Position.Top} />
-<Handle type="source" position={Position.Bottom} />
 
 <style lang="scss">
 	.device-node {
-		display: grid;
-		grid-template-columns: 54px minmax(0, 1fr);
-		gap: 9px;
+		display: flex;
+		flex-direction: column;
 		align-items: center;
-		width: 210px;
-		border: 1px solid #dfe6eb;
-		border-left: 4px solid #0f6fff;
-		border-radius: 6px;
-		padding: 9px;
-		background: var(--color-surface);
-		box-shadow: 0 8px 18px rgba(14, 14, 16, 0.08);
+		gap: 7px;
+		width: 120px;
+		cursor: pointer;
+		transition: opacity 0.15s;
+
+		&.offline {
+			opacity: 0.4;
+			filter: grayscale(1);
+		}
 	}
 
-	.device-node.thumbnail {
-		display: grid;
-		grid-template-columns: 1fr;
-		justify-items: center;
-		gap: 2px;
-		width: 164px;
-		border: 0;
-		padding: 0;
-		background: transparent;
-		box-shadow: none;
-	}
-
-	.device-node.switch {
-		border-left-color: #16a26b;
-	}
-
-	.device-node.discovered {
-		border-left-color: #e5a13a;
-	}
-
-	.device-image {
+	.icon-wrap {
+		position: relative;
 		display: grid;
 		place-items: center;
-		width: 52px;
-		height: 38px;
-		border-radius: 4px;
-		background: #fbfdff;
+		width: 64px;
+		height: 44px;
+		border-radius: 8px;
+		background: var(--color-surface, #fff);
+		color: #0f6fff;
+
+		svg {
+			width: 48px;
+			height: 32px;
+		}
+
+		&.has-image {
+			width: 110px;
+			height: 68px;
+			background: transparent;
+			border-radius: 0;
+		}
 	}
 
-	img {
-		width: 52px;
-		height: 38px;
+	.device-img {
+		width: 100%;
+		height: 100%;
 		object-fit: contain;
 	}
 
-	.thumbnail .device-image {
-		width: 150px;
-		height: 86px;
-		background: transparent;
+	.status-dot {
+		position: absolute;
+		top: -4px;
+		right: -4px;
+		width: 11px;
+		height: 11px;
+		border-radius: 50%;
+		border: 2px solid var(--color-page, #f5f7f9);
+		background: #8a949c;
+
+		.device-node[data-status='online'] & {
+			background: #22c55e;
+		}
+
+		.device-node[data-status='offline'] & {
+			background: #ef4444;
+		}
+
+		.device-node[data-status='warn'] & {
+			background: #f59e0b;
+		}
 	}
 
-	.thumbnail img {
-		width: 150px;
-		height: 86px;
-		object-fit: contain;
-	}
-
-	.device-copy {
-		display: grid;
-		min-width: 0;
-		gap: 2px;
-	}
-
-	strong,
-	span,
-	em {
-		min-width: 0;
+	.node-name {
+		display: block;
+		max-width: 120px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	strong {
-		color: #2f3438;
-		font-size: 13px;
-	}
-
-	.thumbnail strong {
-		color: var(--color-link);
-		font-size: 13px;
-		font-weight: 500;
 		text-align: center;
-	}
-
-	span {
-		color: #6f7a83;
+		color: var(--color-text, #2f3438);
 		font-size: 12px;
-	}
-
-	em {
-		color: #8a949c;
-		font-size: 11px;
-		font-style: normal;
-		text-transform: capitalize;
+		font-weight: 600;
 	}
 </style>

@@ -21,37 +21,50 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/server/repositories/device.repository', () => ({
-	getDeviceByIdForSite: mocks.getDeviceByIdForSite
+	DeviceRepository: {
+		getByIdForSite: mocks.getDeviceByIdForSite,
+		updateName: vi.fn()
+	}
 }));
 
 vi.mock('$lib/server/repositories/site.repository', () => ({
-	findSiteById: mocks.findSiteById
+	SiteRepository: {
+		findById: mocks.findSiteById
+	}
 }));
 
 vi.mock('$lib/server/repositories/telemetry.repository', () => ({
-	listDeviceInterfaces: mocks.listDeviceInterfaces,
-	getActiveCredential: mocks.getActiveCredential
+	TelemetryRepository: {
+		listInterfaces: mocks.listDeviceInterfaces,
+		getActiveCredential: mocks.getActiveCredential
+	}
 }));
 
 vi.mock('$lib/server/repositories/job.repository', () => ({
-	listJobsByDevice: mocks.listJobsByDevice,
-	getJobWithSteps: mocks.getJobWithSteps
+	JobRepository: {
+		listByDevice: mocks.listJobsByDevice,
+		getWithSteps: mocks.getJobWithSteps
+	}
 }));
 
-vi.mock('$lib/server/services/device-image-catalog.service', () => ({
+vi.mock('$lib/server/services/devices.service/image-catalog', () => ({
 	resolveDeviceImage: mocks.resolveDeviceImage
 }));
 
 vi.mock('$lib/server/repositories/metrics.repository', () => ({
-	getInterfaceMetricsHistory: mocks.getInterfaceMetricsHistory
+	MetricsRepository: {
+		getInterfaceHistory: mocks.getInterfaceMetricsHistory
+	}
 }));
 
-vi.mock('$lib/server/services/backup.service', () => ({
+vi.mock('$lib/server/services/devices.service/backup', () => ({
 	getDeviceBackups: mocks.getDeviceBackups
 }));
 
 vi.mock('$lib/server/repositories/firmware.repository', () => ({
-	getFirmwareVersion: mocks.getFirmwareVersion
+	FirmwareRepository: {
+		getVersion: mocks.getFirmwareVersion
+	}
 }));
 
 vi.mock('$lib/server/repositories/firewall.repository', () => ({
@@ -66,11 +79,11 @@ vi.mock('$lib/server/repositories/vlan.repository', () => ({
 	}
 }));
 
-vi.mock('$lib/server/services/device-terminal.service', () => ({
+vi.mock('$lib/server/services/devices.service/terminal', () => ({
 	isDeviceTerminalEligible: mocks.isDeviceTerminalEligible
 }));
 
-vi.mock('$lib/server/services/firmware.service', () => ({
+vi.mock('$lib/server/services/devices.service/firmware', () => ({
 	createFirmwareCheckTask: vi.fn(),
 	createFirmwareUpgradeTask: vi.fn()
 }));

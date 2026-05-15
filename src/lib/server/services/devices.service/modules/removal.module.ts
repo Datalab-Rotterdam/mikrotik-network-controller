@@ -1,7 +1,7 @@
+import removeDeviceTask from "$lib/server/services/devices.service/tasks/remove-device.task";
 import { Service } from '@sourceregistry/sveltekit-service-manager';
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { AuditRepository } from '$lib/server/repositories/audit.repository';
-import { createRemoveDeviceTask } from '../tasks';
 
 export default {
 	async remove(deviceId: string, requestedByUserId: string) {
@@ -24,7 +24,7 @@ export default {
 		});
 
 		const task = await Service('scheduler').schedule(
-			createRemoveDeviceTask({
+			removeDeviceTask({
 				deviceId,
 				siteId: device.siteId,
 				requestedByUserId

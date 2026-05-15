@@ -1,11 +1,12 @@
 export { default as AccountMenu } from './AccountMenu.svelte';
 export { default as Avatar } from './Avatar.svelte';
 export { default as BrandMark } from './BrandMark.svelte';
+export { default as DeviceHealthCard } from './DeviceHealthCard.svelte';
 export { default as DeviceIcon } from './DeviceIcon.svelte';
 export { default as DevicePortLayout } from './DevicePortLayout.svelte';
-export { default as DiscoveryUpdatesWebSocket } from './DiscoveryUpdatesWebSocket.svelte';
 export { default as Donut } from './Donut.svelte';
 export { default as PortDetailPanel } from './PortDetailPanel.svelte';
+export { default as PortIcon } from './PortIcon.svelte';
 export { default as SiteSwitcher } from './SiteSwitcher.svelte';
 export { default as StatCard } from './StatCard.svelte';
 export { default as TerminalPane } from './TerminalPane.svelte';

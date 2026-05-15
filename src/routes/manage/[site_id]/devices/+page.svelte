@@ -2,16 +2,19 @@
   import { goto } from "$app/navigation";
   import { onMount } from "svelte";
   import Form from "$lib/client/components/primitives/Form.svelte";
+  import Icon from "$lib/client/components/primitives/Icon.svelte";
   import Input from "$lib/client/components/primitives/Input.svelte";
   import Button from "$lib/client/components/primitives/Button.svelte";
   import TableSkeleton from "$lib/client/components/primitives/TableSkeleton.svelte";
   import EmptyState from "$lib/client/components/primitives/EmptyState.svelte";
   import StatusBadge from "$lib/client/components/primitives/StatusBadge.svelte";
+  import InfoRow from "$lib/client/components/primitives/InfoRow.svelte";
+  import Tag from "$lib/client/components/primitives/Tag.svelte";
   import Tooltip from "$lib/client/components/primitives/Tooltip.svelte";
   import SidePanel from "$lib/client/components/layout/SidePanel.svelte";
+  import { Tabs } from "$lib/client/components/layout";
   import DevicePortLayout from "$lib/client/components/ui/DevicePortLayout.svelte";
-  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
-  import { PageShell } from "$lib/client/components/layout";
+  import { Page, PageHeader } from "$lib/client/components/layout";
   import {
     discoveredDevices,
     initializeDiscoveryDeviceSnapshot,
@@ -140,6 +143,7 @@
         id: device.id,
         type: "router",
         name: device.identity ?? "Discovered MikroTik",
+        identity: device.identity ?? "",
         status: "Discovered",
         model: device.hardware ?? device.platform ?? "",
         version: device.version ?? "",
@@ -167,6 +171,7 @@
 
   const adoptedRows = $derived(
     data.devices.map((device) => {
+      const liveDevice = $devicesState.devices.find((d) => d.id === device.id);
       const ifaces = data.deviceInterfaces[device.id] ?? [];
       const primaryInterface =
         ifaces.find((i) => i.running === true) ?? ifaces[0];
@@ -175,7 +180,7 @@
         type: device.platform === "switchos" ? "switch" : "router",
         name: device.name ?? device.identity,
         identity: device.identity ?? "",
-        status: device.connectionStatus,
+        status: liveDevice?.status ?? device.connectionStatus,
         model: device.model ?? "",
         version: device.routerOsVersion ?? "",
         ipAddress: device.host,
@@ -204,6 +209,34 @@
   const rows = $derived([...adoptedRows, ...discoveredRows]);
   const adoptedCount = $derived(adoptedRows.length);
   const discoveredCount = $derived(discoveredRows.length);
+
+  type FilterTab = "all" | "online" | "offline";
+  let filterTab = $state<FilterTab>("all");
+  const filterTabDefs = $derived([
+    { id: "all", label: "All", count: rows.length },
+    {
+      id: "online",
+      label: "Online",
+      count: adoptedRows.filter((d) => d.status === "online").length,
+    },
+    {
+      id: "offline",
+      label: "Offline",
+      count: adoptedRows.filter(
+        (d) => d.status === "offline" || d.status === "auth_failed",
+      ).length,
+    },
+  ]);
+  const visibleRows = $derived(
+    filterTab === "online"
+      ? adoptedRows.filter((d) => d.status === "online")
+      : filterTab === "offline"
+        ? adoptedRows.filter(
+            (d) => d.status === "offline" || d.status === "auth_failed",
+          )
+        : rows,
+  );
+
   const selectedDevice = $derived(
     rows.find((device) => device.id === selectedDeviceId),
   );
@@ -380,37 +413,36 @@
       aria-label="Search devices"
     />
     <a
-      class="icon-button"
+      class="adopt-btn"
       href={`${basePath}/devices?adopt=`}
       aria-label="Adopt device"
       title="Adopt device"
     >
-      <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
-        <path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z" />
-      </svg>
+      <Icon name="plus" size={16} />
+      Adopt
     </a>
   </div>
 {/snippet}
 
-<PageShell>
+<Page>
   <PageHeader
     title="Devices"
     subtitle={`${adoptedCount} adopted · ${discoveredCount} discovered`}
     actions={devicesActions}
   />
 
-  <div class="tabs" aria-label="Device filters">
-    <a href={`${basePath}/devices`} aria-current="page">All ({rows.length})</a>
-    <a href={`${basePath}/devices`}>WiFi (0)</a>
-    <a href={`${basePath}/devices`}>Wired ({rows.length})</a>
-    <a href={`${basePath}/devices`}>Adopted ({adoptedCount})</a>
-    <a href={`${basePath}/devices`}>Discovered ({discoveredCount})</a>
-  </div>
+  <Tabs
+    tabs={filterTabDefs}
+    activeTab={filterTab}
+    variant="pills"
+    ariaLabel="Device filters"
+    onTabChange={(id) => (filterTab = id as FilterTab)}
+  />
 
-  <div class="devices-table-wrap">
+  <div class="devices-table-wrap" class:panel-open={anyPanelOpen}>
     {#if $devicesState.loading}
-      <TableSkeleton columns={8} rows={6} />
-    {:else if rows.length}
+      <TableSkeleton columns={7} rows={6} />
+    {:else if visibleRows.length}
       <table class="devices-table">
         <thead>
           <tr>
@@ -418,29 +450,24 @@
             <th class="col-type" style="width: 36px;"></th>
             <th class="col-name">Name</th>
             <th class="col-status">Status</th>
-            <th class="col-mac">MAC Address</th>
             <th class="col-model">Model</th>
             <th class="col-version">Version</th>
             <th class="col-ip">IP Address</th>
           </tr>
         </thead>
         <tbody>
-          {#if adoptedRows.length}
-            <tr class="section-header">
-              <td colspan="8">Adopted ({adoptedRows.length})</td>
-            </tr>
-          {/if}
-          {#each adoptedRows as device}
+          {#each visibleRows as device}
             <tr
-              class="device-row device-row--adopted"
+              class="device-row"
               class:selected={device.id === selectedDeviceId}
               role="button"
               tabindex="0"
-              aria-label={`Open ${device.name} details`}
+              aria-label={device.adopted
+                ? `Open ${device.name} details`
+                : `Adopt ${device.name}`}
               onclick={(event) => openDevice(event, device.id)}
               onkeydown={(event) => openDeviceFromKeyboard(event, device.id)}
             >
-              <!-- Status circle -->
               <td class="col-state">
                 <span
                   class="device-dot"
@@ -448,9 +475,9 @@
                   class:offline={device.status === "offline"}
                   class:error={device.status === "auth_failed" ||
                     device.status === "blocked"}
+                  class:discovered={!device.adopted}
                 ></span>
               </td>
-              <!-- Type icon -->
               <td class="col-type">
                 <img
                   src={device.image.src}
@@ -460,9 +487,8 @@
                   class="device-type-icon"
                 />
               </td>
-              <!-- Name with identity tooltip -->
               <td class="col-name">
-                {#if device.identity}
+                {#if device.adopted && device.identity}
                   <Tooltip text={device.identity}>
                     <span class="device-name-text">{device.name}</span>
                   </Tooltip>
@@ -470,75 +496,24 @@
                   <span class="device-name-text">{device.name}</span>
                 {/if}
               </td>
-              <!-- Status label -->
               <td class="col-status">
-                <StatusBadge status={normalizeStatus(device.status)} />
+                {#if device.adopted}
+                  <StatusBadge status={normalizeStatus(device.status)} />
+                {:else}
+                  <a class="adopt-status-link" href={adoptHref(device)}>
+                    Adopt device
+                  </a>
+                {/if}
               </td>
-              <!-- MAC address -->
-              <td class="col-mac">{device.macAddress || "—"}</td>
-              <!-- Model -->
               <td class="col-model">{device.model || "—"}</td>
-              <!-- Version -->
               <td class="col-version">
                 <span class="version-cell">
                   {device.version || "—"}
-                  {#if "firmware" in device && (device as any).firmware?.updateAvailable}
-                    <span class="fw-badge">Update</span>
+                  {#if device.adopted && (device as any).firmware?.updateAvailable}
+                    <Tag label="Update" variant="warning" size="sm" />
                   {/if}
                 </span>
               </td>
-              <!-- IP address -->
-              <td class="col-ip">{device.ipAddress}</td>
-            </tr>
-          {/each}
-          {#if discoveredRows.length}
-            <tr class="section-header">
-              <td colspan="8">Discovered ({discoveredRows.length})</td>
-            </tr>
-          {/if}
-          {#each discoveredRows as device}
-            <tr
-              class="device-row device-row--discovered"
-              class:selected={device.id === selectedDeviceId}
-              role="button"
-              tabindex="0"
-              aria-label={`Adopt ${device.name}`}
-              onclick={(event) => openDevice(event, device.id)}
-              onkeydown={(event) => openDeviceFromKeyboard(event, device.id)}
-            >
-              <!-- Status circle (discovered = yellow) -->
-              <td class="col-state">
-                <span class="device-dot discovered"></span>
-              </td>
-              <!-- Type icon -->
-              <td class="col-type">
-                <img
-                  src={device.image.src}
-                  alt=""
-                  width="24"
-                  height="24"
-                  class="device-type-icon"
-                />
-              </td>
-              <!-- Name -->
-              <td class="col-name">
-                <span class="device-name-text">{device.name}</span>
-              </td>
-              <!-- Status label with adopt link -->
-              <td class="col-status">
-                <a class="adopt-action" href={adoptHref(device)}>
-                  <StatusBadge status="discovered" />
-                </a>
-              </td>
-              <!-- MAC address -->
-              <td class="col-mac">{device.macAddress || "—"}</td>
-              <!-- Model -->
-              <td class="col-model">{device.model || "—"}</td>
-              <!-- Version -->
-              <td class="col-version">
-                <span class="version-cell">{device.version || "—"}</span>
-              </td>
-              <!-- IP address -->
               <td class="col-ip">{device.ipAddress}</td>
             </tr>
           {/each}
@@ -546,7 +521,7 @@
       </table>
     {:else}
       <EmptyState
-        icon="M4 6h11v8H4V6Zm2 2v4h7V8H6Zm11 1h3v7h-3V9ZM3 17h18v2H3v-2Z"
+        icon="device-screen"
         title="No MikroTik Devices Have Been Adopted"
         description="If devices are missing, make sure they are online and reachable from the controller."
       >
@@ -556,12 +531,6 @@
       </EmptyState>
     {/if}
   </div>
-
-  <code>
-    <p>
-      {JSON.stringify(data, null, 2)}
-    </p>
-  </code>
   <SidePanel
     open={adoptionPanelOpen}
     title="Adopt device"
@@ -735,66 +704,24 @@
               href={`${basePath}/devices/${selectedDevice.id}`}
               aria-label={`Open ${selectedDevice.name} full device page`}
             >
-              <svg
-                viewBox="0 0 24 24"
-                width="16"
-                height="16"
-                aria-hidden="true"
-              >
-                <path
-                  fill="currentColor"
-                  d="M5 5h7v2H7v10h10v-5h2v7H5V5Zm9 0h5v5h-2V8.4l-6.3 6.3-1.4-1.4L15.6 7H14V5Z"
-                />
-              </svg>
+              <Icon name="external-link" size={16} />
               Open full page
             </a>
           {/if}
         </div>
 
         <div class="details-card">
-          <div class="info-row">
-            <span>Device Version</span>
-            <strong>{selectedDevice.version || "-"}</strong>
-          </div>
-          <div class="info-row">
-            <span>IP Address</span>
-            <strong>{selectedDevice.ipAddress || "-"}</strong>
-          </div>
-          <div class="info-row">
-            <span>Status</span>
-            <strong
-              >{selectedDevice.adopted
-                ? selectedDevice.status
-                : "Discovered"}</strong
-            >
-          </div>
-          <div class="info-row">
-            <span>MAC Address</span>
-            <strong>{selectedDevice.macAddress || "-"}</strong>
-          </div>
-          <div class="info-row">
-            <span>Model</span>
-            <strong>{selectedDevice.model || "-"}</strong>
-          </div>
+          <InfoRow label="Version" value={selectedDevice.version || undefined} />
+          <InfoRow label="IP Address" value={selectedDevice.ipAddress || undefined} />
+          <InfoRow label="MAC Address" value={selectedDevice.macAddress || undefined} />
+          <InfoRow label="Model" value={selectedDevice.model || undefined} />
           {#if selectedDevice.adopted}
-            <div class="info-row">
-              <span>Serial Number</span>
-              <strong>{selectedDevice.details.serialNumber || "-"}</strong>
-            </div>
-            <div class="info-row">
-              <span>Architecture</span>
-              <strong>{selectedDevice.details.architecture || "-"}</strong>
-            </div>
-            <div class="info-row">
-              <span>Uptime</span>
-              <strong
-                >{formatUptime(selectedDevice.details.uptimeSeconds)}</strong
-              >
-            </div>
-            <div class="info-row">
-              <span>Last Sync</span>
-              <strong>{formatDate(selectedDevice.details.lastSyncAt)}</strong>
-            </div>
+            <InfoRow label="Serial" value={selectedDevice.details.serialNumber || undefined} />
+            <InfoRow label="Architecture" value={selectedDevice.details.architecture || undefined} />
+            <InfoRow label="Last Sync" value={formatDate(selectedDevice.details.lastSyncAt)} />
+            {#if selectedDevice.status === 'online'}
+              <InfoRow label="Uptime" value={formatUptime(selectedDevice.details.uptimeSeconds)} />
+            {/if}
           {/if}
         </div>
 
@@ -836,7 +763,7 @@
           </div>
         {/if}
 
-        {#if selectedDevice.adopted && selectedDevice.platform === "routeros"}
+        {#if selectedDevice.adopted && selectedDevice.status === 'online' && selectedDevice.platform === "routeros"}
           {@const fwData = selectedDevice as any}
           {@const fw = fwData.firmware}
           <div class="details-card">
@@ -847,19 +774,12 @@
                 >
               {/if}
             </div>
-            <div class="info-row">
-              <span>Installed</span>
-              <strong
-                >{(fw?.currentVersion ?? selectedDevice.version) || "—"}</strong
-              >
-            </div>
+            <InfoRow
+              label="Installed"
+              value={(fw?.currentVersion ?? selectedDevice.version) || undefined}
+            />
             {#if fw?.latestVersion}
-              <div class="info-row">
-                <span>Latest ({fw.channel})</span>
-                <strong class:fw-outdated={fw.updateAvailable}
-                  >{fw.latestVersion}</strong
-                >
-              </div>
+              <InfoRow label={`Latest (${fw.channel ?? "stable"})`} value={fw.latestVersion} />
             {/if}
             {#if form?.action === "firmwareCheck" && form?.message}
               <div class={form?.success ? "status-success" : "error-message"}>
@@ -919,7 +839,7 @@
           </div>
         {/if}
 
-        {#if selectedDevice.adopted && !selectedDeviceProvisioned}
+        {#if selectedDevice.adopted && selectedDevice.status === 'online' && !selectedDeviceProvisioned}
           <div class="details-card">
             <div class="card-heading">
               <strong>Provisioning</strong>
@@ -984,7 +904,7 @@
           </div>
         {/if}
 
-        {#if selectedDevice.adopted}
+        {#if selectedDevice.adopted && selectedDevice.interfaces.length}
           <div class="details-card">
             <div class="card-heading">
               <strong>Interfaces</strong>
@@ -996,7 +916,7 @@
               variant="compact"
             />
           </div>
-        {:else}
+        {:else if !selectedDevice.adopted}
           <a
             class="adopt-submit detail-action"
             href={adoptHref(selectedDevice)}
@@ -1007,67 +927,50 @@
       </div>
     </SidePanel>
   {/if}
-</PageShell>
+</Page>
 
 <style lang="scss">
   .devices-toolbar {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
   }
 
   .search-input {
-    width: min(260px, 100%);
+    width: min(220px, 100%);
     height: 32px;
-    border: 1px solid #eef1f3;
-    border-radius: 3px;
-    padding: 0 12px;
-    color: #36434a;
-    background: #f8f9fa;
-  }
-
-  .tabs {
-    display: inline-flex;
-    height: 32px;
-    border: 1px solid #edf0f2;
-    border-radius: 4px;
-    overflow: hidden;
+    border: 1px solid var(--color-line, #dedfde);
+    border-radius: var(--radius-sm, 3px);
+    padding: 0 10px;
+    color: var(--color-text, #171717);
     background: var(--color-surface);
+    font-size: 13px;
+
+    &:focus {
+      outline: none;
+      border-color: var(--color-brand);
+    }
   }
 
-  .tabs a {
+  .adopt-btn {
     display: inline-flex;
     align-items: center;
-    padding: 0 11px;
-    color: #7d8790;
-    font-size: 13px;
-    border-right: 1px solid #edf0f2;
-  }
-
-  .tabs a:last-child {
-    border-right: 0;
-  }
-
-  .tabs a[aria-current="page"] {
-    color: var(--color-link);
-    background: #fbfdff;
-  }
-
-  .icon-button {
-    display: grid;
-    place-items: center;
-    width: 32px;
+    gap: 5px;
     height: 32px;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    color: #8f9aa3;
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .icon-button:hover {
-    border-color: #dce4e9;
+    border: 1px solid var(--color-line, #dedfde);
+    border-radius: var(--radius-sm, 3px);
+    padding: 0 10px;
+    color: var(--color-text, #171717);
     background: var(--color-surface);
+    font-size: 13px;
+    font-weight: 650;
+    text-decoration: none;
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--color-brand);
+      color: var(--color-brand);
+    }
   }
 
   .devices-table-wrap {
@@ -1100,19 +1003,6 @@
     font-weight: 800;
   }
 
-  .section-header td {
-    height: 28px;
-    padding-top: 4px;
-    padding-bottom: 4px;
-    border-bottom: 0;
-    color: var(--color-muted, #686c6b);
-    font-size: 11px;
-    font-weight: 750;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    background: var(--color-page, #f3f4f4);
-  }
-
   .device-row {
     cursor: pointer;
     outline: 0;
@@ -1122,30 +1012,27 @@
     box-shadow: inset 0 0 0 2px rgba(0, 100, 255, 0.16);
   }
 
-  .device-row--adopted:hover,
-  .device-row--adopted.selected {
-    background: #fbfdff;
+  .device-row:hover,
+  .device-row.selected {
+    background: var(--color-page, #f8f9fa);
   }
 
-  .device-row--discovered {
-    background: var(--color-warning-light, #fef3c7);
-  }
-
-  .device-row--discovered:hover,
-  .device-row--discovered.selected {
-    background: color-mix(
-      in srgb,
-      var(--color-warning-light, #fef3c7) 80%,
-      #fff
-    );
-  }
-
-  .adopt-action {
-    color: inherit;
+  .adopt-status-link {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    border: 1px solid var(--color-brand-light, #bfdbfe);
+    border-radius: var(--radius-pill, 999px);
+    padding: 0 10px;
+    color: var(--color-link, #0d6fd6);
+    background: rgba(13, 111, 214, 0.06);
+    font-size: 11px;
+    font-weight: 700;
     text-decoration: none;
+    white-space: nowrap;
 
     &:hover {
-      opacity: 0.8;
+      background: rgba(13, 111, 214, 0.12);
     }
   }
 
@@ -1262,20 +1149,6 @@
     cursor: pointer;
   }
 
-  .secondary-submit {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 38px;
-    border: 1px solid #dce4e9;
-    border-radius: 6px;
-    padding: 0 14px;
-    color: #30373d;
-    background: var(--color-surface);
-    font-weight: 750;
-    cursor: pointer;
-  }
-
   .message-link {
     display: block;
     margin-top: 6px;
@@ -1371,44 +1244,6 @@
     gap: 10px;
   }
 
-  .remove-submit {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 40px;
-    border: 1px solid var(--color-danger);
-    border-radius: 6px;
-    padding: 0 14px;
-    color: var(--color-surface);
-    background: var(--color-danger);
-    font-weight: 750;
-    cursor: pointer;
-  }
-
-  .remove-submit:hover {
-    filter: brightness(0.96);
-  }
-
-  .upgrade-submit {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    min-height: 36px;
-    border: none;
-    border-radius: 5px;
-    padding: 0 14px;
-    color: #fff;
-    background: var(--color-warning, #d97706);
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-
-    &:hover {
-      filter: brightness(1.08);
-    }
-  }
-
   .fw-actions {
     display: grid;
     gap: 6px;
@@ -1421,46 +1256,10 @@
     gap: 6px;
   }
 
-  .fw-badge {
-    display: inline-flex;
-    align-items: center;
-    height: 18px;
-    border-radius: 999px;
-    padding: 0 7px;
-    color: #fff;
-    background: var(--color-warning, #d97706);
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.03em;
-    white-space: nowrap;
-  }
-
-  .fw-outdated {
-    color: var(--color-warning, #d97706);
-    font-weight: 700;
-  }
-
   .card-meta {
-    color: #8a949c;
+    color: var(--color-muted, #8a949c);
     font-size: 11px;
     font-weight: 400;
-  }
-
-  .info-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
-    gap: 16px;
-    align-items: baseline;
-    color: #3f484f;
-    font-size: 14px;
-  }
-
-  .info-row strong {
-    min-width: 0;
-    color: #7c858d;
-    font-weight: 500;
-    text-align: right;
-    overflow-wrap: anywhere;
   }
 
   .card-heading {
@@ -1555,23 +1354,18 @@
   }
 
   @media (max-width: 900px) {
-    .devices-page.with-panel {
-      padding-right: 0;
-    }
-
-    .devices-toolbar,
-    .toolbar-left {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-
     .devices-table-wrap {
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
+      scrollbar-gutter: stable;
+    }
+
+    .devices-table-wrap.panel-open {
+      overflow-x: hidden;
     }
 
     .devices-table {
-      min-width: 480px;
+      min-width: 440px;
     }
 
     .devices-table th,
@@ -1590,7 +1384,7 @@
     }
 
     .devices-table .col-type {
-      width: 50px;
+      width: 46px;
     }
 
     .devices-table .col-name {
@@ -1598,30 +1392,25 @@
     }
 
     .devices-table .col-status {
-      width: 116px;
+      width: 120px;
     }
 
     .devices-table .col-ip {
-      width: 130px;
+      width: 120px;
     }
   }
 
   @media (max-width: 520px) {
     .devices-table {
-      min-width: 380px;
+      min-width: 340px;
     }
 
     .devices-table .col-type {
-      width: 42px;
-    }
-
-    .device-type img {
-      width: 24px;
-      height: 24px;
+      width: 36px;
     }
 
     .devices-table .col-name {
-      width: 118px;
+      width: 110px;
     }
 
     .devices-table .col-status {
@@ -1629,7 +1418,7 @@
     }
 
     .devices-table .col-ip {
-      width: 110px;
+      width: 100px;
     }
   }
 </style>

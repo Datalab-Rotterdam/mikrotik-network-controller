@@ -1,4 +1,5 @@
-import {Router, type Service, ServiceManager, Action} from "@sourceregistry/sveltekit-service-manager";
+import {deviceEvents} from "$lib/server/services/devices.service/events";
+import {Router, Service, ServiceManager, Action} from "@sourceregistry/sveltekit-service-manager";
 import "$lib/server/services/scheduler.service";
 
 import {adoption, telemetry, provisioning, credentials, removal, config} from "./modules";
@@ -50,6 +51,35 @@ export const service = {
     name: "devices",
     dependsOn: ["scheduler"],
     route: router,
+    load: () => {
+        deviceEvents.any((event, payload) => {
+            if (!payload.siteId) return;
+            switch (event) {
+                case "device.adopted": {
+                    Service('actionbus').publish(`site:${payload.siteId}`, {
+                        type: 'device.adopted',
+                        payload
+                    })
+                    break;
+                }
+                case 'device.updated': {
+                    Service('actionbus').publish(`site:${payload.siteId}`, {
+                        type: 'device.updated',
+                        payload
+                    })
+                    break;
+                }
+                case 'device.removed': {
+                    Service('actionbus').publish(`site:${payload.siteId}`, {
+                        type: 'device.removed',
+                        payload
+                    })
+                    break;
+                }
+            }
+
+        })
+    },
     local: {
         adoption,
         telemetry,

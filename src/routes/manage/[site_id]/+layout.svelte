@@ -4,6 +4,8 @@
 	import AlertBell from '$lib/client/components/actions/AlertBell.svelte';
 	import LiveDataInvalidator from '$lib/client/components/actions/LiveDataInvalidator.svelte';
 	import SiteSwitcher from '$lib/client/components/ui/SiteSwitcher.svelte';
+	import Icon from '$lib/client/components/primitives/Icon.svelte';
+	import type { IconName } from '$lib/client/components/primitives/icons';
 	import favicon from '$lib/assets/favicon.svg';
 
 	let { children, data } = $props();
@@ -12,17 +14,22 @@
 		data.pathname.startsWith(`${basePath}/devices/`) && data.pathname.endsWith('/terminal')
 	);
 
-	const navItems = $derived([
-		{ href: basePath, label: 'Dashboard', icon: 'M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-11h6V4h-6v5Z' },
-		{ href: `${basePath}/topology`, label: 'Topology', icon: 'M7 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm10 10a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM7 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm2.6-7.2 4.8 6.4 1.6-1.2-4.8-6.4-1.6 1.2Zm.4 9.2h4v-2h-4v2Z' },
-		{ href: `${basePath}/devices`, label: 'Devices', icon: 'M4 5h14v10H4V5Zm2 2v6h10V7H6Zm-3 11h18v2H3v-2Zm17-9h1v5h-1V9Z' },
-		{ href: `${basePath}/clients`, label: 'Clients', icon: 'M7 9a4 4 0 1 1 8 0 4 4 0 0 1-8 0Zm-3 11c.8-3.3 3.7-5 8-5s7.2 1.7 8 5H4Z' },
-		{ href: `${basePath}/network`, label: 'Network', icon: 'M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4Zm0 2.2 7 3.1V11c0 4.5-3 8.7-7 10-4-1.3-7-5.5-7-10V6.3l7-3.1Z' },
-		{ href: `${basePath}/alerts`, label: 'Alerts', icon: 'M12 2a7 7 0 0 1 7 7c0 2.4-.8 4.7-2.2 6.4L18 17H6l1.2-1.6A10 10 0 0 1 5 9a7 7 0 0 1 7-7Zm0 18a2 2 0 0 1-2-2h4a2 2 0 0 1-2 2Z' },
-		{ href: `${basePath}/config/templates`, label: 'Config', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm4 18H6V4h7v5h5v11ZM8 15h8v2H8v-2Zm0-4h8v2H8v-2Zm0-4h5v2H8V7Z' },
-		{ href: `${basePath}/jobs`, label: 'Jobs', group: 'management', icon: 'M5 4h14v4H5V4Zm0 6h14v4H5v-4Zm0 6h14v4H5v-4Zm2-10v1h10V6H7Zm0 6v1h10v-1H7Zm0 6v1h10v-1H7Z' },
-		{ href: `${basePath}/syslog`, label: 'Syslog', group: 'management', icon: 'M5 3h14v18H5V3Zm3 4h8V5H8v2Zm0 4h8V9H8v2Zm0 4h6v-2H8v2Zm0 4h8v-2H8v2Z' },
-		{ href: `${basePath}/settings`, label: 'Settings', icon: 'M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2h-4l-.4 3a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5A9 9 0 0 0 4.5 12c0 .5 0 1 .1 1.5l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z' }
+	const hasDevices = $derived(data.deviceCount > 0);
+
+	const navItems: Array<{ href: string; label: string; icon: IconName; group?: string }> = $derived([
+		{ href: basePath, label: 'Dashboard', icon: 'dashboard' },
+		{ href: `${basePath}/topology`, label: 'Topology', icon: 'topology' },
+		{ href: `${basePath}/devices`, label: 'Devices', icon: 'monitor' },
+		{ href: `${basePath}/clients`, label: 'Clients', icon: 'person' },
+		...(hasDevices ? [
+			{ href: `${basePath}/network`, label: 'Network', icon: 'shield' as IconName },
+			{ href: `${basePath}/ports`, label: 'Ports', icon: 'ports' as IconName },
+		] : []),
+		{ href: `${basePath}/alerts`, label: 'Alerts', icon: 'bell' },
+		{ href: `${basePath}/config/templates`, label: 'Config', icon: 'document' },
+		{ href: `${basePath}/jobs`, label: 'Jobs', group: 'management', icon: 'jobs' },
+		{ href: `${basePath}/syslog`, label: 'Syslog', group: 'management', icon: 'log' },
+		{ href: `${basePath}/settings`, label: 'Settings', icon: 'gear' },
 	]);
 
 	function isNavActive(href: string) {
@@ -55,9 +62,7 @@
 								title={item.label}
 								aria-current={isNavActive(item.href) ? 'page' : undefined}
 							>
-								<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-									<path fill="currentColor" d={item.icon} />
-								</svg>
+								<Icon name={item.icon} size={22} />
 							</a>
 							<div class="rail-separator" aria-hidden="true"></div>
 						{:else}
@@ -68,9 +73,7 @@
 								title={item.label}
 								aria-current={isNavActive(item.href) ? 'page' : undefined}
 							>
-								<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-									<path fill="currentColor" d={item.icon} />
-								</svg>
+								<Icon name={item.icon} size={22} />
 							</a>
 						{/if}
 					{/each}
@@ -85,9 +88,7 @@
 								title="Admin"
 								aria-current={data.pathname.startsWith('/manage/admin') ? 'page' : undefined}
 							>
-								<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-									<path fill="currentColor" d="M12 1a5 5 0 1 0 0 10A5 5 0 0 0 12 1Zm0 12c-5.3 0-8 2.7-8 4v2h16v-2c0-1.3-2.7-4-8-4Zm7-2v-2h-2v2h-2v2h2v2h2v-2h2v-2h-2Z" />
-								</svg>
+								<Icon name="user-plus" size={22} />
 							</a>
 						{/if}
 					</div>
@@ -217,11 +218,13 @@
 	}
 
 	.content {
+		--page-pad-y: 18px;
+		--page-pad-x: 14px;
 		display: flex;
 		flex-direction: column;
 		height: 100%;
 		overflow-y: auto;
-		padding: 18px 14px;
+		padding: var(--page-pad-y) var(--page-pad-x);
 	}
 
 	@media (max-width: 900px) {

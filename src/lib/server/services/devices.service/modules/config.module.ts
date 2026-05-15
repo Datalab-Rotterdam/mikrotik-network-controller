@@ -1,6 +1,6 @@
+import configDeployTask from "$lib/server/services/devices.service/tasks/config-deploy.task";
 import { Service } from '@sourceregistry/sveltekit-service-manager';
-import { createConfigDeployTask } from '../tasks';
-import type { DeployVariableValues } from '$lib/server/services/config-deploy.service';
+import type { DeployVariableValues } from '$lib/server/services/devices.service/config-deploy';
 
 export default {
 	/**
@@ -18,7 +18,7 @@ export default {
 		siteId?: string;
 	}) {
 		const task = await Service('scheduler').schedule(
-			createConfigDeployTask({ deviceId, templateId, variableValues, siteId })
+			configDeployTask({ deviceId, templateId, variableValues, siteId })
 		);
 
 		return {

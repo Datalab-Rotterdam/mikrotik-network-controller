@@ -1,3 +1,9 @@
+import adoptCredentialsTask from "$lib/server/services/devices.service/tasks/adopt-credentials.task";
+import managedAdoptCredentialsTask from "$lib/server/services/devices.service/tasks/managed-adopt-credentials.task";
+import prepareBootstrapTask from "$lib/server/services/devices.service/tasks/prepare.bootstrap.task";
+import provisionDeviceTask from "$lib/server/services/devices.service/tasks/provision-device.task";
+import removeDeviceTask from "$lib/server/services/devices.service/tasks/remove-device.task";
+import rotateRestSecretTask from "$lib/server/services/devices.service/tasks/rotate-rest-secret.task";
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StepExecutionContext } from '$lib/server/services/scheduler.service/types';
 
@@ -22,6 +28,7 @@ const mocks = vi.hoisted(() => ({
 	failCredentialAdoption: vi.fn(),
 	ensureControllerSshKeyPair: vi.fn(),
 	getControllerSshPrivateKeyPath: vi.fn(),
+	generateRandomSecret: vi.fn(),
 	schedulerSchedule: vi.fn(),
 	routerOsLogin: vi.fn(),
 	routerOsExecute: vi.fn(),
@@ -39,45 +46,60 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/server/repositories/telemetry.repository', () => ({
-	getDeviceById: mocks.getDeviceById,
-	getDeviceCredentials: mocks.getDeviceCredentials,
-	updateDeviceLastSeen: mocks.updateDeviceLastSeen
+	TelemetryRepository: {
+		getDeviceById: mocks.getDeviceById,
+		getCredentials: mocks.getDeviceCredentials,
+		getActiveCredential: mocks.getDeviceCredentials,
+		updateLastSeen: mocks.updateDeviceLastSeen
+	}
 }));
 
 vi.mock('$lib/server/repositories/device.repository', () => ({
-	deleteDevice: mocks.deleteDevice,
-	replaceCredential: mocks.replaceCredential,
-	updateDeviceState: mocks.updateDeviceState,
-	replaceDeviceInterfaces: mocks.replaceDeviceInterfaces,
-	upsertAdoptedDevice: mocks.upsertAdoptedDevice,
-	replaceReadOnlyCredential: mocks.replaceReadOnlyCredential
+	DeviceRepository: {
+		getByIdForSite: mocks.getDeviceById,
+		delete: mocks.deleteDevice,
+		replaceCredential: mocks.replaceCredential,
+		updateState: mocks.updateDeviceState,
+		replaceInterfaces: mocks.replaceDeviceInterfaces,
+		upsertAdopted: mocks.upsertAdoptedDevice,
+		replaceReadOnlyCredential: mocks.replaceReadOnlyCredential
+	}
 }));
 
 vi.mock('$lib/server/repositories/adoption.repository', () => ({
-	createAdoptionAttempt: mocks.createAdoptionAttempt,
-	updateAdoptionAttempt: mocks.updateAdoptionAttempt
+	AdoptionRepository: {
+		create: mocks.createAdoptionAttempt,
+		update: mocks.updateAdoptionAttempt
+	}
 }));
 
 vi.mock('$lib/server/repositories/site.repository', () => ({
-	ensureSiteByName: mocks.ensureSiteByName
+	SiteRepository: {
+		ensureByName: mocks.ensureSiteByName
+	}
 }));
 
-vi.mock('$lib/server/services/device-events.service', () => ({
+vi.mock('$lib/server/services/devices.service/events', () => ({
 	emitDeviceUpdated: mocks.emitDeviceUpdated,
 	emitDeviceRemoved: mocks.emitDeviceRemoved
 }));
 
 vi.mock('$lib/server/repositories/audit.repository', () => ({
-	recordAuditEvent: mocks.recordAuditEvent
+	AuditRepository: {
+		record: mocks.recordAuditEvent
+	}
 }));
 
 vi.mock('$lib/server/repositories/job.repository', () => ({
-	updateJob: mocks.updateJob
+	JobRepository: {
+		update: mocks.updateJob
+	}
 }));
 
 vi.mock('$lib/server/security/secrets', () => ({
 	decryptSecret: (value: string) => value,
-	encryptSecret: (value: string) => value
+	encryptSecret: (value: string) => value,
+	generateRandomSecret: mocks.generateRandomSecret
 }));
 
 vi.mock('$lib/server/security/controller-ssh-keys', () => ({
@@ -86,12 +108,22 @@ vi.mock('$lib/server/security/controller-ssh-keys', () => ({
 }));
 
 vi.mock('@sourceregistry/sveltekit-service-manager', () => ({
+	Router: vi.fn(() => ({
+		GET: vi.fn(),
+		POST: vi.fn(),
+		PUT: vi.fn(),
+		PATCH: vi.fn(),
+		DELETE: vi.fn()
+	})),
 	Service: vi.fn(() => ({
 		schedule: mocks.schedulerSchedule
-	}))
+	})),
+	ServiceManager: {
+		Load: vi.fn((service) => service)
+	}
 }));
 
-vi.mock('$lib/server/services/adoption.service', () => ({
+vi.mock('$lib/server/services/devices.service/adoption', () => ({
 	createCredentialAdoptionAttempt: mocks.createCredentialAdoptionAttempt,
 	readAdoptionInventory: mocks.readAdoptionInventory,
 	assertSupportedAdoptionInventory: mocks.assertSupportedAdoptionInventory,
@@ -126,14 +158,6 @@ vi.mock('@sourceregistry/mikrotik-client/routeros', () => ({
 	})
 }));
 
-const {
-	createAdoptCredentialsTask,
-	createManagedAdoptCredentialsTask,
-	createPrepareBootstrapTask,
-	createProvisionDeviceTask,
-	createRotateRestSecretTask,
-	createRemoveDeviceTask
-} = await import('./tasks');
 
 const context: StepExecutionContext<{ deviceId: string; siteId: string | null }> = {
 	jobId: 'job-1',
@@ -228,6 +252,7 @@ beforeEach(() => {
 		publicKey: 'ssh-rsa AAAATEST controller@test'
 	});
 	mocks.getControllerSshPrivateKeyPath.mockResolvedValue('/tmp/controller-key');
+	mocks.generateRandomSecret.mockReturnValue('generated-secret-for-tests');
 	mocks.updateJob.mockResolvedValue({});
 	mocks.updateDeviceState.mockResolvedValue({});
 	mocks.createCredentialAdoptionAttempt.mockResolvedValue({
@@ -266,7 +291,7 @@ beforeEach(() => {
 describe('createProvisionDeviceTask', () => {
 	it('sets the singleton RouterOS identity without an item id', async () => {
 		mocks.getDeviceCredentials.mockResolvedValue([makeReadOnlyCredential()]);
-		const task = createProvisionDeviceTask('device-1');
+		const task = provisionDeviceTask('device-1');
 
 		await task.steps[0].execute(makeStepContext({ deviceId: 'device-1' }));
 		await task.steps[1].execute(makeStepContext({ deviceId: 'device-1' }));
@@ -279,7 +304,7 @@ describe('createProvisionDeviceTask', () => {
 
 	it('reverts the singleton RouterOS identity without an item id', async () => {
 		mocks.getDeviceCredentials.mockResolvedValue([makeReadOnlyCredential()]);
-		const task = createProvisionDeviceTask('device-1');
+		const task = provisionDeviceTask('device-1');
 
 		await task.steps[0].execute(makeStepContext({ deviceId: 'device-1' }));
 		await task.steps[1].revert?.(makeStepContext({ deviceId: 'device-1' }));
@@ -291,7 +316,7 @@ describe('createProvisionDeviceTask', () => {
 describe('createRemoveDeviceTask', () => {
 	it('fails validation when the device is missing', async () => {
 		mocks.getDeviceById.mockResolvedValue(null);
-		const task = createRemoveDeviceTask({
+		const task = removeDeviceTask({
 			deviceId: 'device-1',
 			siteId: 'site-1',
 			requestedByUserId: 'user-1'
@@ -303,7 +328,7 @@ describe('createRemoveDeviceTask', () => {
 
 	it('fails validation when the managed SSH credential is missing', async () => {
 		mocks.getDeviceCredentials.mockResolvedValue([]);
-		const task = createRemoveDeviceTask({
+		const task = removeDeviceTask({
 			deviceId: 'device-1',
 			siteId: 'site-1',
 			requestedByUserId: 'user-1'
@@ -315,7 +340,7 @@ describe('createRemoveDeviceTask', () => {
 
 	it('fails validation when controller SSH key material cannot be prepared', async () => {
 		mocks.getControllerSshPrivateKeyPath.mockRejectedValue(new Error('openssl unavailable'));
-		const task = createRemoveDeviceTask({
+		const task = removeDeviceTask({
 			deviceId: 'device-1',
 			siteId: 'site-1',
 			requestedByUserId: 'user-1'
@@ -326,7 +351,7 @@ describe('createRemoveDeviceTask', () => {
 	});
 
 	it('resets the device before deleting controller records', async () => {
-		const task = createRemoveDeviceTask({
+		const task = removeDeviceTask({
 			deviceId: 'device-1',
 			siteId: 'site-1',
 			requestedByUserId: 'user-1'
@@ -365,7 +390,7 @@ describe('createAdoptCredentialsTask', () => {
 			requestedByUserId: 'user-1',
 			siteId: 'site-1'
 		};
-		const task = createAdoptCredentialsTask({
+		const task = adoptCredentialsTask({
 			...payload,
 			password: '',
 		});
@@ -387,7 +412,7 @@ describe('createAdoptCredentialsTask', () => {
 			requestedByUserId: 'user-1',
 			siteId: 'site-1'
 		};
-		const task = createAdoptCredentialsTask({
+		const task = adoptCredentialsTask({
 			...payload,
 			password: 'secret',
 		});
@@ -408,7 +433,7 @@ describe('createAdoptCredentialsTask', () => {
 			siteId: 'site-1'
 		};
 		const adoptionContext = makeStepContext(payload);
-		const task = createAdoptCredentialsTask({
+		const task = adoptCredentialsTask({
 			...payload,
 			password: 'secret',
 		});
@@ -433,7 +458,7 @@ describe('createAdoptCredentialsTask', () => {
 	});
 });
 
-describe('createManagedAdoptCredentialsTask', () => {
+describe('managedAdoptCredentialsTask', () => {
 	it('fails validation when management CIDRs are invalid', async () => {
 		const payload = {
 			host: '192.0.2.1',
@@ -446,7 +471,7 @@ describe('createManagedAdoptCredentialsTask', () => {
 			siteId: 'site-1',
 			managementCidrs: 'not-a-cidr'
 		};
-		const task = createManagedAdoptCredentialsTask({
+		const task = managedAdoptCredentialsTask({
 			...payload,
 			password: 'secret'
 		});
@@ -468,7 +493,7 @@ describe('createManagedAdoptCredentialsTask', () => {
 			requestedByUserId: 'user-1',
 			siteId: 'site-1'
 		};
-		const task = createManagedAdoptCredentialsTask({
+		const task = managedAdoptCredentialsTask({
 			...payload,
 			password: ''
 		});
@@ -493,7 +518,7 @@ describe('createManagedAdoptCredentialsTask', () => {
 			managementCidrs: '10.0.0.0/8,100.64.0.0/10'
 		};
 		const managedContext = makeStepContext(payload);
-		const task = createManagedAdoptCredentialsTask({
+		const task = managedAdoptCredentialsTask({
 			...payload,
 			password: 'admin'
 		});
@@ -599,7 +624,7 @@ describe('createManagedAdoptCredentialsTask', () => {
 			siteId: 'site-1'
 		};
 		const managedContext = makeStepContext(payload);
-		const task = createManagedAdoptCredentialsTask({
+		const task = managedAdoptCredentialsTask({
 			...payload,
 			password: 'admin'
 		});
@@ -626,7 +651,7 @@ describe('createPrepareBootstrapTask', () => {
 			managementCidrs: '10.0.0.0/8'
 		};
 		const bootstrapContext = makeStepContext(payload);
-		const task = createPrepareBootstrapTask(payload);
+		const task = prepareBootstrapTask(payload);
 
 		await expect(task.steps[0].execute(bootstrapContext)).resolves.toEqual(
 			expect.objectContaining({
@@ -660,7 +685,7 @@ describe('createPrepareBootstrapTask', () => {
 describe('createRotateRestSecretTask', () => {
 	it('uses prepared controller SSH key material for rotation', async () => {
 		mocks.getDeviceCredentials.mockResolvedValue([makeReadOnlyCredential(), makeWriteCredential()]);
-		const task = createRotateRestSecretTask('device-1');
+		const task = rotateRestSecretTask('device-1');
 
 		await task.steps[0].execute(makeStepContext({ deviceId: 'device-1' }));
 		await task.steps[1].execute(makeStepContext({ deviceId: 'device-1' }));

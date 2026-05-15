@@ -1,10 +1,12 @@
 <script lang="ts" generics="T extends string">
 	import type { Snippet } from 'svelte';
+	import Icon from '../primitives/Icon.svelte';
+	import type { IconName } from '../primitives/icons';
 
 	type TabItem<T extends string = string> = {
 		id: T;
 		label: string;
-		icon?: string;
+		icon?: IconName;
 	};
 
 	let {
@@ -31,9 +33,7 @@
 				aria-current={tab.id === activeTab ? 'page' : undefined}
 			>
 				{#if tab.icon}
-					<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
-						<path fill="currentColor" d={tab.icon} />
-					</svg>
+					<Icon name={tab.icon} size={17} />
 				{/if}
 				<span>{tab.label}</span>
 			</a>

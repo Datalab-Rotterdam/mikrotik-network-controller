@@ -139,24 +139,23 @@ export type TopologyUpdatedPayload = {
 	siteId: string;
 };
 
-type NamedActionEvents<T extends Record<string, { type: string }>> = {
-	[EventName in keyof T]: T[EventName] & { type: EventName };
+export type SyslogEventPayload = {
+	siteId: string;
+	id: string;
+	severity: string;
+	category: string;
+	title: string;
+	message: string;
+	deviceId: string | null;
+	createdAt: string;
 };
 
-export type SiteActionEventMap = NamedActionEvents<App.ActionEvents['site:${string}']>;
-export type DiscoveryActionEventMap = NamedActionEvents<App.ActionEvents['discovery']>;
-export type ActionEventMap = SiteActionEventMap & DiscoveryActionEventMap;
-export type ActionEventType = Extract<keyof ActionEventMap, string>;
-export type ActionEvent = SiteActionEventMap[keyof SiteActionEventMap] | DiscoveryActionEventMap[keyof DiscoveryActionEventMap];
-export type JobSnapshotEvent = SiteActionEventMap['job.snapshot'];
-export type JobUpdatedEvent = SiteActionEventMap['job.updated'];
-export type DiscoverySnapshotEvent = DiscoveryActionEventMap['discovery.snapshot'];
-export type DiscoveryNeighborEvent = DiscoveryActionEventMap['discovery.neighbor'];
-export type DeviceAdoptedEvent = SiteActionEventMap['device.adopted'] | DiscoveryActionEventMap['device.adopted'];
-export type DeviceUpdatedEvent = SiteActionEventMap['device.updated'];
-export type DeviceRemovedEvent = SiteActionEventMap['device.removed'];
-export type MetricUpdatedEvent = SiteActionEventMap['metric.updated'];
-export type ClientUpdatedEvent = SiteActionEventMap['client.updated'];
-export type AlertFiredEvent = SiteActionEventMap['alert.fired'];
-export type AlertResolvedEvent = SiteActionEventMap['alert.resolved'];
-export type TopologyUpdatedEvent = SiteActionEventMap['topology.updated'];
+type SiteChannelMap = App.ActionEvents['site:${string}'];
+type DiscoveryChannelMap = App.ActionEvents['discovery'];
+
+export type ActionEvent =
+	| { [K in keyof SiteChannelMap]: { type: K; payload: SiteChannelMap[K] } }[keyof SiteChannelMap]
+	| { [K in keyof DiscoveryChannelMap]: { type: K; payload: DiscoveryChannelMap[K] } }[keyof DiscoveryChannelMap];
+
+export type ActionEventType = ActionEvent['type'];
+

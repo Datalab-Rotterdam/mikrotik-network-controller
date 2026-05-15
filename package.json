@@ -33,7 +33,7 @@
     "@sourceregistry/node-env": "^1.6.2",
     "@sourceregistry/node-openssl": "^1.0.2",
     "@sourceregistry/node-validator": "^1.1.5",
-    "@sourceregistry/sveltekit-actionbus": "^1.0.0",
+    "@sourceregistry/sveltekit-actionbus": "^1.1.0",
     "@sourceregistry/sveltekit-enhance": "^1.0.0",
     "@sourceregistry/sveltekit-service-manager": "^1.3.0",
     "@sourceregistry/sveltekit-websockets": "^1.0.6",

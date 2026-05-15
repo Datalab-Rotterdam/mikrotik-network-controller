@@ -1,21 +1,22 @@
-import { error, fail, type Actions } from '@sveltejs/kit';
+import addFirewallRuleTask from "$lib/server/services/devices.service/tasks/add-firewall-rule.task";
+import addVlanTask from "$lib/server/services/devices.service/tasks/add-vlan.task";
+import backupDeviceTask from "$lib/server/services/devices.service/tasks/backup-device.task";
+import checkFirmwareTask from "$lib/server/services/devices.service/tasks/check-firmware.task";
+import deleteFirewallRuleTask from "$lib/server/services/devices.service/tasks/delete-firewall-rule.task";
+import deleteVlanTask from "$lib/server/services/devices.service/tasks/delete-vlan.task";
+import firmwareUpgradeTask from "$lib/server/services/devices.service/tasks/firmware-upgrade.task";
+import renameDeviceTask from "$lib/server/services/devices.service/tasks/rename-device.task";
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { DeviceRepository } from '$lib/server/repositories/device.repository';
+import { ClientRepository } from '$lib/server/repositories/clients.repository';
 import { JobRepository } from '$lib/server/repositories/job.repository';
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
-import { resolveDeviceImage } from '$lib/server/services/device-image-catalog.service';
-import { isDeviceTerminalEligible } from '$lib/server/services/device-terminal.service';
+import { resolveDeviceImage } from '$lib/server/services/devices.service/image-catalog';
+import { isDeviceTerminalEligible } from '$lib/server/services/devices.service/terminal';
 import { MetricsRepository } from '$lib/server/repositories/metrics.repository';
-import { getDeviceBackups } from '$lib/server/services/backup.service';
+import { getDeviceBackups } from '$lib/server/services/devices.service/backup';
 import { Service } from '@sourceregistry/sveltekit-service-manager';
-import {
-	createBackupDeviceTask,
-	createRenameDeviceTask,
-	createAddFirewallRuleTask,
-	createDeleteFirewallRuleTask,
-	createAddVlanTask,
-	createDeleteVlanTask
-} from '$lib/server/services/devices.service/tasks';
-import { createFirmwareCheckTask, createFirmwareUpgradeTask } from '$lib/server/services/firmware.service';
+
 import { FirmwareRepository } from '$lib/server/repositories/firmware.repository';
 import { FirewallRepository } from '$lib/server/repositories/firewall.repository';
 import { VlanRepository } from '$lib/server/repositories/vlan.repository';
@@ -43,7 +44,7 @@ export const actions: Actions = {
 			let jobId: string | undefined;
 			if (manageIdentity) {
 				const job = await Service('scheduler').schedule(
-					createRenameDeviceTask({ deviceId, name, siteId })
+					renameDeviceTask({ deviceId, name, siteId })
 				);
 				jobId = job.id;
 			}
@@ -57,7 +58,7 @@ export const actions: Actions = {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
 		try {
-			const job = await Service('scheduler').schedule(createBackupDeviceTask(deviceId, siteId));
+			const job = await Service('scheduler').schedule(backupDeviceTask(deviceId, siteId));
 			return { success: true, message: 'Backup queued', jobId: job.id };
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
@@ -67,7 +68,7 @@ export const actions: Actions = {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
 		try {
-			const job = await Service('scheduler').schedule(createFirmwareCheckTask(deviceId, siteId));
+			const job = await Service('scheduler').schedule(checkFirmwareTask(deviceId, siteId));
 			return { success: true, message: 'Firmware check queued', jobId: job.id };
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
@@ -77,7 +78,7 @@ export const actions: Actions = {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
 		try {
-			const job = await Service('scheduler').schedule(createFirmwareUpgradeTask(deviceId, siteId));
+			const job = await Service('scheduler').schedule(firmwareUpgradeTask(deviceId, siteId));
 			return { success: true, message: 'Firmware upgrade queued', jobId: job.id };
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
@@ -95,7 +96,7 @@ export const actions: Actions = {
 		if (!validActions.includes(fwAction)) return fail(400, { success: false, message: 'Invalid action' });
 		try {
 			const job = await Service('scheduler').schedule(
-				createAddFirewallRuleTask(deviceId, siteId, {
+				addFirewallRuleTask(deviceId, siteId, {
 					chain: chain as 'input' | 'forward' | 'output',
 					action: fwAction as 'accept' | 'drop' | 'reject' | 'jump' | 'return' | 'passthrough' | 'log',
 					srcAddress: (form.get('srcAddress') as string) || null,
@@ -121,7 +122,7 @@ export const actions: Actions = {
 		if (!routerId) return fail(400, { success: false, message: 'routerId is required' });
 		try {
 			const job = await Service('scheduler').schedule(
-				createDeleteFirewallRuleTask(deviceId, siteId, routerId)
+				deleteFirewallRuleTask(deviceId, siteId, routerId)
 			);
 			return { success: true, message: 'Firewall rule removal queued', jobId: job.id };
 		} catch (e) {
@@ -142,13 +143,29 @@ export const actions: Actions = {
 		if (!interfaceName) return fail(400, { success: false, message: 'Interface name is required' });
 		try {
 			const job = await Service('scheduler').schedule(
-				createAddVlanTask(deviceId, siteId, { vlanId, name, interfaceName, comment })
+				addVlanTask(deviceId, siteId, { vlanId, name, interfaceName, comment })
 			);
 			return { success: true, message: 'VLAN creation queued', jobId: job.id };
 		} catch (e) {
 			return fail(500, { success: false, message: String(e) });
 		}
 	}, SessionContext.require),
+	moveToSite: enhance.action(async ({ request, params }) => {
+		const deviceId = params.device_id as string;
+		const currentSiteId = params.site_id as string;
+		const form = await request.formData();
+		const targetSiteId = (form.get('targetSiteId') as string | null)?.trim();
+		if (!targetSiteId) return fail(400, { success: false, message: 'Target site is required.' });
+		if (targetSiteId === currentSiteId) return fail(400, { success: false, message: 'Device is already on this site.' });
+		try {
+			await DeviceRepository.updateSite(deviceId, targetSiteId);
+			await ClientRepository.updateSiteForDevice(deviceId, targetSiteId);
+		} catch (e) {
+			return fail(500, { success: false, message: String(e) });
+		}
+		throw redirect(303, `/manage/${targetSiteId}/devices/${deviceId}`);
+	}, SessionContext.require),
+
 	deleteVlan: enhance.action(async ({ request, params }) => {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
@@ -157,7 +174,7 @@ export const actions: Actions = {
 		if (!routerId) return fail(400, { success: false, message: 'routerId is required' });
 		try {
 			const job = await Service('scheduler').schedule(
-				createDeleteVlanTask(deviceId, siteId, routerId)
+				deleteVlanTask(deviceId, siteId, routerId)
 			);
 			return { success: true, message: 'VLAN removal queued', jobId: job.id };
 		} catch (e) {
@@ -267,7 +284,7 @@ export async function load({ locals, parent, params, depends }) {
 	const device = await DeviceRepository.getByIdForSite(deviceId, site.id);
 
 	if (!device) {
-		throw error(404, 'Device not found');
+		throw redirect(303, `/manage/${site.id}/devices`);
 	}
 
 	const [interfaces, recentJobs, writeCredential, rawIfaceMetrics, backups, firmware, firewallRules, vlans] = await Promise.all([

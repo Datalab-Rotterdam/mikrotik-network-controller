@@ -13,3 +13,4 @@ export * from './templates';
 export * from './topology';
 export * from './firewall';
 export * from './vlans';
+export * from './syslog';

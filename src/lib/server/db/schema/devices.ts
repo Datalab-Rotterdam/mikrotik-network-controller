@@ -97,6 +97,9 @@ export const deviceInterfaces = pgTable(
 		comment: text('comment'),
 		running: boolean('running').notNull().default(false),
 		disabled: boolean('disabled').notNull().default(false),
+		pvid: integer('pvid'),
+		frameTypes: varchar('frame_types', { length: 80 }),
+		bridge: varchar('bridge', { length: 160 }),
 		createdAt,
 		updatedAt
 	},

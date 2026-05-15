@@ -2,13 +2,13 @@
   import { enhance } from "$app/forms";
   import { useActionSocket } from "$lib/client/actions/use-action-socket";
   import type { ActionEvent } from "$lib/shared/action-events";
-  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
+  import {PageHeader} from "$lib/client/components/layout/Page";
   import Button from "$lib/client/components/primitives/Button.svelte";
   import Input from "$lib/client/components/primitives/Input.svelte";
   import Select from "$lib/client/components/primitives/Select.svelte";
   import Checkbox from "$lib/client/components/primitives/Checkbox.svelte";
   import TextArea from "$lib/client/components/primitives/TextArea.svelte";
-  import { PageShell } from "$lib/client/components/layout";
+  import { Page } from "$lib/client/components/layout";
 
   let { data } = $props();
 
@@ -116,7 +116,7 @@
   {/if}
 {/snippet}
 
-<PageShell>
+<Page>
   <PageHeader
     title="Alerts"
     subtitle="Rules, active events, and notification channels."
@@ -488,7 +488,7 @@
     {/if}
   </div>
 {/if}
-</PageShell>
+</Page>
 
 <style lang="scss">
   .badge-critical {

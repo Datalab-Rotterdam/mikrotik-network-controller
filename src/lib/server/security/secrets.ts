@@ -18,6 +18,19 @@ export function encryptSecret(value: string): string {
 	);
 }
 
+export function generateRandomSecret(length = 40): string  {
+	const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_!@#%+=';
+	const bytes = randomBytes(length);
+	let out = '';
+
+	for (let i = 0; i < length; i += 1) {
+		out += chars[bytes[i] % chars.length];
+	}
+
+	return out;
+}
+
+
 export function decryptSecret(value: string): string {
 	const [version, iv, authTag, encrypted] = value.split(':');
 

@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import SidePanel from '$lib/client/components/layout/SidePanel.svelte';
-	import PageHeader from '$lib/client/components/primitives/PageHeader.svelte';
-	import { PageShell } from '$lib/client/components/layout';
+	import { Page, PageHeader } from '$lib/client/components/layout';
 	import {
 		formatJobStatus,
 		getCurrentStep,
@@ -60,7 +59,7 @@
 	}
 </script>
 
-<PageShell>
+<Page>
 	<PageHeader
 		title="Jobs"
 		subtitle={`${runningJobs.length} running · ${jobs.length} recent`}
@@ -168,7 +167,7 @@
 			</div>
 		</SidePanel>
 	{/if}
-</PageShell>
+</Page>
 
 <style lang="scss">
 	.jobs-table-wrap {

@@ -1,7 +1,7 @@
 import {RouterOSClient} from '@sourceregistry/mikrotik-client/routeros';
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import {decryptSecret} from '$lib/server/security/secrets';
-import { emitDeviceUpdated } from '$lib/server/services/device-events.service';
+import { emitDeviceUpdated } from '$lib/server/services/devices.service/events';
 
 export default {
     async list() {

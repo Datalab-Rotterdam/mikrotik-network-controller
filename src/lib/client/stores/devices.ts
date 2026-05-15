@@ -1,8 +1,8 @@
 import { writable, type Writable } from 'svelte/store';
-import type { DeviceInterfaceRow } from '$lib/server/services/site-device.service';
+import type { DeviceInterfaceRow } from '$lib/server/services/devices.service/site-state';
 import type { DiscoveryDevice } from './discovery-updates';
 
-export type { DeviceRow } from '$lib/server/services/site-device.service';
+export type { DeviceRow } from '$lib/server/services/devices.service/site-state';
 
 export type Device = {
 	id: string;

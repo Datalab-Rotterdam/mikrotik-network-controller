@@ -41,7 +41,7 @@ describe('action bus', () => {
 		});
 
 		bus.publish({
-			type: 'discovery.snapshot',
+			type: 'snapshot',
 			payload: {
 				discoveredDevices: []
 			}

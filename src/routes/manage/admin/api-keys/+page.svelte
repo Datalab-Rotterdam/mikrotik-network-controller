@@ -1,10 +1,10 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
+  import {Page, PageHeader} from "$lib/client/components/layout";
   import Alert from "$lib/client/components/primitives/Alert.svelte";
   import Button from "$lib/client/components/primitives/Button.svelte";
   import Card from "$lib/client/components/primitives/Card.svelte";
   import Input from "$lib/client/components/primitives/Input.svelte";
-  import PageHeader from "$lib/client/components/primitives/PageHeader.svelte";
   import Select from "$lib/client/components/primitives/Select.svelte";
 
   let { data, form } = $props();
@@ -32,14 +32,14 @@
   }
 </script>
 
-<div class="keys-page">
+<Page>
   <PageHeader title="API Keys">
     {#snippet actions()}
       <Button
-        variant="secondary"
-        size="sm"
-        onclick={() => (showCreate = !showCreate)}
-        >{showCreate ? "Cancel" : "+ New key"}</Button
+              variant="secondary"
+              size="sm"
+              onclick={() => (showCreate = !showCreate)}
+      >{showCreate ? "Cancel" : "+ New key"}</Button
       >
     {/snippet}
   </PageHeader>
@@ -57,9 +57,9 @@
       <div class="key-row">
         <code class="key-token">{form.createdRaw}</code>
         <Button
-          variant="ghost"
-          size="sm"
-          onclick={() => copyKey(form.createdRaw!)}
+                variant="ghost"
+                size="sm"
+                onclick={() => copyKey(form.createdRaw!)}
         >
           {copied ? "Copied!" : "Copy"}
         </Button>
@@ -70,9 +70,9 @@
   {#if showCreate}
     <Card title="New API key">
       <form
-        method="POST"
-        action="?/create"
-        use:enhance={() =>
+              method="POST"
+              action="?/create"
+              use:enhance={() =>
           async ({ update }: any) => {
             await update();
             showCreate = false;
@@ -80,15 +80,15 @@
       >
         <div class="form-row">
           <Input
-            name="name"
-            label="Key name"
-            required
-            placeholder="e.g. automation-script"
+                  name="name"
+                  label="Key name"
+                  required
+                  placeholder="e.g. automation-script"
           />
           <Select
-            name="userId"
-            label="Owner"
-            options={data.users.map((u) => ({
+                  name="userId"
+                  label="Owner"
+                  options={data.users.map((u) => ({
               value: u.id,
               label: `${u.displayName} (${u.email})`,
             }))}
@@ -105,70 +105,68 @@
   <div class="table-wrapper">
     <table class="key-table">
       <thead>
-        <tr>
-          <th>Name</th>
-          <th>Owner</th>
-          <th>Last used</th>
-          <th>Expires</th>
-          <th>Created</th>
-          <th></th>
-        </tr>
+      <tr>
+        <th>Name</th>
+        <th>Owner</th>
+        <th>Last used</th>
+        <th>Expires</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
       </thead>
       <tbody>
-        {#each data.keys as key}
-          <tr class:expired-row={isExpired(key.expiresAt)}>
-            <td><strong>{key.name}</strong></td>
-            <td class="owner-cell">
-              {#if key.userDisplay}
-                <span>{key.userDisplay}</span>
-                <span class="email-sub">{key.userEmail}</span>
-              {:else}
-                <span class="muted">—</span>
-              {/if}
-            </td>
-            <td>{formatDate(key.lastUsedAt)}</td>
-            <td>
-              {#if key.expiresAt}
+      {#each data.keys as key}
+        <tr class:expired-row={isExpired(key.expiresAt)}>
+          <td><strong>{key.name}</strong></td>
+          <td class="owner-cell">
+            {#if key.userDisplay}
+              <span>{key.userDisplay}</span>
+              <span class="email-sub">{key.userEmail}</span>
+            {:else}
+              <span class="muted">—</span>
+            {/if}
+          </td>
+          <td>{formatDate(key.lastUsedAt)}</td>
+          <td>
+            {#if key.expiresAt}
                 <span
-                  class:expired-pill={isExpired(key.expiresAt)}
-                  class:expiry-pill={!isExpired(key.expiresAt)}
+                        class:expired-pill={isExpired(key.expiresAt)}
+                        class:expiry-pill={!isExpired(key.expiresAt)}
                 >
                   {formatDate(key.expiresAt)}
                 </span>
-              {:else}
-                <span class="muted">Never</span>
-              {/if}
-            </td>
-            <td>{formatDate(key.createdAt)}</td>
-            <td class="actions-cell">
-              <form method="POST" action="?/revoke" use:enhance>
-                <input type="hidden" name="id" value={key.id} />
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onclick={(e: Event) => {
+            {:else}
+              <span class="muted">Never</span>
+            {/if}
+          </td>
+          <td>{formatDate(key.createdAt)}</td>
+          <td class="actions-cell">
+            <form method="POST" action="?/revoke" use:enhance>
+              <input type="hidden" name="id" value={key.id} />
+              <Button
+                      variant="danger"
+                      size="sm"
+                      onclick={(e: Event) => {
                     if (!confirm(`Revoke key "${key.name}"?`))
                       e.preventDefault();
                   }}>Revoke</Button
-                >
-              </form>
-            </td>
-          </tr>
-        {:else}
-          <tr>
-            <td colspan="6" class="empty-row">No API keys yet.</td>
-          </tr>
-        {/each}
+              >
+            </form>
+          </td>
+        </tr>
+      {:else}
+        <tr>
+          <td colspan="6" class="empty-row">No API keys yet.</td>
+        </tr>
+      {/each}
       </tbody>
     </table>
   </div>
-</div>
+
+</Page>
 
 <style lang="scss">
-  .keys-page {
-    display: grid;
-    gap: 16px;
-  }
+
 
   .alert-bar.key-reveal {
     display: grid;

@@ -1,6 +1,6 @@
 import { enhance } from '@sourceregistry/sveltekit-enhance';
 import { SessionContext } from '$lib/server/context/session.context';
-import { loadSiteDeviceState } from '$lib/server/services/site-device.service';
+import { loadSiteDeviceState } from '$lib/server/services/devices.service/site-state';
 import { TopologyRepository } from '$lib/server/repositories/topology.repository';
 
 export const load = enhance.load(async ({ parent, depends }) => {

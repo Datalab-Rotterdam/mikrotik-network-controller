@@ -7,11 +7,15 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/server/repositories/device.repository', () => ({
-	getDeviceByIdForSite: mocks.getDeviceByIdForSite
+	DeviceRepository: {
+		getByIdForSite: mocks.getDeviceByIdForSite
+	}
 }));
 
 vi.mock('$lib/server/repositories/telemetry.repository', () => ({
-	getActiveCredential: mocks.getActiveCredential
+	TelemetryRepository: {
+		getActiveCredential: mocks.getActiveCredential
+	}
 }));
 
 vi.mock('@sourceregistry/sveltekit-websockets/server', () => ({
@@ -94,6 +98,9 @@ describe('device terminal page load', () => {
 
 		await expect(
 			load({
+				locals: {
+					user: { id: 'user-1', roles: ['admin'] }
+				},
 				parent: async () => ({ site: { id: 'site-1', name: 'Default' } }),
 				params: {
 					site_id: 'site-1',
@@ -158,7 +165,7 @@ describe('device terminal page actions', () => {
 			expect.objectContaining({
 				status: 401,
 				data: expect.objectContaining({
-					success: false
+					message: 'User is required.'
 				})
 			})
 		);

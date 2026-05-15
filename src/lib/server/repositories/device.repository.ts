@@ -1,8 +1,16 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, count, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { deviceCredentials, deviceInterfaces, devices } from '$lib/server/db/schema';
 
 export const DeviceRepository = {
+	async countBySite(siteId: string): Promise<number> {
+		const [row] = await db
+			.select({ value: count() })
+			.from(devices)
+			.where(eq(devices.siteId, siteId));
+		return row?.value ?? 0;
+	},
+
 	async list(siteId?: string) {
 		const query = db
 			.select({
@@ -205,6 +213,13 @@ export const DeviceRepository = {
 			.where(eq(devices.id, deviceId));
 	},
 
+	async updateSite(deviceId: string, siteId: string): Promise<void> {
+		await db
+			.update(devices)
+			.set({ siteId, updatedAt: new Date() })
+			.where(eq(devices.id, deviceId));
+	},
+
 	async listInterfaces(siteId?: string) {
 		const query = db
 			.select({
@@ -215,7 +230,10 @@ export const DeviceRepository = {
 				macAddress: deviceInterfaces.macAddress,
 				comment: deviceInterfaces.comment,
 				running: deviceInterfaces.running,
-				disabled: deviceInterfaces.disabled
+				disabled: deviceInterfaces.disabled,
+				pvid: deviceInterfaces.pvid,
+				frameTypes: deviceInterfaces.frameTypes,
+				bridge: deviceInterfaces.bridge
 			})
 			.from(deviceInterfaces)
 			.leftJoin(devices, eq(deviceInterfaces.deviceId, devices.id));

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import TerminalPane from '$lib/client/components/ui/TerminalPane.svelte';
+	import Icon from '$lib/client/components/primitives/Icon.svelte';
 
 	let { data } = $props();
 
@@ -26,9 +27,7 @@
 <section class="terminal-page">
 	<header class="terminal-banner">
 		<a class="back-link" href={`${basePath}/devices/${device.id}`} aria-label="Back to device">
-			<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-				<path fill="currentColor" d="m10.8 5.4 1.4 1.4L8 11h11v2H8l4.2 4.2-1.4 1.4L4.2 12l6.6-6.6Z" />
-			</svg>
+			<Icon name="arrow-left" size={18} />
 		</a>
 		<div class="banner-main">
 			<span>SSH terminal</span>

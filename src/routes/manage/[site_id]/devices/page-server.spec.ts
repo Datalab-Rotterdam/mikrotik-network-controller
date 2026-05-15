@@ -11,14 +11,24 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/server/repositories/device.repository', () => ({
-	getDeviceByIdForSite: mocks.getDeviceByIdForSite
+	DeviceRepository: {
+		getByIdForSite: mocks.getDeviceByIdForSite
+	}
 }));
 
 vi.mock('$lib/server/repositories/site.repository', () => ({
-	findSiteById: mocks.findSiteById
+	SiteRepository: {
+		findById: mocks.findSiteById
+	}
 }));
 
-vi.mock('$lib/server/services/site-device.service', () => ({
+vi.mock('$lib/server/repositories/firmware.repository', () => ({
+	FirmwareRepository: {
+		getVersionsForDevices: vi.fn().mockResolvedValue([])
+	}
+}));
+
+vi.mock('$lib/server/services/devices.service/site-state', () => ({
 	loadSiteDeviceState: mocks.loadSiteDeviceState
 }));
 
