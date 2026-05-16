@@ -1,0 +1,1 @@
+ALTER TABLE "device_interfaces" ADD COLUMN "link_speed" varchar(40);

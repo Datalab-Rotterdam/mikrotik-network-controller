@@ -195,5 +195,6 @@ If instructions conflict, prefer this order:
 4. `docs/MARKET_RESEARCH.md`.
 5. General framework conventions.
 
+## Skills
 
-use the Caveman skill to report to the user [SKILL.md](docs/SKILL.md)
+When building or reviewing UI, use the `ui-components` skill (`.claude/skills/ui-components/SKILL.md`). It contains the full component inventory, design token reference, page structure patterns, and anti-patterns. Trigger: any task that creates pages, adds components, writes SCSS, or touches the frontend.

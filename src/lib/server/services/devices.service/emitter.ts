@@ -1,19 +1,19 @@
-import {AnyEventEmitter} from "$lib/server/utilities/AnyEventEmitter";
+import { AnyEventEmitter } from '$lib/server/utilities/AnyEventEmitter';
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import type {
 	ActionDeviceAdoptedPayload,
 	ActionDeviceRemovedPayload,
-	ActionDeviceUpdatedPayload, DeviceUpdateReason
+	ActionDeviceUpdatedPayload,
+	DeviceUpdateReason
 } from '$lib/shared/action-events';
 
 export type DeviceEventMap = {
-	'device.removed': [ActionDeviceRemovedPayload]
-	'device.updated': [ActionDeviceUpdatedPayload],
-	'device.adopted': [ActionDeviceAdoptedPayload]
-}
+	'device.removed': [ActionDeviceRemovedPayload];
+	'device.updated': [ActionDeviceUpdatedPayload];
+	'device.adopted': [ActionDeviceAdoptedPayload];
+};
 
 export const deviceEvents = new AnyEventEmitter<DeviceEventMap>();
-
 
 export async function emitDeviceUpdated(deviceId: string, reason: DeviceUpdateReason): Promise<void> {
 	const device = await TelemetryRepository.getDeviceById(deviceId);
@@ -32,10 +32,7 @@ export async function emitDeviceUpdated(deviceId: string, reason: DeviceUpdateRe
 	deviceEvents.emit('device.updated', payload);
 }
 
-export function emitDeviceRemoved(input: {
-	siteId: string | null;
-	deviceId: string;
-}): void {
+export function emitDeviceRemoved(input: { siteId: string | null; deviceId: string }): void {
 	const payload: ActionDeviceRemovedPayload = {
 		siteId: input.siteId,
 		deviceId: input.deviceId,

@@ -1,6 +1,11 @@
-import { and, asc, count, eq } from 'drizzle-orm';
+import { and, asc, count, eq, notInArray, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { deviceCredentials, deviceInterfaces, devices } from '$lib/server/db/schema';
+
+export type DeviceRow = Awaited<ReturnType<typeof DeviceRepository.list>>[number];
+
+export type DeviceInterfaceRow = Awaited<ReturnType<typeof DeviceRepository.listInterfaces>>[number];
+
 
 export const DeviceRepository = {
 	async countBySite(siteId: string): Promise<number> {
@@ -15,6 +20,7 @@ export const DeviceRepository = {
 		const query = db
 			.select({
 				id: devices.id,
+				siteId: devices.siteId,
 				name: devices.name,
 				host: devices.host,
 				apiPort: devices.apiPort,
@@ -30,6 +36,8 @@ export const DeviceRepository = {
 				routerOsVersion: devices.routerOsVersion,
 				capabilities: devices.capabilities,
 				tags: devices.tags,
+				publicIp: devices.publicIp,
+				agentLastCheckinAt: devices.agentLastCheckinAt,
 				lastSeenAt: devices.lastSeenAt,
 				lastSyncAt: devices.lastSyncAt
 			})
@@ -63,6 +71,7 @@ export const DeviceRepository = {
 				routerOsVersion: devices.routerOsVersion,
 				capabilities: devices.capabilities,
 				tags: devices.tags,
+				publicIp: devices.publicIp,
 				lastSeenAt: devices.lastSeenAt,
 				lastSyncAt: devices.lastSyncAt
 			})
@@ -108,18 +117,44 @@ export const DeviceRepository = {
 		deviceId: string,
 		interfaces: Array<Omit<typeof deviceInterfaces.$inferInsert, 'deviceId'>>
 	): Promise<void> {
-		await db.delete(deviceInterfaces).where(eq(deviceInterfaces.deviceId, deviceId));
-
 		if (interfaces.length === 0) {
+			await db.delete(deviceInterfaces).where(eq(deviceInterfaces.deviceId, deviceId));
 			return;
 		}
 
-		await db.insert(deviceInterfaces).values(
-			interfaces.map((networkInterface) => ({
-				...networkInterface,
-				deviceId
-			}))
-		);
+		const rows = interfaces.map((iface) => ({ ...iface, deviceId }));
+
+		await db
+			.insert(deviceInterfaces)
+			.values(rows)
+			.onConflictDoUpdate({
+				target: [deviceInterfaces.deviceId, deviceInterfaces.name],
+				set: {
+					routerosId: sql`excluded.routeros_id`,
+					type: sql`excluded.type`,
+					macAddress: sql`excluded.mac_address`,
+					comment: sql`excluded.comment`,
+					running: sql`excluded.running`,
+					disabled: sql`excluded.disabled`,
+					pvid: sql`excluded.pvid`,
+					frameTypes: sql`excluded.frame_types`,
+					bridge: sql`excluded.bridge`,
+					// Preserve existing linkSpeed when new value is null (monitor call failed)
+					linkSpeed: sql`COALESCE(excluded.link_speed, ${deviceInterfaces.linkSpeed})`,
+					updatedAt: sql`now()`
+				}
+			});
+
+		// Remove interfaces that disappeared from the device
+		const activeNames = rows.map((r) => r.name);
+		await db
+			.delete(deviceInterfaces)
+			.where(
+				and(
+					eq(deviceInterfaces.deviceId, deviceId),
+					notInArray(deviceInterfaces.name, activeNames)
+				)
+			);
 	},
 
 	async delete(deviceId: string): Promise<void> {
@@ -206,6 +241,47 @@ export const DeviceRepository = {
 			.where(eq(devices.id, deviceId));
 	},
 
+	async setAgentToken(deviceId: string, agentToken: string): Promise<void> {
+		await db
+			.update(devices)
+			.set({ agentToken, updatedAt: new Date() })
+			.where(eq(devices.id, deviceId));
+	},
+
+	async getByAgentToken(agentToken: string) {
+		const result = await db
+			.select()
+			.from(devices)
+			.where(eq(devices.agentToken, agentToken));
+		return result[0] ?? null;
+	},
+
+	async recordAgentCheckin(
+		deviceId: string,
+		agentIp: string,
+		agentCfgversion: string | null
+	): Promise<void> {
+		const existing = await db.select({ host: devices.host }).from(devices).where(eq(devices.id, deviceId));
+		const isPlaceholder = existing[0]?.host?.startsWith('pending-') ?? false;
+		await db
+			.update(devices)
+			.set({
+				agentIp,
+				agentCfgversion,
+				agentLastCheckinAt: new Date(),
+				updatedAt: new Date(),
+				...(isPlaceholder && agentIp !== 'unknown' ? { host: agentIp } : {})
+			})
+			.where(eq(devices.id, deviceId));
+	},
+
+	async setPublicIp(deviceId: string, publicIp: string | null): Promise<void> {
+		await db
+			.update(devices)
+			.set({ publicIp, updatedAt: new Date() })
+			.where(eq(devices.id, deviceId));
+	},
+
 	async updateName(deviceId: string, name: string): Promise<void> {
 		await db
 			.update(devices)
@@ -233,7 +309,8 @@ export const DeviceRepository = {
 				disabled: deviceInterfaces.disabled,
 				pvid: deviceInterfaces.pvid,
 				frameTypes: deviceInterfaces.frameTypes,
-				bridge: deviceInterfaces.bridge
+				bridge: deviceInterfaces.bridge,
+				linkSpeed: deviceInterfaces.linkSpeed
 			})
 			.from(deviceInterfaces)
 			.leftJoin(devices, eq(deviceInterfaces.deviceId, devices.id));

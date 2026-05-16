@@ -61,6 +61,11 @@ export const devices = pgTable(
 			.$type<string[]>()
 			.notNull()
 			.default(sql`'[]'::jsonb`),
+		publicIp: varchar('public_ip', { length: 255 }),
+		agentToken: varchar('agent_token', { length: 64 }),
+		agentCfgversion: varchar('agent_cfgversion', { length: 64 }),
+		agentLastCheckinAt: timestamp('agent_last_checkin_at', { withTimezone: true }),
+		agentIp: varchar('agent_ip', { length: 64 }),
 		lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
 		lastSyncAt: timestamp('last_sync_at', { withTimezone: true }),
 		createdAt,
@@ -100,6 +105,7 @@ export const deviceInterfaces = pgTable(
 		pvid: integer('pvid'),
 		frameTypes: varchar('frame_types', { length: 80 }),
 		bridge: varchar('bridge', { length: 160 }),
+		linkSpeed: varchar('link_speed', { length: 40 }),
 		createdAt,
 		updatedAt
 	},

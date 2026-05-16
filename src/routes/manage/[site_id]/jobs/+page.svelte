@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import SidePanel from '$lib/client/components/layout/SidePanel.svelte';
-	import { Page, PageHeader } from '$lib/client/components/layout';
+	import { Page, PageHeader, SidePanel } from '$lib/client/components/layout';
+	import { Alert, DetailCard, StatusPill } from '$lib/client/components/primitives';
 	import {
 		formatJobStatus,
 		getCurrentStep,
@@ -87,7 +87,7 @@
 								<span>{job.deviceId ?? 'Site task'}</span>
 							</td>
 							<td>
-								<span class={`status-pill status-${getJobStatusTone(job.status)}`}>{formatJobStatus(job.status)}</span>
+								<StatusPill status={getJobStatusTone(job.status)} label={formatJobStatus(job.status)} />
 							</td>
 							<td>
 								<div class="progress-cell">
@@ -116,34 +116,35 @@
 	{#if selectedJob}
 		<SidePanel open title={selectedJob.type} closeHref={`${basePath}/jobs`}>
 			<div class="job-detail">
-				<div class="detail-summary">
-					<div>
-						<span>Status</span>
-						<strong class={`status-value status-${getJobStatusTone(selectedJob.status)}`}>{formatJobStatus(selectedJob.status)}</strong>
+				<DetailCard>
+					<div class="detail-summary">
+						<div>
+							<span>Status</span>
+							<StatusPill status={getJobStatusTone(selectedJob.status)} label={formatJobStatus(selectedJob.status)} size="sm" />
+						</div>
+						<div>
+							<span>Progress</span>
+							<strong>{selectedJob.progress}%</strong>
+						</div>
+						<div>
+							<span>Started</span>
+							<strong>{formatDate(selectedJob.startedAt ?? selectedJob.createdAt)}</strong>
+						</div>
+						<div>
+							<span>Finished</span>
+							<strong>{formatDate(selectedJob.finishedAt)}</strong>
+						</div>
 					</div>
-					<div>
-						<span>Progress</span>
-						<strong>{selectedJob.progress}%</strong>
-					</div>
-					<div>
-						<span>Started</span>
-						<strong>{formatDate(selectedJob.startedAt ?? selectedJob.createdAt)}</strong>
-					</div>
-					<div>
-						<span>Finished</span>
-						<strong>{formatDate(selectedJob.finishedAt)}</strong>
-					</div>
-				</div>
+				</DetailCard>
 
 				{#if selectedJob.errorMessage}
-					<div class="job-error">{selectedJob.errorMessage}</div>
+					<Alert variant="error">{selectedJob.errorMessage}</Alert>
 				{/if}
 
-				<div class="steps-card">
-					<div class="card-heading">
-						<strong>Steps</strong>
-						<span>{selectedJob.steps.length}</span>
-					</div>
+				<DetailCard title="Steps" flush>
+					{#snippet actions()}
+						<span class="steps-count">{selectedJob.steps.length}</span>
+					{/snippet}
 					{#each selectedJob.steps as step}
 						<div class="step-row">
 							<div class="step-status" class:active={step.status === 'running' || step.status === 'reverting'}></div>
@@ -163,7 +164,7 @@
 							<time>{formatDate(step.finishedAt ?? step.revertedAt ?? step.startedAt)}</time>
 						</div>
 					{/each}
-				</div>
+				</DetailCard>
 			</div>
 		</SidePanel>
 	{/if}
@@ -213,58 +214,6 @@
 		font-size: 12px;
 	}
 
-	.status-pill {
-		display: inline-flex;
-		align-items: center;
-		min-height: 24px;
-		border: 1px solid #e2e8ec;
-		border-radius: 4px;
-		padding: 0 8px;
-		background: #fbfdff;
-	}
-
-	.status-pill.status-running,
-	.status-value.status-running {
-		border-color: #b9daf8;
-		color: var(--color-link);
-		background: #eef6ff;
-	}
-
-	.status-pill.status-success,
-	.status-value.status-success {
-		border-color: #b7dfc2;
-		color: #237a3b;
-		background: #effaf2;
-	}
-
-	.status-pill.status-danger,
-	.status-value.status-danger {
-		border-color: #efb8b8;
-		color: var(--color-danger);
-		background: #fff2f2;
-	}
-
-	.status-pill.status-warning,
-	.status-value.status-warning {
-		border-color: #e8d391;
-		color: #7a5b12;
-		background: #fff8df;
-	}
-
-	.status-pill.status-muted,
-	.status-value.status-muted {
-		border-color: #d7dde2;
-		color: #606b74;
-		background: #f4f6f8;
-	}
-
-	.status-pill.status-queued,
-	.status-value.status-queued {
-		border-color: #dfe7ed;
-		color: #5f7180;
-		background: #f7fbff;
-	}
-
 	.progress-cell {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 42px;
@@ -305,26 +254,21 @@
 		gap: 16px;
 	}
 
-	.detail-summary,
-	.steps-card {
+	.detail-summary {
 		display: grid;
 		gap: 14px;
-		border-radius: 6px;
-		padding: 16px;
-		background: #fbfdff;
 	}
 
 	.detail-summary div {
 		display: flex;
 		justify-content: space-between;
+		align-items: center;
 		gap: 12px;
 		color: #3f484f;
 		font-size: 14px;
 	}
 
-	.detail-summary span,
-	.step-row span,
-	.card-heading span {
+	.detail-summary span {
 		color: #8a949c;
 		font-size: 12px;
 	}
@@ -335,25 +279,9 @@
 		text-align: right;
 	}
 
-	.detail-summary .status-value {
-		border: 1px solid #e2e8ec;
-		border-radius: 4px;
-		padding: 2px 8px;
-	}
-
-	.job-error {
-		border: 1px solid #efb8b8;
-		border-radius: 6px;
-		padding: 10px 12px;
-		color: var(--color-danger);
-		background: #fff2f2;
-	}
-
-	.card-heading {
-		display: flex;
-		justify-content: space-between;
-		gap: 12px;
-		color: #30373d;
+	.steps-count {
+		color: #8a949c;
+		font-size: 12px;
 	}
 
 	.step-row {
@@ -361,12 +289,16 @@
 		grid-template-columns: 10px minmax(0, 1fr) auto;
 		gap: 10px;
 		border-top: 1px solid #eef1f3;
-		padding-top: 12px;
+		padding: 12px 16px 0;
+
+		&:last-child {
+			padding-bottom: 16px;
+		}
 	}
 
 	.step-row:first-of-type {
 		border-top: 0;
-		padding-top: 0;
+		padding-top: 16px;
 	}
 
 	.step-row strong,

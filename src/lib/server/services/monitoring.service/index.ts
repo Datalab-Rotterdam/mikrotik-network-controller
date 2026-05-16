@@ -1,4 +1,4 @@
-import backupDeviceTask from "$lib/server/services/devices.service/tasks/backup-device.task";
+﻿import backupDeviceTask from "$lib/server/services/devices.service/tasks/backup-device.task";
 import checkFirmwareTask from "$lib/server/services/devices.service/tasks/check-firmware.task";
 import {AnyEventEmitter} from "$lib/server/utilities/AnyEventEmitter";
 import {RouterOSClient} from '@sourceregistry/mikrotik-client/routeros';
@@ -9,7 +9,7 @@ import {DeviceRepository} from '$lib/server/repositories/device.repository';
 import {decryptSecret} from '$lib/server/security/secrets';
 import {MetricsRepository} from '$lib/server/repositories/metrics.repository';
 import {ClientRepository, type DeviceClientInput} from '$lib/server/repositories/clients.repository';
-import {emitDeviceUpdated} from '$lib/server/services/devices.service/events';
+import {emitDeviceUpdated} from '$lib/server/services/devices.service/emitter';
 import {
     evaluateDeviceMetric,
     evaluateDeviceOffline,
@@ -18,6 +18,7 @@ import {
 import {TopologyRepository} from '$lib/server/repositories/topology.repository';
 import {FirewallRepository} from '$lib/server/repositories/firewall.repository';
 import {VlanRepository} from '$lib/server/repositories/vlan.repository';
+import {VpnRepository} from '$lib/server/repositories/vpn.repository';
 
 const POLL_INTERVAL_MS = 30_000;
 const STARTUP_DELAY_MS = 8_000;
@@ -76,7 +77,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
     try {
         const now = new Date();
 
-        const [resourceResult, ifaceResult, healthResult, arpResult, dhcpResult, capsmAnResult, neighborResult, firewallResult, vlanResult, bridgePortResult] =
+        const [resourceResult, ifaceResult, healthResult, arpResult, dhcpResult, capsmAnResult, neighborResult, firewallResult, vlanResult, bridgePortResult, wgIfaceResult, wgPeerResult, etherMonitorResult] =
             await Promise.allSettled([
                 client.system.resource.get() as Promise<RawRecord>,
                 client.print('/interface', {}) as Promise<RawRecord[]>,
@@ -89,7 +90,10 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
                 client.print('/ip/neighbor', {}) as Promise<RawRecord[]>,
                 client.print('/ip/firewall/filter', {}) as Promise<RawRecord[]>,
                 client.print('/interface/vlan', {}) as Promise<RawRecord[]>,
-                client.print('/interface/bridge/port', {}) as Promise<RawRecord[]>
+                client.print('/interface/bridge/port', {}) as Promise<RawRecord[]>,
+                client.print('/interface/wireguard', {}) as Promise<RawRecord[]>,
+                client.print('/interface/wireguard/peers', {}) as Promise<RawRecord[]>,
+                client.print('/interface/ethernet/monitor', {}) as Promise<RawRecord[]>
             ]);
 
         // --- System metrics ---
@@ -143,7 +147,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
             }
         } else {
             // Resource endpoint rejected = device unreachable or API error.
-            // Promise.allSettled never throws, so catch below won't fire for this case —
+            // Promise.allSettled never throws, so catch below won't fire for this case â€”
             // mark offline explicitly here.
             await DeviceRepository.updateTelemetryState(device.id, 'offline');
             await emitDeviceUpdated(device.id, 'telemetry');
@@ -154,7 +158,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
         }
 
         // --- Interface metrics + bridge port VLAN state ---
-        // Build bridge port lookup: interface name → { pvid, frameTypes, bridge }
+        // Build bridge port lookup: interface name â†’ { pvid, frameTypes, bridge }
         const bridgePortMap = new Map<string, { pvid: number | null; frameTypes: string | null; bridge: string | null }>();
         if (bridgePortResult.status === 'fulfilled') {
             for (const bp of bridgePortResult.value) {
@@ -165,6 +169,16 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
                     frameTypes: str(bp['frame-types'] ?? bp.frameTypes),
                     bridge: str(bp['bridge'] ?? bp.bridge)
                 });
+            }
+        }
+
+        // Build ethernet monitor speed map: interface name → rate string
+        const etherSpeedMap = new Map<string, string>();
+        if (etherMonitorResult.status === 'fulfilled') {
+            for (const entry of etherMonitorResult.value) {
+                const name = str(entry['name'] ?? entry.name);
+                const rate = str(entry['rate'] ?? entry.rate);
+                if (name && rate) etherSpeedMap.set(name, rate);
             }
         }
 
@@ -190,6 +204,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
                 .map((iface) => {
                     const name = str(iface['name'] ?? iface.name) as string;
                     const bp = bridgePortMap.get(name);
+                    const speed = etherSpeedMap.get(name) ?? null;
                     return {
                         routerosId: str(iface['.id'] ?? iface.id) ?? undefined,
                         name,
@@ -199,14 +214,15 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
                         disabled: iface['disabled'] === 'true' || iface['disabled'] === true,
                         pvid: bp?.pvid ?? null,
                         frameTypes: bp?.frameTypes ?? null,
-                        bridge: bp?.bridge ?? null
+                        bridge: bp?.bridge ?? null,
+                        linkSpeed: speed
                     };
                 });
             void DeviceRepository.replaceInterfaces(device.id, interfaceUpdates).catch(() => {});
         }
 
         // --- Connected clients ---
-        // Build a map: mac → client. DHCP hostname takes priority over ARP entry.
+        // Build a map: mac â†’ client. DHCP hostname takes priority over ARP entry.
         const clientMap = new Map<string, DeviceClientInput>();
 
         if (arpResult.status === 'fulfilled') {
@@ -255,7 +271,7 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
             for (const reg of capsmAnResult.value) {
                 const mac = str(reg['mac-address'] ?? reg.macAddress);
                 if (!mac) continue;
-                // Signal strength comes as e.g. "-65dBm@6GHz" — strip the unit
+                // Signal strength comes as e.g. "-65dBm@6GHz" â€” strip the unit
                 const rawSignal = str(reg['signal-strength'] ?? reg.signalStrength) ?? '';
                 const signal = num(rawSignal.replace(/[^0-9-]/g, ''));
                 const prev = clientMap.get(mac);
@@ -351,6 +367,51 @@ async function collectDevice(device: MonitorableDevice): Promise<void> {
             }
             void VlanRepository.deleteByDeviceExcluding(device.id, seenRouterIds).catch(() => {
             });
+        }
+
+        // --- WireGuard interfaces ---
+        if (wgIfaceResult.status === 'fulfilled') {
+            const seenRouterIds: string[] = [];
+            for (const iface of wgIfaceResult.value) {
+                const routerId = str(iface['.id'] ?? iface.id);
+                const name = str(iface['name'] ?? iface.name);
+                if (!routerId || !name) continue;
+                seenRouterIds.push(routerId);
+                void VpnRepository.upsertWgInterface({
+                    deviceId: device.id,
+                    siteId: device.siteId,
+                    routerId,
+                    name,
+                    publicKey: str(iface['public-key'] ?? iface.publicKey),
+                    listenPort: num(iface['listen-port'] ?? iface.listenPort)
+                }).catch(() => {});
+            }
+            void VpnRepository.deleteWgInterfacesByDeviceExcluding(device.id, seenRouterIds).catch(() => {});
+        }
+
+        // --- WireGuard peers ---
+        if (wgPeerResult.status === 'fulfilled') {
+            const seenRouterIds: string[] = [];
+            for (const peer of wgPeerResult.value) {
+                const routerId = str(peer['.id'] ?? peer.id);
+                const publicKey = str(peer['public-key'] ?? peer.publicKey);
+                if (!routerId || !publicKey) continue;
+                seenRouterIds.push(routerId);
+                void VpnRepository.upsertWgPeer({
+                    deviceId: device.id,
+                    siteId: device.siteId,
+                    routerId,
+                    interfaceName: str(peer['interface'] ?? peer.interface),
+                    publicKey,
+                    endpointAddress: str(peer['endpoint-address'] ?? peer.endpointAddress),
+                    endpointPort: num(peer['endpoint-port'] ?? peer.endpointPort),
+                    allowedAddresses: str(peer['allowed-address'] ?? peer.allowedAddress ?? peer.allowedAddresses),
+                    lastHandshake: str(peer['last-handshake'] ?? peer.lastHandshake),
+                    rxBytes: num(peer['rx'] ?? peer.rx),
+                    txBytes: num(peer['tx'] ?? peer.tx)
+                }).catch(() => {});
+            }
+            void VpnRepository.deleteWgPeersByDeviceExcluding(device.id, seenRouterIds).catch(() => {});
         }
     } catch {
         await DeviceRepository.updateTelemetryState(device.id, 'offline');
@@ -522,3 +583,4 @@ export const service = {
 export type MonitoringService = typeof service;
 
 export default await ServiceManager.Load(service, import.meta);
+

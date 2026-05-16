@@ -1,4 +1,5 @@
 import '$lib/server/services/actionbus.service';
+import '$lib/server/services/agent.service';
 import '$lib/server/services/auth.service';
 import '$lib/server/services/discovery.service';
 import '$lib/server/services/monitoring.service';
@@ -15,7 +16,7 @@ Service('notification').start();
 Service('syslog').start();
 
 const loginRoute = '/manage/account/login';
-const publicRoutes = [loginRoute, '/setup', '/dev'];
+const publicRoutes = [loginRoute, '/setup', '/dev', '/api']; //TODO secure /api routes
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const pathname = event.url.pathname;
@@ -38,11 +39,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Run middleware guards
 	await requireSetupComplete(event, () => Service('auth').hasAnyUsers());
 	await blockSetupIfComplete(event, () => Service('auth').hasAnyUsers());
-
-	// Legacy /login redirect
-	if (pathname === '/login') {
-		throw redirect(303, `${loginRoute}${event.url.search}`);
-	}
 
 	// Auth gate for protected routes
 	const isPublicRoute = publicRoutes.some(

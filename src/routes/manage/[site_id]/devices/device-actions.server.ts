@@ -74,14 +74,6 @@ export async function removeDeviceAction({ request, locals, params }: RequestEve
 		});
 	}
 
-	if (device.platform !== 'routeros') {
-		return fail(400, {
-			action: 'remove',
-			message: 'Only RouterOS devices can be reset and removed.',
-			deviceId
-		});
-	}
-
 	try {
 		const result = await devicesService.local.removal.remove(deviceId, locals.user!.id);
 

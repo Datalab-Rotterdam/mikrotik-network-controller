@@ -8,7 +8,7 @@ import {AuditRepository} from '$lib/server/repositories/audit.repository';
 import {DeviceRepository} from '$lib/server/repositories/device.repository';
 import {SiteRepository} from '$lib/server/repositories/site.repository';
 import {encryptSecret} from '$lib/server/security/secrets';
-import {deviceEvents, emitDeviceUpdated} from '$lib/server/services/devices.service/events';
+import {deviceEvents, emitDeviceUpdated} from '$lib/server/services/devices.service/emitter';
 
 
 type DevicePlatform = 'routeros' | 'switchos';

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import {PageShell} from "$lib/client/components/layout/Page/index.ts";
+  import {PageShell} from "$lib/client/components/layout/Page/index";
   import {EmptyState} from "$lib/client/components/primitives";
   import { Page, PageHeader } from '$lib/client/components/layout';
   import { useActionSocket } from '$lib/client/actions/use-action-socket';

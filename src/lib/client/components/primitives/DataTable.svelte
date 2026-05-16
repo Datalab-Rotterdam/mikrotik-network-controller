@@ -43,13 +43,11 @@
 {:else}
   <div class="table-wrapper">
     <table class="table-base" {...rest}>
-      {#if header}
-        <colgroup>
-          {#each columns as col}
-            <col class={col.className?.split(" ")[0]} style={col.width ? `width: ${col.width}` : ""} />
-          {/each}
-        </colgroup>
-      {/if}
+      <colgroup>
+        {#each columns as col}
+          <col class={col.className?.split(" ")[0]} style={col.width ? `width: ${col.width}` : ""} />
+        {/each}
+      </colgroup>
       <thead>
         <tr>
           {#if header}

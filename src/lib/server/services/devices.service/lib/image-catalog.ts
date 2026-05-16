@@ -1,4 +1,4 @@
-import catalog from '../../../../../static/mikrotik_products_catalog.json';
+import catalog from '../../../../../../static/mikrotik_products_catalog.json';
 
 type MikroTikProduct = {
 	product_code: string;

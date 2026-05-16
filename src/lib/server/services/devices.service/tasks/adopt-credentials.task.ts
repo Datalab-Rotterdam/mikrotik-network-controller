@@ -5,7 +5,7 @@ import {
     createCredentialAdoptionAttempt, failCredentialAdoption, finishCredentialAdoption, markCredentialAdoptionSyncing,
     readAdoptionInventory,
     type RouterOSInventory, storeAdoptionReadOnlyCredential, upsertAdoptionInventory
-} from "$lib/server/services/devices.service/adoption";
+} from "../modules/adoption/helpers";
 import type {TaskDefinition} from "$lib/server/services/scheduler.service/types";
 import {validateTcpPort} from "$lib/server/utilities/action-helpers";
 

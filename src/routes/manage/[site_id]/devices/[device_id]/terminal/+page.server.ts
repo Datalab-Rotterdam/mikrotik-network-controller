@@ -4,10 +4,7 @@ import { enhance } from '@sourceregistry/sveltekit-enhance';
 import { SessionContext } from '$lib/server/context/session.context';
 import { DeviceRepository } from '$lib/server/repositories/device.repository';
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
-import {
-	isDeviceTerminalEligible,
-	startDeviceTerminalSession
-} from '$lib/server/services/devices.service/terminal';
+import { Service } from '@sourceregistry/sveltekit-service-manager/server';
 
 const terminalUnavailableMessage =
 	'Terminal access is available only for managed RouterOS devices with SSH trust.';
@@ -35,7 +32,7 @@ export const actions: Actions = {
 
 		const writeCredential = await TelemetryRepository.getActiveCredential(device.id, 'write');
 		if (
-			!isDeviceTerminalEligible({
+			!Service('devices').terminal.isEligible({
 				userRoles: user.roles,
 				device,
 				writeCredential
@@ -55,7 +52,7 @@ export const actions: Actions = {
 			url: websockets.use(
 				input,
 				(socket) => {
-					void startDeviceTerminalSession({
+					void Service('devices').terminal.startSession({
 						socket,
 						device,
 						credential: writeCredential,
@@ -85,7 +82,7 @@ export const load = enhance.load(async ({ locals, parent, params, depends }) => 
 
 	return {
 		device,
-		terminalAvailable: isDeviceTerminalEligible({
+		terminalAvailable: Service('devices').terminal.isEligible({
 			userRoles: locals?.user?.roles ?? [],
 			device,
 			writeCredential

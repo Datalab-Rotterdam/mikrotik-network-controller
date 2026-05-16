@@ -3,10 +3,10 @@ import firmwareUpgradeTask from "$lib/server/services/devices.service/tasks/firm
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { SiteRepository } from '$lib/server/repositories/site.repository';
 import { service as devicesService } from '$lib/server/services/devices.service';
-import { loadSiteDeviceState } from '$lib/server/services/devices.service/site-state';
 import { provisionDeviceAction, removeDeviceAction } from './device-actions.server';
 import { FirmwareRepository } from '$lib/server/repositories/firmware.repository';
-import { Service } from '@sourceregistry/sveltekit-service-manager';
+import { AgentRepository } from '$lib/server/repositories/agent.repository';
+import { Service } from '@sourceregistry/sveltekit-service-manager/server';
 import { enhance } from "@sourceregistry/sveltekit-enhance";
 import { SessionContext } from '$lib/server/context/session.context';
 
@@ -144,6 +144,19 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(500, { message: String(e) });
 		}
+	}, SessionContext.require),
+
+	generateInstallToken: enhance.action(async ({ params, context }) => {
+		const siteId = params.site_id as string;
+		try {
+			const { token, expiresAt } = await Service('agent').createInstallToken({
+				siteId,
+				createdByUserId: context.user.id
+			});
+			return { success: true, installToken: token, installTokenExpiresAt: expiresAt.toISOString() };
+		} catch (e) {
+			return fail(500, { message: String(e) });
+		}
 	}, SessionContext.require)
 };
 
@@ -152,13 +165,27 @@ export const load = enhance.load(async ({ parent, url, depends }) => {
 	depends?.(`app:site-devices:${site.id}`);
 
 	const host = url.searchParams.get('adopt') ?? url.searchParams.get('host') ?? '';
-	const { devices, interfaces, deviceInterfaces, discoveredDevices, deviceImages } = await loadSiteDeviceState(site.id);
+	const { devices, interfaces, deviceInterfaces, discoveredDevices, deviceImages } = await Service('devices').telemetry.siteState(site.id);
 
-	const firmwareRows = await FirmwareRepository.getVersionsForDevices(devices.map((d) => d.id));
+	const [firmwareRows, installTokens] = await Promise.all([
+		FirmwareRepository.getVersionsForDevices(devices.map((d) => d.id)),
+		AgentRepository.listBySite(site.id)
+	]);
 	const firmwareByDeviceId = Object.fromEntries(firmwareRows.map((f) => [f.deviceId, f]));
+
+	// Pending = discovered via agent checkin, not yet adopted by admin
+	const pendingDevices = devices.filter((d) => d.adoptionState === 'discovered' && d.agentLastCheckinAt);
 
 	return {
 		devices,
+		pendingDevices,
+		installTokens: installTokens.map((t) => ({
+			id: t.id,
+			token: t.token,
+			expiresAt: t.expiresAt.toISOString(),
+			claimedAt: t.claimedAt?.toISOString() ?? null,
+			deviceId: t.deviceId
+		})),
 		interfaces,
 		discoveredDevices,
 		deviceInterfaces,

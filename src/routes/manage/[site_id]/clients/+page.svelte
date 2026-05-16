@@ -1,13 +1,6 @@
 <script lang="ts">
-  import { Page, Tabs } from "$lib/client/components/layout";
-  import {PageHeader} from "$lib/client/components/layout/Page";
-  import {
-    Card,
-    DataTable,
-    EmptyState,
-    Input,
-    Tag,
-  } from "$lib/client/components/primitives";
+  import { Page, PageHeader, ResponsiveGrid, Tabs } from "$lib/client/components/layout";
+  import { Card, DataTable, EmptyState, Input, Tag } from "$lib/client/components/primitives";
   import { StatCard } from "$lib/client/components/ui";
 
   let { data } = $props();
@@ -162,12 +155,12 @@
     subtitle={`${data.clients.length} active client${data.clients.length !== 1 ? "s" : ""} across ${data.siteDevices.length} device${data.siteDevices.length !== 1 ? "s" : ""}`}
   />
 
-  <div class="client-stats">
+  <ResponsiveGrid min="200px" gap="14px">
     <StatCard label="Active clients" value={data.clients.length} />
     <StatCard label="Wired" value={wiredCount} />
     <StatCard label="Wireless" value={wirelessCount} />
     <StatCard label="Reporting devices" value={reportingDeviceCount} sub={`${data.siteDevices.length} adopted`} />
-  </div>
+  </ResponsiveGrid>
 
   <Tabs
     tabs={filterTabs}
@@ -178,13 +171,11 @@
   />
 
   {#if data.clients.length === 0}
-    <Card>
-      <EmptyState
-        icon="crosshair"
-        title="No clients yet"
-        description="Clients appear automatically once devices start reporting DHCP leases and ARP entries."
-      />
-    </Card>
+    <EmptyState
+      icon="crosshair"
+      title="No clients yet"
+      description="Clients appear automatically once devices start reporting DHCP leases and ARP entries."
+    />
   {:else}
     <Card
       title="Client inventory"
@@ -203,12 +194,6 @@
 </Page>
 
 <style lang="scss">
-  .client-stats {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
-  }
-
   .table-actions {
     width: min(280px, 48vw);
   }
@@ -258,17 +243,7 @@
     text-decoration: underline;
   }
 
-  @media (max-width: 900px) {
-    .client-stats {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
   @media (max-width: 640px) {
-    .client-stats {
-      grid-template-columns: 1fr;
-    }
-
     .table-actions {
       width: 100%;
     }

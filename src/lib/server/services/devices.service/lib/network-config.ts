@@ -1,6 +1,7 @@
-import { RouterOSSshClient } from '@sourceregistry/mikrotik-client/routeros';
+import { RouterOSClient, RouterOSSshClient } from '@sourceregistry/mikrotik-client/routeros';
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { getControllerSshPrivateKeyPath } from '$lib/server/security/controller-ssh-keys';
+import { decryptSecret } from '$lib/server/security/secrets';
 
 const TIMEOUT_MS = 20_000;
 
@@ -99,6 +100,120 @@ export type PortConfigInput = {
 	frameTypes?: string | null;
 	bridge?: string | null;
 };
+
+// ---- WireGuard helpers ----
+
+async function buildReadClient(deviceId: string): Promise<RouterOSClient> {
+	const device = await TelemetryRepository.getDeviceById(deviceId);
+	if (!device) throw new Error(`Device ${deviceId} not found`);
+	const credentials = await TelemetryRepository.getCredentials(deviceId);
+	const cred = credentials.find((c) => c.purpose === 'read_only');
+	if (!cred) throw new Error('No read_only credential for device');
+	return new RouterOSClient({
+		host: device.host,
+		port: device.apiPort,
+		username: cred.username,
+		password: decryptSecret(cred.secretEncrypted),
+		timeoutMs: TIMEOUT_MS
+	});
+}
+
+export async function createWireGuardInterface(
+	deviceId: string,
+	name: string,
+	listenPort: number
+): Promise<void> {
+	const ssh = await buildSshClient(deviceId);
+	await ssh.execute(`/interface wireguard add name=${rosQuote(name)} listen-port=${listenPort}`);
+}
+
+export async function readWireGuardPublicKey(deviceId: string, name: string): Promise<string> {
+	const client = await buildReadClient(deviceId);
+	try {
+		const rows = (await client.print('/interface/wireguard', {})) as Record<string, unknown>[];
+		const iface = rows.find((r) => r['name'] === name || r.name === name);
+		const key =
+			typeof iface?.['public-key'] === 'string'
+				? iface['public-key']
+				: typeof iface?.publicKey === 'string'
+					? (iface.publicKey as string)
+					: null;
+		if (!key) throw new Error(`WireGuard interface "${name}" not found or has no public key`);
+		return key;
+	} finally {
+		await client.close().catch(() => {});
+	}
+}
+
+export type WireGuardPeerInput = {
+	interfaceName: string;
+	publicKey: string;
+	endpointAddress: string;
+	endpointPort: number;
+	allowedAddresses: string;
+};
+
+export async function addWireGuardPeer(deviceId: string, input: WireGuardPeerInput): Promise<void> {
+	const ssh = await buildSshClient(deviceId);
+	await ssh.execute(
+		[
+			'/interface wireguard peers add',
+			`interface=${rosQuote(input.interfaceName)}`,
+			`public-key=${rosQuote(input.publicKey)}`,
+			`endpoint-address=${rosQuote(input.endpointAddress)}`,
+			`endpoint-port=${input.endpointPort}`,
+			`allowed-address=${rosQuote(input.allowedAddresses)}`
+		].join(' ')
+	);
+}
+
+export async function removeWireGuardPeer(deviceId: string, publicKey: string): Promise<void> {
+	const ssh = await buildSshClient(deviceId);
+	await ssh.execute(`/interface wireguard peers remove [find public-key=${rosQuote(publicKey)}]`);
+}
+
+export async function deleteWireGuardInterface(deviceId: string, name: string): Promise<void> {
+	const ssh = await buildSshClient(deviceId);
+	await ssh.execute(`/interface wireguard remove [find name=${rosQuote(name)}]`);
+}
+
+export async function addIpAddress(
+	deviceId: string,
+	address: string,
+	interfaceName: string
+): Promise<void> {
+	const ssh = await buildSshClient(deviceId);
+	await ssh.execute(
+		`/ip address add address=${rosQuote(address)} interface=${rosQuote(interfaceName)}`
+	);
+}
+
+export async function removeIpAddress(
+	deviceId: string,
+	address: string,
+	interfaceName: string
+): Promise<void> {
+	const ssh = await buildSshClient(deviceId);
+	await ssh.execute(
+		`/ip address remove [find address=${rosQuote(address)} interface=${rosQuote(interfaceName)}]`
+	);
+}
+
+export async function addRoute(
+	deviceId: string,
+	dstAddress: string,
+	gateway: string
+): Promise<void> {
+	const ssh = await buildSshClient(deviceId);
+	await ssh.execute(
+		`/ip route add dst-address=${rosQuote(dstAddress)} gateway=${rosQuote(gateway)}`
+	);
+}
+
+export async function removeRoute(deviceId: string, dstAddress: string): Promise<void> {
+	const ssh = await buildSshClient(deviceId);
+	await ssh.execute(`/ip route remove [find dst-address=${rosQuote(dstAddress)}]`);
+}
 
 export async function configurePort(
 	deviceId: string,

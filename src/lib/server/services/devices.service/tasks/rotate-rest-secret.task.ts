@@ -1,8 +1,8 @@
-import {DeviceRepository} from "$lib/server/repositories/device.repository";
+﻿import {DeviceRepository} from "$lib/server/repositories/device.repository";
 import {TelemetryRepository} from "$lib/server/repositories/telemetry.repository";
 import {getControllerSshPrivateKeyPath} from "$lib/server/security/controller-ssh-keys";
 import {decryptSecret, encryptSecret, generateRandomSecret} from "$lib/server/security/secrets";
-import {emitDeviceUpdated} from "$lib/server/services/devices.service/events";
+import {emitDeviceUpdated} from "$lib/server/services/devices.service/emitter";
 import {RouterOSSshClient} from "@sourceregistry/mikrotik-client/routeros";
 import type {TaskDefinition} from "../../scheduler.service/types";
 
@@ -133,3 +133,4 @@ export default (deviceId: string): TaskDefinition<{ deviceId: string }> => {
         ]
     };
 }
+

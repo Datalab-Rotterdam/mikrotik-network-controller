@@ -1,7 +1,5 @@
 <script lang="ts">
-  import Form from "$lib/client/components/primitives/Form.svelte";
-  import Input from "$lib/client/components/primitives/Input.svelte";
-  import Button from "$lib/client/components/primitives/Button.svelte";
+  import { Alert, Button, Form, Input } from "$lib/client/components/primitives";
 
   let { form } = $props();
 </script>
@@ -15,7 +13,7 @@
 
     <Form ariaLabel="Sign in">
       {#if form?.message}
-        <div class="error-message">{form.message}</div>
+        <Alert variant="error">{form.message}</Alert>
       {/if}
 
       <Input
@@ -73,11 +71,4 @@
     line-height: 1.5;
   }
 
-  .error-message {
-    border: 1px solid #efb8b8;
-    border-radius: 6px;
-    padding: 10px 12px;
-    color: var(--color-danger);
-    background: #fff2f2;
-  }
 </style>

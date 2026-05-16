@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { isDeviceTerminalEligible, startDeviceTerminalSession } from './terminal';
+import { isDeviceTerminalEligible, startDeviceTerminalSession } from './modules/terminal.module';
 
 const mocks = vi.hoisted(() => ({
 	getControllerSshPrivateKeyPath: vi.fn(),

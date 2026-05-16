@@ -1,6 +1,14 @@
 export { default as Alert } from './Alert.svelte';
+export { default as DetailCard } from './DetailCard.svelte';
+export { default as EnumBadge } from './EnumBadge.svelte';
+export type { EnumBadgePreset } from './EnumBadge.svelte';
+export { default as HealthIndicator } from './HealthIndicator.svelte';
+export type { HealthStatus } from './HealthIndicator.svelte';
 export { default as Icon } from './Icon.svelte';
 export type { IconName } from './icons';
+export { default as LinkButton } from './LinkButton.svelte';
+export { default as StatusPill } from './StatusPill.svelte';
+export type { StatusPillStatus } from './StatusPill.svelte';
 export { default as Breadcrumb } from './Breadcrumb.svelte';
 export { default as Button } from './Button.svelte';
 export { default as Card } from './Card.svelte';

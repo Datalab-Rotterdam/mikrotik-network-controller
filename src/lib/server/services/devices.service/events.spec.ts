@@ -10,7 +10,7 @@ vi.mock('$lib/server/repositories/telemetry.repository', () => ({
 	}
 }));
 
-const { deviceEvents, emitDeviceRemoved, emitDeviceUpdated } = await import('./events');
+const { deviceEvents, emitDeviceRemoved, emitDeviceUpdated } = await import('./emitter');
 
 describe('device event service', () => {
 	beforeEach(() => {

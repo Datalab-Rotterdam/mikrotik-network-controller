@@ -1,4 +1,4 @@
-import adoptCredentialsTask from "$lib/server/services/devices.service/tasks/adopt-credentials.task";
+﻿import adoptCredentialsTask from "$lib/server/services/devices.service/tasks/adopt-credentials.task";
 import managedAdoptCredentialsTask from "$lib/server/services/devices.service/tasks/managed-adopt-credentials.task";
 import prepareBootstrapTask from "$lib/server/services/devices.service/tasks/prepare.bootstrap.task";
 import provisionDeviceTask from "$lib/server/services/devices.service/tasks/provision-device.task";
@@ -79,7 +79,7 @@ vi.mock('$lib/server/repositories/site.repository', () => ({
 	}
 }));
 
-vi.mock('$lib/server/services/devices.service/events', () => ({
+vi.mock('$lib/server/services/devices.service/emitter', () => ({
 	emitDeviceUpdated: mocks.emitDeviceUpdated,
 	emitDeviceRemoved: mocks.emitDeviceRemoved
 }));
@@ -123,7 +123,7 @@ vi.mock('@sourceregistry/sveltekit-service-manager', () => ({
 	}
 }));
 
-vi.mock('$lib/server/services/devices.service/adoption', () => ({
+vi.mock('./modules/adoption/helpers', () => ({
 	createCredentialAdoptionAttempt: mocks.createCredentialAdoptionAttempt,
 	readAdoptionInventory: mocks.readAdoptionInventory,
 	assertSupportedAdoptionInventory: mocks.assertSupportedAdoptionInventory,
@@ -694,3 +694,4 @@ describe('createRotateRestSecretTask', () => {
 		expect(mocks.sshExecute).toHaveBeenCalledWith(expect.stringContaining('/user set'));
 	});
 });
+

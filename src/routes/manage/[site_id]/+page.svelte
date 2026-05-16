@@ -3,9 +3,7 @@
   import type { ActionEvent } from "$lib/shared/action-events";
   import { Page, PageHeader } from "$lib/client/components/layout";
   import { StatCard, DeviceHealthCard } from "$lib/client/components/ui";
-  import Icon from "$lib/client/components/primitives/Icon.svelte";
-  import SectionLabel from "$lib/client/components/primitives/SectionLabel.svelte";
-  import Tag from "$lib/client/components/primitives/Tag.svelte";
+  import { Icon, SectionLabel, Tag, LinkButton, DetailCard } from "$lib/client/components/primitives";
 
   let { data } = $props();
 
@@ -101,15 +99,10 @@
 </script>
 
 {#snippet adoptAction()}
-  <a
-    class="adopt-btn"
-    href={`${basePath}/devices?adopt=`}
-    aria-label="Adopt device"
-    title="Adopt device"
-  >
-    <Icon name="plus" size={16} />
+  <LinkButton href={`${basePath}/devices?adopt=`} variant="secondary" size="sm">
+    <Icon name="plus" size={14} />
     Adopt Device
-  </a>
+  </LinkButton>
 {/snippet}
 
 <Page>
@@ -160,11 +153,10 @@
   <!-- Bottom panels -->
   <div class="dash-grid">
     <!-- Recent jobs -->
-    <div class="dash-panel">
-      <div class="dash-panel-head">
-        <span class="dash-panel-title">Recent Jobs</span>
+    <DetailCard title="Recent Jobs" flush>
+      {#snippet actions()}
         <a class="dash-panel-link" href="{basePath}/jobs">View all →</a>
-      </div>
+      {/snippet}
       {#if data.recentJobs.length}
         <ul class="job-list">
           {#each data.recentJobs as job}
@@ -188,14 +180,13 @@
       {:else}
         <p class="dash-empty">No jobs run yet.</p>
       {/if}
-    </div>
+    </DetailCard>
 
     <!-- Recent activity -->
-    <div class="dash-panel">
-      <div class="dash-panel-head">
-        <span class="dash-panel-title">Activity</span>
+    <DetailCard title="Activity" flush>
+      {#snippet actions()}
         <span class="dash-panel-count">{data.summary.recentAuditEvents.length}</span>
-      </div>
+      {/snippet}
       {#if data.summary.recentAuditEvents.length}
         <ul class="activity-list">
           {#each data.summary.recentAuditEvents as event}
@@ -213,32 +204,11 @@
       {:else}
         <p class="dash-empty">No audit events yet.</p>
       {/if}
-    </div>
+    </DetailCard>
   </div>
 </Page>
 
 <style lang="scss">
-  /* ── Adopt button ────────────────────────────────────── */
-  .adopt-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md, 6px);
-    background: var(--color-surface);
-    color: var(--color-link);
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-    transition: border-color 0.1s, background 0.1s;
-
-    &:hover {
-      border-color: var(--color-link);
-      background: var(--color-surface-hover, #f5f7f9);
-    }
-  }
-
   /* ── Stat grid ───────────────────────────────────────── */
   .stat-grid {
     display: grid;
@@ -268,28 +238,7 @@
     }
   }
 
-  /* ── Panel ───────────────────────────────────────────── */
-  .dash-panel {
-    border: 1px solid var(--color-border, var(--color-line));
-    border-radius: var(--radius-md, 6px);
-    background: var(--color-surface);
-    overflow: hidden;
-  }
-
-  .dash-panel-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--color-border, var(--color-line));
-  }
-
-  .dash-panel-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--color-text);
-  }
-
+  /* ── Panel link / count (rendered inside DetailCard actions slot) ── */
   .dash-panel-link {
     font-size: 12px;
     color: var(--color-link);

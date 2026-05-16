@@ -2,13 +2,8 @@
   import { enhance } from "$app/forms";
   import { useActionSocket } from "$lib/client/actions/use-action-socket";
   import type { ActionEvent } from "$lib/shared/action-events";
-  import {PageHeader} from "$lib/client/components/layout/Page";
-  import Button from "$lib/client/components/primitives/Button.svelte";
-  import Input from "$lib/client/components/primitives/Input.svelte";
-  import Select from "$lib/client/components/primitives/Select.svelte";
-  import Checkbox from "$lib/client/components/primitives/Checkbox.svelte";
-  import TextArea from "$lib/client/components/primitives/TextArea.svelte";
-  import { Page } from "$lib/client/components/layout";
+  import { Page, PageHeader, Tabs } from "$lib/client/components/layout";
+  import { Button, Input, Select, Checkbox, TextArea, Tag, EnumBadge, StatusPill } from "$lib/client/components/primitives";
 
   let { data } = $props();
 
@@ -88,12 +83,6 @@
     return condition !== "device_offline" && condition !== "interface_down";
   }
 
-  function severityClass(severity: string) {
-    if (severity === "critical") return "severity-critical";
-    if (severity === "warning") return "severity-warning";
-    return "severity-info";
-  }
-
   function relativeTime(date: Date | string): string {
     const ms = Date.now() - new Date(date).getTime();
     const s = Math.floor(ms / 1000);
@@ -112,7 +101,7 @@
 
 {#snippet alertsActions()}
   {#if unacknowledged > 0}
-    <span class="badge-critical">{unacknowledged} unacknowledged</span>
+    <Tag label="{unacknowledged} unacknowledged" variant="danger" size="sm" />
   {/if}
 {/snippet}
 
@@ -123,42 +112,15 @@
     actions={alertsActions}
   />
 
-  <div class="tab-bar" role="tablist">
-  <button
-    role="tab"
-    class="tab-btn"
-    class:tab-active={activeTab === "events"}
-    aria-selected={activeTab === "events"}
-    onclick={() => (activeTab = "events")}
-  >
-    Events
-    {#if liveEvents.filter((e) => !e.resolvedAt).length > 0}
-      <span class="tab-count"
-        >{liveEvents.filter((e) => !e.resolvedAt).length}</span
-      >
-    {/if}
-  </button>
-  <button
-    role="tab"
-    class="tab-btn"
-    class:tab-active={activeTab === "rules"}
-    aria-selected={activeTab === "rules"}
-    onclick={() => (activeTab = "rules")}
-  >
-    Rules
-    <span class="tab-count tab-count-neutral">{data.rules.length}</span>
-  </button>
-  <button
-    role="tab"
-    class="tab-btn"
-    class:tab-active={activeTab === "channels"}
-    aria-selected={activeTab === "channels"}
-    onclick={() => (activeTab = "channels")}
-  >
-    Channels
-    <span class="tab-count tab-count-neutral">{data.channels.length}</span>
-  </button>
-</div>
+  <Tabs
+    tabs={[
+      { id: 'events', label: 'Events', count: liveEvents.filter(e => !e.resolvedAt).length || undefined },
+      { id: 'rules', label: 'Rules', count: data.rules.length },
+      { id: 'channels', label: 'Channels', count: data.channels.length },
+    ]}
+    {activeTab}
+    onTabChange={(id) => (activeTab = id as Tab)}
+  />
 
 <!-- ── Events tab ─────────────────────────────────────────────────────────── -->
 {#if activeTab === "events"}
@@ -183,21 +145,17 @@
             )}
             <tr class:row-resolved={!!event.resolvedAt}>
               <td>
-                <span
-                  class={`severity-badge ${severityClass(rule?.severity ?? "info")}`}
-                >
-                  {rule?.severity ?? "—"}
-                </span>
+                <EnumBadge value={rule?.severity ?? "info"} preset="severity" />
               </td>
               <td class="col-message">{event.message}</td>
               <td class="col-time">{relativeTime(event.firedAt)}</td>
               <td>
                 {#if event.resolvedAt}
-                  <span class="status-resolved">Resolved</span>
+                  <StatusPill status="resolved" label="Resolved" />
                 {:else if event.acknowledgedAt}
-                  <span class="status-ack">Acknowledged</span>
+                  <StatusPill status="acknowledged" label="Acknowledged" />
                 {:else}
-                  <span class="status-active">Active</span>
+                  <StatusPill status="danger" label="Active" />
                 {/if}
               </td>
               <td class="col-action">
@@ -324,9 +282,7 @@
                 >{conditionLabels[rule.conditionType] ?? rule.conditionType}</td
               >
               <td>
-                <span class={`severity-badge ${severityClass(rule.severity)}`}>
-                  {rule.severity}
-                </span>
+                <EnumBadge value={rule.severity} preset="severity" />
               </td>
               <td>{rule.cooldownSeconds}s</td>
               <td>
@@ -337,12 +293,13 @@
                     name="enabled"
                     value={String(!rule.enabled)}
                   />
-                  <button
+                  <Button
                     type="submit"
-                    class={`toggle-btn ${rule.enabled ? "toggle-on" : "toggle-off"}`}
+                    size="sm"
+                    variant={rule.enabled ? "secondary" : "ghost"}
                   >
                     {rule.enabled ? "On" : "Off"}
-                  </button>
+                  </Button>
                 </form>
               </td>
               <td class="col-action">
@@ -461,11 +418,10 @@
               <td class="col-name">{channel.name}</td>
               <td class="col-type">{channel.type}</td>
               <td>
-                <span
-                  class={channel.enabled ? "status-active" : "status-resolved"}
-                >
-                  {channel.enabled ? "Active" : "Disabled"}
-                </span>
+                <StatusPill
+                  status={channel.enabled ? "active" : "disabled"}
+                  label={channel.enabled ? "Active" : "Disabled"}
+                />
               </td>
               <td class="col-action">
                 <form method="POST" action="?/deleteChannel" use:enhance>
@@ -491,70 +447,6 @@
 </Page>
 
 <style lang="scss">
-  .badge-critical {
-    padding: 4px 10px;
-    border-radius: 20px;
-    background: var(--color-danger, #ef4444);
-    color: #fff;
-    font-size: 12px;
-    font-weight: 700;
-  }
-
-  .tab-bar {
-    display: flex;
-    gap: 2px;
-    margin-bottom: 14px;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .tab-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    border: none;
-    border-bottom: 2px solid transparent;
-    background: transparent;
-    color: var(--color-muted);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    margin-bottom: -1px;
-
-    &:hover {
-      color: var(--color-text);
-    }
-
-    &.tab-active {
-      border-bottom-color: var(--color-link);
-      color: var(--color-link);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--color-link);
-      outline-offset: 2px;
-    }
-  }
-
-  .tab-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 9px;
-    background: var(--color-danger, #ef4444);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 700;
-  }
-
-  .tab-count-neutral {
-    background: var(--color-border);
-    color: var(--color-muted);
-  }
-
   .panel {
     border: 1px solid var(--color-border);
     border-radius: 4px;
@@ -642,56 +534,6 @@
     text-align: right;
   }
 
-  .severity-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-  }
-
-  .severity-critical {
-    background: color-mix(
-      in srgb,
-      var(--color-danger, #ef4444) 15%,
-      transparent
-    );
-    color: var(--color-danger, #ef4444);
-  }
-
-  .severity-warning {
-    background: color-mix(
-      in srgb,
-      var(--color-warning, #f59e0b) 15%,
-      transparent
-    );
-    color: var(--color-warning, #f59e0b);
-  }
-
-  .severity-info {
-    background: color-mix(in srgb, var(--color-link, #3b82f6) 15%, transparent);
-    color: var(--color-link, #3b82f6);
-  }
-
-  .status-active {
-    color: var(--color-danger, #ef4444);
-    font-size: 12px;
-    font-weight: 700;
-  }
-
-  .status-ack {
-    color: var(--color-warning, #f59e0b);
-    font-size: 12px;
-    font-weight: 700;
-  }
-
-  .status-resolved {
-    color: var(--color-success, #22c55e);
-    font-size: 12px;
-    font-weight: 700;
-  }
-
   /* Forms */
   .inline-form {
     padding: 14px;
@@ -723,40 +565,6 @@
   .form-footer {
     display: flex;
     justify-content: flex-end;
-  }
-
-  .toggle-btn {
-    height: 24px;
-    padding: 0 10px;
-    border: 1px solid var(--color-border);
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 700;
-    cursor: pointer;
-
-    &.toggle-on {
-      border-color: var(--color-success, #22c55e);
-      background: color-mix(
-        in srgb,
-        var(--color-success, #22c55e) 15%,
-        transparent
-      );
-      color: var(--color-success, #22c55e);
-    }
-
-    &.toggle-off {
-      background: var(--color-surface);
-      color: var(--color-muted);
-    }
-
-    &:hover {
-      filter: brightness(1.1);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--color-link);
-      outline-offset: 2px;
-    }
   }
 
   @media (max-width: 768px) {

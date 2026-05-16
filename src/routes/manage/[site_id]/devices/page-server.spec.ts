@@ -28,7 +28,7 @@ vi.mock('$lib/server/repositories/firmware.repository', () => ({
 	}
 }));
 
-vi.mock('$lib/server/services/devices.service/site-state', () => ({
+vi.mock('$lib/server/services/devices.service/modules/telemetry.module', () => ({
 	loadSiteDeviceState: mocks.loadSiteDeviceState
 }));
 

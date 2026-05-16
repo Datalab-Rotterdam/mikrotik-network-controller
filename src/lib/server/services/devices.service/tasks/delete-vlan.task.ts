@@ -1,4 +1,4 @@
-import {deleteVlan} from "$lib/server/services/devices.service/network-config";
+import {deleteVlan} from "../lib/network-config";
 import type {TaskDefinition} from "$lib/server/services/scheduler.service/types";
 
 export default (

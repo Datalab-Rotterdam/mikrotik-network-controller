@@ -1,6 +1,6 @@
-import {TelemetryRepository} from "$lib/server/repositories/telemetry.repository";
+﻿import {TelemetryRepository} from "$lib/server/repositories/telemetry.repository";
 import { decryptSecret } from "$lib/server/security/secrets";
-import {emitDeviceUpdated} from "$lib/server/services/devices.service/events";
+import {emitDeviceUpdated} from "$lib/server/services/devices.service/emitter";
 import type {TaskDefinition} from "$lib/server/services/scheduler.service/types";
 import {RouterOSClient} from "@sourceregistry/mikrotik-client/routeros";
 
@@ -122,3 +122,4 @@ export default (deviceId: string): TaskDefinition<{ deviceId: string }> => {
         ]
     };
 }
+

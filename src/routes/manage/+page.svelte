@@ -2,7 +2,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import favicon from "$lib/assets/favicon.svg";
-  import { DataTable, Tag, Input, SectionLabel } from "$lib/client/components/primitives";
+  import { DataTable, Tag, Input, SectionLabel, HealthIndicator, LinkButton } from "$lib/client/components/primitives";
   import { ContentGrid } from "$lib/client/components/layout";
   import { StatCard, Donut } from "$lib/client/components/ui";
   import Button from "$lib/client/components/primitives/Button.svelte";
@@ -95,7 +95,7 @@
               <tr>
                 <td>
                   <div class="site-name-cell">
-                    <span class="health-dot {healthColor(site)}"></span>
+                    <HealthIndicator status={healthColor(site)} />
                     <strong>{site.name}</strong>
                   </div>
                 </td>
@@ -118,7 +118,7 @@
                   {/if}
                 </td>
                 <td class="actions-cell">
-                  <a href="/manage/{site.id}" class="goto-btn">Open</a>
+                  <LinkButton href="/manage/{site.id}" size="sm">Open</LinkButton>
                 </td>
               </tr>
             {:else}
@@ -274,47 +274,12 @@
     gap: 8px;
   }
 
-  .health-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-
-    &.success {
-      background: var(--color-success);
-    }
-    &.warning {
-      background: var(--color-warning);
-    }
-    &.danger {
-      background: var(--color-danger);
-    }
-  }
-
   .muted {
     color: var(--color-muted);
   }
 
   .actions-cell {
     text-align: right;
-  }
-
-  .goto-btn {
-    display: inline-flex;
-    align-items: center;
-    height: 28px;
-    border: 1px solid var(--color-brand);
-    border-radius: 4px;
-    padding: 0 10px;
-    color: var(--color-brand);
-    background: transparent;
-    font-size: 12px;
-    font-weight: 700;
-    text-decoration: none;
-
-    &:hover {
-      background: color-mix(in srgb, var(--color-brand) 8%, transparent);
-    }
   }
 
   .mac {

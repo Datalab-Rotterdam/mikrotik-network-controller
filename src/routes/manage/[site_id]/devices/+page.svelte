@@ -259,6 +259,15 @@
           selectedDevice.adoptionMode === "managed"),
     ),
   );
+  const selectedDeviceCanReset = $derived(
+    selectedDevice?.adoptionMode === "managed" &&
+      selectedDevice?.status === "online",
+  );
+  const selectedDeviceStatusKnownOffline = $derived(
+    selectedDevice?.status === "offline" ||
+      selectedDevice?.status === "auth_failed" ||
+      selectedDevice?.status === "blocked",
+  );
 
   function deviceHref(deviceId: string) {
     return `${basePath}/devices?device=${encodeURIComponent(deviceId)}`;
@@ -394,11 +403,18 @@
       return;
     }
 
-    const confirmed = confirm(
-      `Factory reset ${selectedDevice.name} and remove it from the controller? This will erase the device configuration and reboot it.`,
-    );
+    let suffix: string;
+    if (selectedDeviceCanReset) {
+      suffix = " This will erase the device configuration and reboot it.";
+    } else if (selectedDeviceStatusKnownOffline) {
+      suffix = " The device is offline — it will not be factory reset.";
+    } else if (selectedDevice.status === "unknown") {
+      suffix = " Device status is unknown — it will only be removed from the controller.";
+    } else {
+      suffix = " The device is not fully managed — it will only be removed from the controller.";
+    }
 
-    if (!confirmed) {
+    if (!confirm(`${selectedDeviceCanReset ? "Factory reset" : "Remove"} ${selectedDevice.name} from the controller?${suffix}`)) {
       event.preventDefault();
     }
   }
@@ -531,6 +547,67 @@
       </EmptyState>
     {/if}
   </div>
+  <!-- Pending devices (checked in via agent, not yet adopted) -->
+  {#if data.pendingDevices.length > 0}
+    <section class="pending-section">
+      <div class="pending-header">
+        <h2>Pending Adoption <span class="pending-badge">{data.pendingDevices.length}</span></h2>
+        <p>These devices checked in via the agent but haven't been adopted yet.</p>
+      </div>
+      <div class="pending-list">
+        {#each data.pendingDevices as device}
+          <div class="pending-card">
+            <div class="pending-card-info">
+              <strong>{device.identity ?? device.name}</strong>
+              <span class="pending-meta">
+                {device.host} · last seen {device.agentLastCheckinAt ? new Date(device.agentLastCheckinAt).toLocaleString() : "—"}
+              </span>
+            </div>
+            <a href={`${basePath}/devices?adopt=${device.host}&identity=${device.identity ?? ""}`}>
+              <Button size="sm">Adopt</Button>
+            </a>
+          </div>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  <!-- Install token generator -->
+  <section class="install-token-section">
+    <div class="install-token-header">
+      <h2>Agent Install Token</h2>
+      <p>Generate a one-time token to register a new device via the agent bootstrap script. Valid for 24 hours.</p>
+    </div>
+    <form method="POST" action="?/generateInstallToken">
+      <Button type="submit" variant="secondary" size="sm">Generate Install Token</Button>
+    </form>
+    {#if form?.installToken}
+      <div class="token-result">
+        <p class="token-hint">Paste this script into the RouterOS terminal on the device:</p>
+        <pre class="token-script">/tool fetch url="{typeof window !== 'undefined' ? `${window.location.origin}/api/v1/services/agent/bootstrap?token=${form.installToken}` : `/api/v1/services/agent/bootstrap?token=${form.installToken}`}" output=file dst-path=agent-bootstrap.rsc
+/import file-name=agent-bootstrap.rsc</pre>
+        <p class="token-expiry">Expires: {form.installTokenExpiresAt ? new Date(form.installTokenExpiresAt).toLocaleString() : ""}</p>
+      </div>
+    {/if}
+    {#if data.installTokens.length}
+      <div class="token-list">
+        {#each data.installTokens.slice().reverse() as t}
+          {@const expired = new Date(t.expiresAt) < new Date()}
+          {@const claimed = Boolean(t.claimedAt)}
+          <div class="token-row">
+            <span class="token-prefix">{t.token.slice(0, 8)}…</span>
+            <span class="token-status" class:status-claimed={claimed} class:status-expired={expired && !claimed} class:status-valid={!expired && !claimed}>
+              {claimed ? "Claimed" : expired ? "Expired" : "Valid"}
+            </span>
+            <span class="token-date">
+              {claimed ? `Claimed ${new Date(t.claimedAt!).toLocaleString()}` : `Expires ${new Date(t.expiresAt).toLocaleString()}`}
+            </span>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </section>
+
   <SidePanel
     open={adoptionPanelOpen}
     title="Adopt device"
@@ -873,6 +950,15 @@
             <div class="card-heading">
               <strong>Remove device</strong>
             </div>
+            <p class="muted">
+              {selectedDeviceCanReset
+                ? "Factory reset and remove from the controller inventory."
+                : selectedDeviceStatusKnownOffline
+                  ? "Device is offline — will be removed without factory reset."
+                  : selectedDevice.status === "unknown"
+                    ? "Status unknown — will be removed without factory reset."
+                    : "Will be removed from the controller inventory."}
+            </p>
             {#if form?.action === "remove" && form?.message}
               <div class={form?.success ? "status-success" : "error-message"}>
                 {form.message}
@@ -886,19 +972,8 @@
               onsubmit={confirmRemove}
             >
               <input type="hidden" name="deviceId" value={selectedDevice.id} />
-              <Button
-                variant="danger"
-                fullWidth
-                onclick={(e: Event) => {
-                  if (
-                    !confirm(
-                      `Factory reset ${selectedDevice.name} and remove it from the controller? Device will reboot.`,
-                    )
-                  )
-                    e.preventDefault();
-                }}
-              >
-                Reset & Remove
+              <Button variant="danger" fullWidth type="submit">
+                {selectedDeviceCanReset ? "Reset & Remove" : "Remove from controller"}
               </Button>
             </form>
           </div>
@@ -934,6 +1009,169 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .pending-section,
+  .install-token-section {
+    margin-top: 20px;
+    border: 1px solid var(--color-border, #eef1f3);
+    border-radius: 8px;
+    padding: 16px 20px;
+    background: var(--color-surface);
+  }
+
+  .pending-section {
+    border-color: #ffe08a;
+    background: #fffdf0;
+  }
+
+  .pending-header,
+  .install-token-header {
+    margin-bottom: 12px;
+
+    h2 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #30373d;
+      margin: 0 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    p {
+      font-size: 13px;
+      color: #6b7280;
+      margin: 0;
+    }
+  }
+
+  .pending-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #f59e0b;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 1px 7px;
+  }
+
+  .pending-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pending-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: white;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+    padding: 10px 14px;
+  }
+
+  .pending-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    strong { font-size: 13px; color: #30373d; }
+  }
+
+  .pending-meta {
+    font-size: 12px;
+    color: #8a949c;
+    font-family: monospace;
+  }
+
+  .token-result {
+    background: #f8f9fa;
+    border: 1px solid var(--color-border, #eef1f3);
+    border-radius: 6px;
+    padding: 12px 14px;
+  }
+
+  .token-hint {
+    font-size: 12px;
+    color: #6b7280;
+    margin: 0 0 8px;
+  }
+
+  .token-script {
+    font-family: monospace;
+    font-size: 12px;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 10px 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0 0 8px;
+  }
+
+  .token-expiry {
+    font-size: 11px;
+    color: #8a949c;
+    margin: 0;
+  }
+
+  .token-list {
+    display: grid;
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .token-row {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border, #eef1f3);
+    border-radius: 4px;
+    background: var(--color-surface);
+    font-size: 12px;
+  }
+
+  .token-prefix {
+    font-family: monospace;
+    color: #6b7280;
+  }
+
+  .token-status {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    border-radius: 999px;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .status-valid {
+    background: #eaf8f1;
+    color: #0d704f;
+  }
+
+  .status-claimed {
+    background: #e8f0fe;
+    color: #1a56d6;
+  }
+
+  .status-expired {
+    background: #f1f4f6;
+    color: #8a949c;
+  }
+
+  .token-date {
+    color: #8a949c;
+    font-size: 11px;
+    text-align: right;
   }
 
   .search-input {

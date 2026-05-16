@@ -1,51 +1,18 @@
-import {deviceEvents} from "$lib/server/services/devices.service/events";
-import {Router, Service, ServiceManager, Action} from "@sourceregistry/sveltekit-service-manager";
-import "$lib/server/services/scheduler.service";
-
-import {adoption, telemetry, provisioning, credentials, removal, config} from "./modules";
+import { AnyEventEmitter } from '$lib/server/utilities/AnyEventEmitter';
+import { deviceEvents, type DeviceEventMap } from './emitter';
+import { Router, Service, ServiceManager, type ServiceRouter } from '@sourceregistry/sveltekit-service-manager';
+import { adoption, telemetry, provisioning, credentials, removal, config, terminal, type ServiceModuleContext } from './modules';
 
 const router = Router();
 
-// Bootstrap / adoption
-router.POST("/enroll", async ({request}) => {
-    const body = await request.json();
-
-    const result = await service.local.adoption.enroll(body);
-    return Action.success(200, result);
-});
-router.GET("/bootstrap/controller.pub", async () => {
-    const key = await service.local.adoption.getControllerPublicKey();
-
-    return new Response(key + "\n", {
-        headers: {
-            "content-type": "text/plain; charset=utf-8"
-        }
-    });
-});
-router.POST("/bootstrap/ack", async ({request}) => {
-    const body = await request.json();
-
-    const result = await service.local.adoption.ack(body);
-    return Action.success(200, result);
-});
-
-// Telemetry / reads
-router.GET("/", async () => {
-    return Action.success(200, await service.local.telemetry.list());
-});
-router.GET("/[serial]", async ({params}) => {
-    const result = await service.local.telemetry.get(params.serial);
-
-    if (!result) {
-        return Action.error(404, {message: "Device not found"});
+const moduleContext: ServiceModuleContext = {
+    get eventEmitter(): AnyEventEmitter<DeviceEventMap> {
+        return deviceEvents;
+    },
+    get router(): ServiceRouter {
+        return router;
     }
-
-    return Action.success(200, result);
-});
-router.GET("/[serial]/stats", async ({params}) => {
-    const result = await service.local.telemetry.stats(params.serial);
-    return Action.success(200, result);
-});
+};
 
 export const service = {
     name: "devices",
@@ -81,12 +48,13 @@ export const service = {
         })
     },
     local: {
-        adoption,
-        telemetry,
-        provisioning,
-        credentials,
-        removal,
-        config
+        adoption: adoption(moduleContext),
+        telemetry: telemetry(moduleContext),
+        provisioning: provisioning(moduleContext),
+        credentials: credentials(moduleContext),
+        removal: removal(moduleContext),
+        config: config(moduleContext),
+        terminal: terminal(moduleContext),
     }
 } satisfies Service<"devices">;
 

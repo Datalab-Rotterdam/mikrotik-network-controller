@@ -11,11 +11,8 @@ import { DeviceRepository } from '$lib/server/repositories/device.repository';
 import { ClientRepository } from '$lib/server/repositories/clients.repository';
 import { JobRepository } from '$lib/server/repositories/job.repository';
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
-import { resolveDeviceImage } from '$lib/server/services/devices.service/image-catalog';
-import { isDeviceTerminalEligible } from '$lib/server/services/devices.service/terminal';
 import { MetricsRepository } from '$lib/server/repositories/metrics.repository';
-import { getDeviceBackups } from '$lib/server/services/devices.service/backup';
-import { Service } from '@sourceregistry/sveltekit-service-manager';
+import { Service } from '@sourceregistry/sveltekit-service-manager/server';
 
 import { FirmwareRepository } from '$lib/server/repositories/firmware.repository';
 import { FirewallRepository } from '$lib/server/repositories/firewall.repository';
@@ -166,6 +163,18 @@ export const actions: Actions = {
 		throw redirect(303, `/manage/${targetSiteId}/devices/${deviceId}`);
 	}, SessionContext.require),
 
+	setPublicIp: enhance.action(async ({ request, params }) => {
+		const deviceId = params.device_id as string;
+		const form = await request.formData();
+		const publicIp = ((form.get('publicIp') as string) ?? '').trim() || null;
+		try {
+			await DeviceRepository.setPublicIp(deviceId, publicIp);
+			return { success: true, message: publicIp ? `Public IP set to ${publicIp}` : 'Public IP cleared' };
+		} catch (e) {
+			return fail(500, { success: false, message: String(e) });
+		}
+	}, SessionContext.require),
+
 	deleteVlan: enhance.action(async ({ request, params }) => {
 		const siteId = params.site_id as string;
 		const deviceId = params.device_id as string;
@@ -292,7 +301,7 @@ export async function load({ locals, parent, params, depends }) {
 		JobRepository.listByDevice(device.id, 20),
 		TelemetryRepository.getActiveCredential(device.id, 'write'),
 		MetricsRepository.getInterfaceHistory(device.id, 60 * 60 * 1000), // last 1h
-		getDeviceBackups(device.id),
+		Service('devices').telemetry.backups(device.id),
 		FirmwareRepository.getVersion(device.id),
 		FirewallRepository.listByDevice(device.id),
 		VlanRepository.listByDevice(device.id)
@@ -304,14 +313,14 @@ export async function load({ locals, parent, params, depends }) {
 
 	return {
 		device,
-		deviceImage: resolveDeviceImage(device.model ?? device.identity ?? device.name, device.platform),
+		deviceImage: Service('devices').telemetry.deviceImage(device.model ?? device.identity ?? device.name, device.platform),
 		interfaces,
 		ifaceTraffic,
 		backups,
 		firmware,
 		firewallRules,
 		vlans,
-		terminalAvailable: isDeviceTerminalEligible({
+		terminalAvailable: Service('devices').terminal.isEligible({
 			userRoles: locals?.user?.roles ?? [],
 			device,
 			writeCredential

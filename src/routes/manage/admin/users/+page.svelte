@@ -1,11 +1,7 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
-  import Alert from "$lib/client/components/primitives/Alert.svelte";
-  import Button from "$lib/client/components/primitives/Button.svelte";
-  import Card from "$lib/client/components/primitives/Card.svelte";
-  import Checkbox from "$lib/client/components/primitives/Checkbox.svelte";
-  import Input from "$lib/client/components/primitives/Input.svelte";
-  import {PageHeader} from "$lib/client/components/layout/Page";
+  import { Page, PageHeader } from "$lib/client/components/layout";
+  import { Alert, Button, Card, Checkbox, Input, StatusPill } from "$lib/client/components/primitives";
 
   let { data, form } = $props();
 
@@ -24,7 +20,7 @@
   }
 </script>
 
-<div class="users-page">
+<Page>
   <PageHeader title="Users">
     {#snippet actions()}
       <Button
@@ -121,11 +117,7 @@
             </td>
             <td>{formatDate(user.lastLoginAt)}</td>
             <td>
-              {#if user.disabledAt}
-                <span class="status-pill disabled">Disabled</span>
-              {:else}
-                <span class="status-pill active">Active</span>
-              {/if}
+              <StatusPill status={user.disabledAt ? 'disabled' : 'active'} label={user.disabledAt ? 'Disabled' : 'Active'} size="sm" />
             </td>
             <td class="actions-cell">
               <Button
@@ -238,14 +230,9 @@
       </tbody>
     </table>
   </div>
-</div>
+</Page>
 
 <style lang="scss">
-  .users-page {
-    display: grid;
-    gap: 16px;
-  }
-
   .form-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -337,26 +324,6 @@
 
   .no-role {
     color: var(--color-muted);
-  }
-
-  .status-pill {
-    display: inline-flex;
-    align-items: center;
-    height: 20px;
-    border-radius: 999px;
-    padding: 0 8px;
-    font-size: 11px;
-    font-weight: 700;
-
-    &.active {
-      color: var(--color-success);
-      background: color-mix(in srgb, var(--color-success) 10%, transparent);
-    }
-
-    &.disabled {
-      color: var(--color-muted);
-      background: color-mix(in srgb, var(--color-muted) 10%, transparent);
-    }
   }
 
   .actions-cell {

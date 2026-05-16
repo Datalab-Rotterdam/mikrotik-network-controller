@@ -47,7 +47,7 @@ vi.mock('$lib/server/repositories/job.repository', () => ({
 	}
 }));
 
-vi.mock('$lib/server/services/devices.service/image-catalog', () => ({
+vi.mock('$lib/server/services/devices.service/lib/image-catalog', () => ({
 	resolveDeviceImage: mocks.resolveDeviceImage
 }));
 
@@ -57,7 +57,7 @@ vi.mock('$lib/server/repositories/metrics.repository', () => ({
 	}
 }));
 
-vi.mock('$lib/server/services/devices.service/backup', () => ({
+vi.mock('$lib/server/services/devices.service/modules/telemetry.module', () => ({
 	getDeviceBackups: mocks.getDeviceBackups
 }));
 
@@ -79,7 +79,7 @@ vi.mock('$lib/server/repositories/vlan.repository', () => ({
 	}
 }));
 
-vi.mock('$lib/server/services/devices.service/terminal', () => ({
+vi.mock('$lib/server/services/devices.service/modules/terminal.module', () => ({
 	isDeviceTerminalEligible: mocks.isDeviceTerminalEligible
 }));
 

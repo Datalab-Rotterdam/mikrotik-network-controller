@@ -1,9 +1,10 @@
+import type {ServiceModuleContext} from "$lib/server/services/devices.service/modules";
 import removeDeviceTask from "$lib/server/services/devices.service/tasks/remove-device.task";
 import { Service } from '@sourceregistry/sveltekit-service-manager';
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { AuditRepository } from '$lib/server/repositories/audit.repository';
 
-export default {
+export default (ctx: ServiceModuleContext) => ({
 	async remove(deviceId: string, requestedByUserId: string) {
 		const device = await TelemetryRepository.getDeviceById(deviceId);
 
@@ -37,4 +38,4 @@ export default {
 			jobId: task.id
 		};
 	}
-};
+});

@@ -229,4 +229,4 @@ The `devices` service is a single bounded service for the full device lifecycle.
 
 If you want, I can turn this into an `ARCHITECTURE.md` file in a cleaner repository-ready format.
 
-[1]: https://github.com/SourceRegistry/sveltekit-service-manager?utm_source=chatgpt.com "SourceRegistry/sveltekit-service-manager"
+[1]: https://github.com/SourceRegistry/sveltekit-service-manager "SourceRegistry/sveltekit-service-manager"

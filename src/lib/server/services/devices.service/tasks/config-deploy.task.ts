@@ -1,4 +1,4 @@
-import {deployConfig, type DeployVariableValues} from "$lib/server/services/devices.service/config-deploy";
+import {deployConfig, type DeployVariableValues} from "../lib/config-deploy";
 import type {TaskDefinition} from "$lib/server/services/scheduler.service/types";
 
 export default (input: {

@@ -14,3 +14,5 @@ export * from './topology';
 export * from './firewall';
 export * from './vlans';
 export * from './syslog';
+export * from './vpn';
+export * from './agent';

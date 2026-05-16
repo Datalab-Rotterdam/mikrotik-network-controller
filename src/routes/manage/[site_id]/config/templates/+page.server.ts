@@ -3,10 +3,9 @@ import { fail, type Actions } from '@sveltejs/kit';
 import { enhance } from '@sourceregistry/sveltekit-enhance';
 import { SessionContext } from '$lib/server/context/session.context';
 import { TemplateRepository } from '$lib/server/repositories/templates.repository';
-import { extractPlaceholders, renderTemplate, diffConfigs } from '$lib/server/services/devices.service/template-renderer';
-import type { TemplateVariable } from '$lib/server/services/devices.service/template-renderer';
+import type { TemplateVariable } from '$lib/server/services/devices.service/lib/template-renderer';
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
-import { Service } from '@sourceregistry/sveltekit-service-manager';
+import { Service } from '@sourceregistry/sveltekit-service-manager/server';
 
 export const load = enhance.load(async ({ parent, params, depends }) => {
 	const { site } = await parent();
@@ -33,7 +32,7 @@ export const actions: Actions = {
 
 		if (!name) return fail(400, { error: 'Name is required' });
 
-		const placeholders = extractPlaceholders(content);
+		const placeholders = Service('devices').config.extractPlaceholders(content);
 		const variables: TemplateVariable[] = placeholders.map((name) => ({
 			name,
 			label: name,
@@ -66,7 +65,7 @@ export const actions: Actions = {
 
 		// Merge any new placeholders found in content into the variable list
 		const existingNames = new Set(variables.map((v) => v.name));
-		for (const ph of extractPlaceholders(content)) {
+		for (const ph of Service('devices').config.extractPlaceholders(content)) {
 			if (!existingNames.has(ph)) {
 				variables.push({ name: ph, label: ph, type: 'string', required: false });
 			}
@@ -102,7 +101,7 @@ export const actions: Actions = {
 		const template = await TemplateRepository.get(templateId);
 		if (!template) return fail(404, { error: 'Template not found' });
 
-		const { content: rendered, missingRequired } = renderTemplate(
+		const { content: rendered, missingRequired } = Service('devices').config.renderTemplate(
 			template.content,
 			template.variables,
 			variableValues
@@ -112,7 +111,7 @@ export const actions: Actions = {
 			return fail(400, { error: `Missing required values: ${missingRequired.join(', ')}` });
 		}
 
-		const diffOutput = diffConfigs('', rendered);
+		const diffOutput = Service('devices').config.diffConfigs('', rendered);
 
 		return { success: true, renderedContent: rendered, diff: diffOutput };
 	}, SessionContext.require),

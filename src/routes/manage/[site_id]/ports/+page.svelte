@@ -19,25 +19,37 @@
   let panelDeviceId = $state<string | null>(null);
   let panelPortName = $state<string | null>(null);
   let filterStatus = $state(new Set<string>());
+  let filterTypes = $state(new Set<string>());
 
   const activeDevice = $derived(
     activeDeviceId ? data.devices.find((d) => d.id === activeDeviceId) ?? null : null,
   );
 
-  const visibleRows = $derived.by<Array<FullInterface & { deviceName: string }>>(() => {
+  const allRows = $derived.by<Array<FullInterface & { deviceName: string }>>(() => {
     const deviceIds = activeDeviceId ? [activeDeviceId] : data.devices.map((d) => d.id);
-    let rows = deviceIds.flatMap((deviceId) => {
+    return deviceIds.flatMap((deviceId) => {
       const device = data.devices.find((d) => d.id === deviceId);
       return (data.interfacesByDevice[deviceId] ?? []).map((iface) => ({
         ...iface,
         deviceName: device?.name ?? device?.identity ?? deviceId,
       }));
     });
+  });
+
+  const availableTypes = $derived(
+    [...new Set(allRows.map((r) => r.type ?? "unknown"))].sort()
+  );
+
+  const visibleRows = $derived.by<Array<FullInterface & { deviceName: string }>>(() => {
+    let rows = allRows;
     if (filterStatus.size > 0) {
       rows = rows.filter((r) => {
         const s = r.disabled ? "disabled" : r.running ? "running" : "inactive";
         return filterStatus.has(s);
       });
+    }
+    if (filterTypes.size > 0) {
+      rows = rows.filter((r) => filterTypes.has(r.type ?? "unknown"));
     }
     return rows;
   });
@@ -110,6 +122,13 @@
     filterStatus = next;
   }
 
+  function toggleType(type: string) {
+    const next = new Set(filterTypes);
+    if (next.has(type)) next.delete(type);
+    else next.add(type);
+    filterTypes = next;
+  }
+
   const totalIfaceCount = $derived(
     data.devices.reduce((sum, d) => sum + deviceIfaceCount(d.id), 0),
   );
@@ -158,6 +177,22 @@
           </label>
         {/each}
       </div>
+
+      {#if availableTypes.length > 0}
+        <div class="filter-section">
+          <p class="filter-label">Type</p>
+          {#each availableTypes as type}
+            <label class="filter-row">
+              <input
+                type="checkbox"
+                checked={filterTypes.has(type)}
+                onchange={() => toggleType(type)}
+              />
+              <span class="type-label">{type}</span>
+            </label>
+          {/each}
+        </div>
+      {/if}
     </div>
   {/snippet}
 
@@ -192,6 +227,8 @@
             <th class="col-port">Port</th>
             {#if !activeDeviceId}<th class="col-device">Device</th>{/if}
             <th class="col-status">Status</th>
+            <th class="col-type">Type</th>
+            <th class="col-speed">Speed</th>
             <th class="col-name">Name</th>
             <th class="col-native">Native VLAN</th>
             <th class="col-frame">Frame types</th>
@@ -222,6 +259,8 @@
                 <td class="col-status">
                   <Tag variant={portTagVariant(row)} label={portTagLabel(row)} size="sm" />
                 </td>
+                <td class="col-type type-dim">{row.type ?? "—"}</td>
+                <td class="col-speed speed-val">{row.linkSpeed ?? "—"}</td>
                 <td class="col-name name-dim">{row.comment ?? "—"}</td>
                 <td class="col-native">{row.pvid ?? "—"}</td>
                 <td class="col-frame">
@@ -234,7 +273,7 @@
             {/each}
           {:else}
             <tr>
-              <td colspan={activeDeviceId ? 7 : 8} class="empty-cell">
+              <td colspan={activeDeviceId ? 9 : 10} class="empty-cell">
                 No interfaces collected yet.
               </td>
             </tr>
@@ -258,6 +297,9 @@
       <div class="panel-card">
         <InfoRow label="Port" value={panelInterface.name} />
         <InfoRow label="Type" value={panelInterface.type ?? undefined} />
+        {#if panelInterface.linkSpeed}
+          <InfoRow label="Speed" value={panelInterface.linkSpeed} />
+        {/if}
         <InfoRow label="MAC Address" value={panelInterface.macAddress ?? undefined} />
         {#if panelDevice?.connectionStatus === "online"}
           <InfoRow
@@ -516,6 +558,8 @@
   .col-port   { width: 130px; }
   .col-device { width: 160px; }
   .col-status { width: 90px; }
+  .col-type   { width: 90px; }
+  .col-speed  { width: 90px; }
   .col-name   { min-width: 120px; }
   .col-native { width: 110px; }
   .col-frame  { width: 110px; }
@@ -537,7 +581,11 @@
   /* ── Misc cells ──────────────────────────────────────── */
   .device-dim { color: var(--color-text-muted); font-size: 12px; }
   .name-dim   { color: var(--color-text-muted); font-size: 12px; }
+  .type-dim   { color: var(--color-text-muted); font-size: 12px; font-family: monospace; }
+  .speed-val  { font-size: 12px; font-weight: 600; }
   .mono       { font-family: monospace; font-size: 12px; }
+
+  .type-label { font-family: monospace; font-size: 12px; }
 
   .empty-cell {
     text-align: center;

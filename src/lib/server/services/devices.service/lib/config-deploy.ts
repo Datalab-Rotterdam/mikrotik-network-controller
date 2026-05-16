@@ -2,7 +2,7 @@ import { RouterOSClient, RouterOSSshClient } from '@sourceregistry/mikrotik-clie
 import { TelemetryRepository } from '$lib/server/repositories/telemetry.repository';
 import { decryptSecret } from '$lib/server/security/secrets';
 import { TemplateRepository } from '$lib/server/repositories/templates.repository';
-import { renderTemplate, diffConfigs } from '$lib/server/services/devices.service/template-renderer';
+import { renderTemplate, diffConfigs } from './template-renderer';
 
 export type DeployMode = 'dry-run' | 'apply';
 

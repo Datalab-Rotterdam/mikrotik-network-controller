@@ -59,6 +59,7 @@ export const TelemetryRepository = {
 				uptimeSeconds: devices.uptimeSeconds,
 				capabilities: devices.capabilities,
 				tags: devices.tags,
+				publicIp: devices.publicIp,
 				lastSeenAt: devices.lastSeenAt,
 				lastSyncAt: devices.lastSyncAt,
 				createdAt: devices.createdAt,

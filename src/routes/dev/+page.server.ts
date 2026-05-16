@@ -1,5 +1,5 @@
 import { portLayoutCatalog } from '$lib/shared/device-port-layouts';
-import { resolveDeviceImage } from '$lib/server/services/devices.service/image-catalog';
+import { resolveDeviceImage } from '$lib/server/services/devices.service/lib/image-catalog';
 
 export function load() {
 	const modelImages = Object.fromEntries(

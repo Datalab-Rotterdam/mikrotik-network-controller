@@ -1,5 +1,5 @@
-import { ServiceManager, type Service } from '@sourceregistry/sveltekit-service-manager/server';
-import { deviceEvents } from '$lib/server/services/devices.service/events';
+﻿import { ServiceManager, type Service } from '@sourceregistry/sveltekit-service-manager/server';
+import { deviceEvents } from '$lib/server/services/devices.service/emitter';
 import { schedulerEvents } from '$lib/server/services/scheduler.service';
 import { SyslogRepository } from '$lib/server/repositories/syslog.repository';
 import { JobRepository } from '$lib/server/repositories/job.repository';
@@ -52,7 +52,7 @@ async function writeEvent(input: {
 			}
 		});
 	} catch {
-		// Fire-and-forget — never block device operations
+		// Fire-and-forget â€” never block device operations
 	}
 }
 
@@ -68,7 +68,7 @@ function startDeviceListeners() {
 		if (prev === current) return;
 		lastStatus.set(deviceId, current);
 
-		// Skip first-seen (no previous) for online — suppress startup noise
+		// Skip first-seen (no previous) for online â€” suppress startup noise
 		if (!prev && current === 'online') {
 			lastStatus.set(deviceId, current);
 			return;
@@ -202,3 +202,4 @@ export const service = {
 export type SyslogService = typeof service;
 
 export default ServiceManager.Load(service, import.meta);
+

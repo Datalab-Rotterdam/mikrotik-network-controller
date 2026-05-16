@@ -127,12 +127,29 @@
     }
   }
 
-  function confirmRemove(event: SubmitEvent) {
-    const confirmed = confirm(
-      `Factory reset ${deviceName} and remove it from the controller? This will erase the device configuration and reboot it.`,
-    );
+  const canReset = $derived(
+    device.adoptionMode === "managed" && device.connectionStatus === "online",
+  );
+  const statusKnownOffline = $derived(
+    device.connectionStatus === "offline" ||
+      device.connectionStatus === "auth_failed" ||
+      device.connectionStatus === "blocked",
+  );
 
-    if (!confirmed) {
+  function confirmRemove(event: SubmitEvent) {
+    let suffix: string;
+    if (canReset) {
+      suffix = " This will erase the device configuration and reboot it.";
+    } else if (statusKnownOffline) {
+      suffix = " The device is offline — it will not be factory reset.";
+    } else if (device.connectionStatus === "unknown") {
+      suffix =
+        " Device status is unknown — it will only be removed from the controller.";
+    } else {
+      suffix = " The device is not fully managed — it will only be removed from the controller.";
+    }
+
+    if (!confirm(`${canReset ? "Factory reset" : "Remove"} ${deviceName} from the controller?${suffix}`)) {
       event.preventDefault();
     }
   }
@@ -891,6 +908,23 @@
               </p>
             {/if}
           </div>
+          <div class="advanced-block">
+            <strong>Public WAN IP</strong>
+            <p>
+              Set the public IP address used as the WireGuard endpoint when creating site-to-site VPN tunnels.
+              If left blank, the device host address is used instead.
+            </p>
+            <form method="POST" action="?/setPublicIp" use:enhance class="public-ip-row">
+              <input
+                type="text"
+                name="publicIp"
+                placeholder="e.g. 203.0.113.10"
+                value={device.publicIp ?? ""}
+                class="public-ip-input"
+              />
+              <Button variant="secondary" size="sm" type="submit">Save</Button>
+            </form>
+          </div>
           {#if data.sites.length > 1}
             <div class="advanced-block">
               <strong>Move to new site</strong>
@@ -911,21 +945,20 @@
           <div class="advanced-block danger-block">
             <strong>Remove device</strong>
             <p>
-              Factory reset the device and remove it from the controller
-              inventory.
+              {canReset
+                ? "Factory reset the device and remove it from the controller inventory."
+                : statusKnownOffline
+                  ? "The device is offline. It will be removed from the controller without a factory reset."
+                  : device.connectionStatus === "unknown"
+                    ? "Device status is unknown. It will be removed from the controller without a factory reset."
+                    : "Remove this device from the controller inventory. A factory reset requires a fully managed device."}
             </p>
-            {#if device.platform === "routeros"}
-              <form method="POST" action="?/remove" onsubmit={confirmRemove}>
-                <input type="hidden" name="deviceId" value={device.id} />
-                <Button variant="danger" size="sm" type="submit"
-                  >Reset & Remove</Button
-                >
-              </form>
-            {:else}
-              <p class="muted">
-                Only RouterOS devices can be reset and removed.
-              </p>
-            {/if}
+            <form method="POST" action="?/remove" onsubmit={confirmRemove}>
+              <input type="hidden" name="deviceId" value={device.id} />
+              <Button variant="danger" size="sm" type="submit">
+                {canReset ? "Reset & Remove" : "Remove from controller"}
+              </Button>
+            </form>
           </div>
         </div>
       </section>
@@ -1344,6 +1377,23 @@
   }
 
   .migrate-select {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border, var(--color-line));
+    border-radius: var(--radius-md, 6px);
+    font-size: 13px;
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .public-ip-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+  }
+
+  .public-ip-input {
     flex: 1;
     padding: 6px 10px;
     border: 1px solid var(--color-border, var(--color-line));

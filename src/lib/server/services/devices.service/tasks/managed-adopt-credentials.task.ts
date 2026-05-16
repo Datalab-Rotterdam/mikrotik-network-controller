@@ -1,9 +1,9 @@
-import {DeviceRepository} from "$lib/server/repositories/device.repository";
+﻿import {DeviceRepository} from "$lib/server/repositories/device.repository";
 import {JobRepository} from "$lib/server/repositories/job.repository";
 import {TelemetryRepository} from "$lib/server/repositories/telemetry.repository";
 import {ensureControllerSshKeyPair} from "$lib/server/security/controller-ssh-keys";
 import {encryptSecret, generateRandomSecret} from "$lib/server/security/secrets";
-import {emitDeviceUpdated} from "$lib/server/services/devices.service/events";
+import {emitDeviceUpdated} from "$lib/server/services/devices.service/emitter";
 import provisionDeviceTask from "$lib/server/services/devices.service/tasks/provision-device.task";
 import type {TaskDefinition} from "$lib/server/services/scheduler.service/types";
 import {validateTcpPort} from "$lib/server/utilities/action-helpers";
@@ -15,7 +15,7 @@ import {
     failCredentialAdoption, finishCredentialAdoption, markCredentialAdoptionSyncing, readAdoptionInventory,
     type RouterOSInventory,
     upsertAdoptionInventory
-} from "../adoption";
+} from "../modules/adoption/helpers";
 
 
 
@@ -424,3 +424,4 @@ export default (input: AdoptDeviceInput & {
         ]
     };
 }
+

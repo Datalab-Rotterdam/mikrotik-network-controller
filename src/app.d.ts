@@ -9,6 +9,7 @@ import type {MonitoringService} from "$lib/server/services/monitoring.service";
 import type {NotificationService} from "$lib/server/services/notification.service";
 import type {ActionBusService} from "$lib/server/services/actionbus.service";
 import type {SyslogService} from "$lib/server/services/syslog.service";
+import type {AgentService} from "$lib/server/services/agent.service";
 import type {
 	ActionDeviceAdoptedPayload,
 	ActionDeviceRemovedPayload,
@@ -38,6 +39,7 @@ declare global {
         interface Services {
             alerts: AlertsService
             auth: AuthService
+            agent: AgentService
             discovery: DiscoveryService
             devices: DevicesService
             monitoring: MonitoringService

@@ -1,8 +1,8 @@
-import {AuditRepository} from "$lib/server/repositories/audit.repository";
+﻿import {AuditRepository} from "$lib/server/repositories/audit.repository";
 import {DeviceRepository} from "$lib/server/repositories/device.repository";
 import {TelemetryRepository} from "$lib/server/repositories/telemetry.repository";
 import {getControllerSshPrivateKeyPath} from "$lib/server/security/controller-ssh-keys";
-import {emitDeviceRemoved} from "$lib/server/services/devices.service/events";
+import {emitDeviceRemoved} from "$lib/server/services/devices.service/emitter";
 import type {TaskDefinition} from "$lib/server/services/scheduler.service/types";
 import {RouterOSSshClient} from "@sourceregistry/mikrotik-client/routeros";
 
@@ -22,6 +22,22 @@ function resetCommandWasAccepted(error: unknown): boolean {
     return output.includes('reset') || output.includes('reboot');
 }
 
+function isConnectionError(error: unknown): boolean {
+    const parts = [
+        error instanceof Error ? error.message : String(error),
+        typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code) : ''
+    ].join('\n').toLowerCase();
+
+    return parts.includes('econnrefused') ||
+        parts.includes('etimedout') ||
+        parts.includes('enotfound') ||
+        parts.includes('ehostunreach') ||
+        parts.includes('enetunreach') ||
+        parts.includes('connection refused') ||
+        parts.includes('timed out') ||
+        parts.includes('no route to host');
+}
+
 
 export default (input: {
     deviceId: string;
@@ -31,6 +47,7 @@ export default (input: {
     let device: Awaited<ReturnType<typeof TelemetryRepository.getDeviceById>>;
     let managedCredential: Awaited<ReturnType<typeof TelemetryRepository.getCredentials>>[number] | undefined;
     let controllerPrivateKeyPath = '';
+    let shouldReset = false;
 
     async function recordAuditEvent(input: typeof import('$lib/server/db/schema').auditEvents.$inferInsert): Promise<void> {
         await AuditRepository.record(input);
@@ -63,7 +80,7 @@ export default (input: {
         failurePolicy: 'stop',
         steps: [
             {
-                name: 'Validate device and SSH trust',
+                name: 'Validate device and prepare removal',
                 async execute() {
                     try {
                         device = await TelemetryRepository.getDeviceById(input.deviceId);
@@ -75,29 +92,27 @@ export default (input: {
                             throw new Error(`Device ${input.deviceId} does not belong to the requested site`);
                         }
 
-                        if (device.platform !== 'routeros') {
-                            throw new Error('Only RouterOS devices can be reset by this removal action');
-                        }
-
-                        if (device.adoptionState === 'discovered') {
-                            throw new Error(`Device ${input.deviceId} is not adopted`);
-                        }
-
                         const credentials = await TelemetryRepository.getCredentials(device.id);
                         managedCredential = credentials.find((credential) => credential.purpose === 'write');
 
-                        if (!managedCredential) {
-                            throw new Error(`Device ${input.deviceId} has no active SSH trust credential`);
+                        const isOnline = device.connectionStatus === 'online';
+                        const isManaged = device.adoptionMode === 'managed' && device.adoptionState !== 'discovered';
+
+                        if (managedCredential && isOnline && isManaged) {
+                            controllerPrivateKeyPath = await getControllerSshPrivateKeyPath();
+                            shouldReset = true;
                         }
 
-                        controllerPrivateKeyPath = await getControllerSshPrivateKeyPath();
+                        const skipReason = !isManaged ? 'not_managed'
+                            : !managedCredential ? 'no_ssh_trust'
+                            : !isOnline ? 'offline'
+                            : undefined;
 
                         return {
-                            message: 'Removal inputs are ready',
-                            data: {
-                                host: device.host,
-                                managedUser: managedCredential.username
-                            }
+                            message: shouldReset
+                                ? 'Device is online and managed â€” will factory reset before removal'
+                                : `Removal will proceed without factory reset (${skipReason})`,
+                            data: { host: device.host, shouldReset, skipReason }
                         };
                     } catch (error) {
                         await recordFailure(error, 'validate');
@@ -108,11 +123,14 @@ export default (input: {
             {
                 name: 'Factory reset RouterOS device',
                 async execute() {
-                    try {
-                        if (!device || !managedCredential || !controllerPrivateKeyPath) {
-                            throw new Error('Removal validation step did not complete');
-                        }
+                    if (!shouldReset || !device || !managedCredential || !controllerPrivateKeyPath) {
+                        return {
+                            message: 'Factory reset skipped â€” device will be removed from controller only',
+                            data: { skipped: true }
+                        };
+                    }
 
+                    try {
                         const ssh = new RouterOSSshClient({
                             host: device.host,
                             username: managedCredential.username,
@@ -141,9 +159,14 @@ export default (input: {
                             if (resetCommandWasAccepted(error)) {
                                 return {
                                     message: 'Factory reset command accepted before SSH disconnected',
-                                    data: {
-                                        disconnected: true
-                                    }
+                                    data: { disconnected: true }
+                                };
+                            }
+
+                            if (isConnectionError(error)) {
+                                return {
+                                    message: 'Device unreachable at reset time â€” reset skipped, proceeding to remove controller records',
+                                    data: { skipped: true, connectionFailed: true }
                                 };
                             }
 
@@ -196,3 +219,4 @@ export default (input: {
         ]
     };
 }
+

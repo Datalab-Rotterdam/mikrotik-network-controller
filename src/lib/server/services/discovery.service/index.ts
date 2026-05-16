@@ -1,5 +1,6 @@
 import {DeviceRepository} from "$lib/server/repositories/device.repository";
 import {NeighborDiscoveryService} from "@sourceregistry/mikrotik-client";
+import type {DiscoveredNeighbor} from "@sourceregistry/mikrotik-client/discovery";
 import {Service, ServiceManager} from '@sourceregistry/sveltekit-service-manager';
 import env from "$lib/server/configurations/env.configuration";
 
@@ -9,17 +10,7 @@ export const discovery = new NeighborDiscoveryService({
     dedupe: true
 });
 
-
-type DiscoveryDevice = {
-    id: string;
-    identity?: string | null;
-    macAddress?: string | null;
-    platform?: string | null;
-    version?: string | null;
-    hardware?: string | null;
-    interfaceName?: string | null;
-    address?: string | null;
-};
+export type DiscoveryDevice = Omit<DiscoveredNeighbor, 'raw'>
 
 async function buildDiscoverySnapshot(): Promise<DiscoveryDevice[]> {
     const allDevices = await DeviceRepository.list();
@@ -27,18 +18,12 @@ async function buildDiscoverySnapshot(): Promise<DiscoveryDevice[]> {
 
     return discovery.list()
         .filter((device) => device.address && !adoptedHosts.has(device.address))
-        .map((device) => ({
-            id: device.id,
-            identity: device.identity,
-            macAddress: device.macAddress,
-            platform: device.platform,
-            version: device.version,
-            hardware: device.hardware,
-            interfaceName: device.interfaceName,
-            address: device.address
-        }));
+        .map((device) => {
+            let dev: DiscoveryDevice & { raw?: any } = {...device};
+            delete dev.raw;
+            return dev as DiscoveryDevice;
+        });
 }
-
 
 export const service = {
     name: 'discovery',
