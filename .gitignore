@@ -33,3 +33,4 @@ vite.config.ts.timestamp-*
 /opencode.jsonc
 .claude
 /examples/unifi/
+/old

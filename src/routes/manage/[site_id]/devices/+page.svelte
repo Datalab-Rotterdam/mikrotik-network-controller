@@ -1,905 +1,909 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
-  import { onMount } from "svelte";
-  import Form from "$lib/client/components/primitives/Form.svelte";
-  import Icon from "$lib/client/components/primitives/Icon.svelte";
-  import Input from "$lib/client/components/primitives/Input.svelte";
-  import Button from "$lib/client/components/primitives/Button.svelte";
-  import TableSkeleton from "$lib/client/components/primitives/TableSkeleton.svelte";
-  import EmptyState from "$lib/client/components/primitives/EmptyState.svelte";
-  import StatusBadge from "$lib/client/components/primitives/StatusBadge.svelte";
-  import InfoRow from "$lib/client/components/primitives/InfoRow.svelte";
-  import Tag from "$lib/client/components/primitives/Tag.svelte";
-  import Tooltip from "$lib/client/components/primitives/Tooltip.svelte";
-  import SidePanel from "$lib/client/components/layout/SidePanel.svelte";
-  import { Tabs } from "$lib/client/components/layout";
-  import DevicePortLayout from "$lib/client/components/ui/DevicePortLayout.svelte";
-  import { Page, PageHeader } from "$lib/client/components/layout";
-  import {
-    discoveredDevices,
-    initializeDiscoveryDeviceSnapshot,
-  } from "$lib/client/stores/discovery-updates";
-  import {
-    devicesState,
-    setDevicesState,
-    removeDevice,
-    processDeviceAdopted,
-    updateDevice,
-  } from "$lib/client/stores/devices";
-  import {
-    formatJobStatus,
-    getCurrentStep,
-    getJobsForDevice,
-    isRunningJob,
-    jobsState,
-  } from "$lib/client/stores/jobs";
-  import { useActionSocket } from "$lib/client/actions/use-action-socket";
+    import {goto} from "$app/navigation";
+    import Page from "$lib/client-lib/components/layout/Page.svelte";
+    import {onMount} from "svelte";
+    import Form from "$lib/client/components/primitives/Form.svelte";
+    import Icon from "$lib/client/primitives/Icon.svelte";
+    import Input from "$lib/client/components/primitives/Input.svelte";
+    import Button from "$lib/client/components/primitives/Button.svelte";
+    import TableSkeleton from "$lib/client/components/primitives/TableSkeleton.svelte";
+    import EmptyState from "$lib/client/components/primitives/EmptyState.svelte";
+    import StatusBadge from "$lib/client/components/primitives/StatusBadge.svelte";
+    import InfoRow from "$lib/client/components/primitives/InfoRow.svelte";
+    import Tag from "$lib/client/components/primitives/Tag.svelte";
+    import Tooltip from "$lib/client/components/primitives/Tooltip.svelte";
+    import SidePanel from "$lib/client/components/layout/SidePanel.svelte";
+    import {Tabs} from "$lib/client/components/layout";
+    import DevicePortLayout from "$lib/client/components/ui/DevicePortLayout.svelte";
+    import {
+        discoveredDevices,
+        initializeDiscoveryDeviceSnapshot,
+    } from "$lib/client/stores/discovery-updates";
+    import {
+        devicesState,
+        setDevicesState,
+        removeDevice,
+        processDeviceAdopted,
+        updateDevice,
+    } from "$lib/client/stores/devices";
+    import {
+        formatJobStatus,
+        getCurrentStep,
+        getJobsForDevice,
+        isRunningJob,
+        jobsState,
+    } from "$lib/client/stores/jobs";
+    import {useActionSocket} from "$lib/client/actions/use-action-socket";
 
-  let { data, form } = $props();
-  const basePath = $derived(`/manage/${data.site.id}`);
-  const adoptionPanelOpen = $derived(
-    data.adoptionPanel.open ||
-      (form?.action === "adopt" && Boolean(form?.message)),
-  );
-  const panelHost = $derived(form?.host ?? data.adoptionPanel.host);
-  const panelPlatform = $derived(form?.platform ?? data.adoptionPanel.platform);
-  const panelApiPort = $derived(
-    form?.apiPort ?? (panelPlatform === "switchos" ? 80 : 8728),
-  );
-  const panelSiteName = $derived(form?.siteName ?? data.adoptionPanel.siteName);
-  const panelDiscovery = $derived({
-    identity: form?.discoveryIdentity ?? data.adoptionPanel.discovery.identity,
-    macAddress:
-      form?.discoveryMacAddress ?? data.adoptionPanel.discovery.macAddress,
-    version: form?.discoveryVersion ?? data.adoptionPanel.discovery.version,
-    hardware: form?.discoveryHardware ?? data.adoptionPanel.discovery.hardware,
-    interfaceName:
-      form?.discoveryInterfaceName ??
-      data.adoptionPanel.discovery.interfaceName,
-  });
-  const panelHasDiscoveryContext = $derived(
-    Boolean(
-      panelDiscovery.identity ||
-        panelDiscovery.macAddress ||
-        panelDiscovery.version ||
-        panelDiscovery.hardware ||
-        panelDiscovery.interfaceName,
-    ),
-  );
-  const selectedDeviceId = $derived(data.selectedDeviceId);
-
-  onMount(() => {
-    initializeDiscoveryDeviceSnapshot(data.discoveredDevices);
-
-    const devices = data.devices.map((device) => {
-      const ifaces = data.deviceInterfaces[device.id] ?? [];
-      const primaryInterface =
-        ifaces.find((i) => i.running === true) ?? ifaces[0];
-      return {
-        id: device.id,
-        type: (device.platform === "switchos" ? "switch" : "router") as
-          | "router"
-          | "switch",
-        name: device.name ?? device.identity,
-        identity: device.identity ?? "",
-        status: device.connectionStatus,
-        model: device.model ?? "",
-        version: device.routerOsVersion ?? "",
-        ipAddress: device.host,
-        platform: device.platform,
-        adopted: true,
-        adoptionMode: device.adoptionMode,
-        adoptionState: device.adoptionState,
-        image: data.deviceImages[device.id],
-        interfaces: ifaces,
-        macAddress: primaryInterface?.macAddress ?? "",
-        details: {
-          identity: device.identity ?? "",
-          serialNumber: device.serialNumber ?? "",
-          architecture: device.architecture ?? "",
-          uptimeSeconds: device.uptimeSeconds ?? undefined,
-          lastSeenAt: device.lastSeenAt,
-          lastSyncAt: device.lastSyncAt,
-          capabilities: device.capabilities,
-          tags: device.tags,
-        },
-      };
-    });
-
-    const discovered = data.discoveredDevices
-      .filter((device) => device.address)
-      .map((device) => ({
-        id: device.id,
-        identity: device.identity,
-        macAddress: device.macAddress,
-        platform: device.platform,
-        version: device.version,
-        hardware: device.hardware,
-        interfaceName: device.interfaceName,
-        address: device.address,
-      }));
-
-    setDevicesState({
-      devices,
-      interfaces: data.interfaces,
-      deviceInterfaces: data.deviceInterfaces,
-      discoveredDevices: discovered,
-      deviceImages: data.deviceImages,
-    });
-
-    return undefined;
-  });
-
-  const adoptedHosts = $derived(
-    new Set(data.devices.map((device) => device.host)),
-  );
-  const runtimeDiscoveredDevices = $derived(
-    $discoveredDevices.length ? $discoveredDevices : data.discoveredDevices,
-  );
-  const discoveredRows = $derived(
-    runtimeDiscoveredDevices
-      .filter((device) => device.address && !adoptedHosts.has(device.address))
-      .map((device) => ({
-        id: device.id,
-        type: "router",
-        name: device.identity ?? "Discovered MikroTik",
-        identity: device.identity ?? "",
-        status: "Discovered",
-        model: device.hardware ?? device.platform ?? "",
-        version: device.version ?? "",
-        ipAddress: device.address ?? "",
-        platform: device.platform ?? "routeros",
-        adopted: false,
-        adoptionMode: "read_only",
-        adoptionState: "discovered",
-        image: data.deviceImages[device.id],
-        interfaces: [],
-        macAddress: device.macAddress ?? "",
-        discoveryInterfaceName: device.interfaceName ?? "",
-        details: {
-          identity: device.identity ?? "",
-          serialNumber: "",
-          architecture: "",
-          uptimeSeconds: undefined,
-          lastSeenAt: undefined,
-          lastSyncAt: undefined,
-          capabilities: [],
-          tags: [],
-        },
-      })),
-  );
-
-  const adoptedRows = $derived(
-    data.devices.map((device) => {
-      const liveDevice = $devicesState.devices.find((d) => d.id === device.id);
-      const ifaces = data.deviceInterfaces[device.id] ?? [];
-      const primaryInterface =
-        ifaces.find((i) => i.running === true) ?? ifaces[0];
-      return {
-        id: device.id,
-        type: device.platform === "switchos" ? "switch" : "router",
-        name: device.name ?? device.identity,
-        identity: device.identity ?? "",
-        status: liveDevice?.status ?? device.connectionStatus,
-        model: device.model ?? "",
-        version: device.routerOsVersion ?? "",
-        ipAddress: device.host,
-        platform: device.platform,
-        adopted: true,
-        adoptionMode: device.adoptionMode,
-        adoptionState: device.adoptionState,
-        image: data.deviceImages[device.id],
-        interfaces: ifaces,
-        macAddress: primaryInterface?.macAddress ?? "",
-        firmware: data.firmwareByDeviceId[device.id] ?? null,
-        details: {
-          identity: device.identity ?? "",
-          serialNumber: device.serialNumber ?? "",
-          architecture: device.architecture ?? "",
-          uptimeSeconds: device.uptimeSeconds,
-          lastSeenAt: device.lastSeenAt,
-          lastSyncAt: device.lastSyncAt,
-          capabilities: device.capabilities,
-          tags: device.tags,
-        },
-      };
-    }),
-  );
-
-  const rows = $derived([...adoptedRows, ...discoveredRows]);
-  const adoptedCount = $derived(adoptedRows.length);
-  const discoveredCount = $derived(discoveredRows.length);
-
-  type FilterTab = "all" | "online" | "offline";
-  let filterTab = $state<FilterTab>("all");
-  const filterTabDefs = $derived([
-    { id: "all", label: "All", count: rows.length },
-    {
-      id: "online",
-      label: "Online",
-      count: adoptedRows.filter((d) => d.status === "online").length,
-    },
-    {
-      id: "offline",
-      label: "Offline",
-      count: adoptedRows.filter(
-        (d) => d.status === "offline" || d.status === "auth_failed",
-      ).length,
-    },
-  ]);
-  const visibleRows = $derived(
-    filterTab === "online"
-      ? adoptedRows.filter((d) => d.status === "online")
-      : filterTab === "offline"
-        ? adoptedRows.filter(
-            (d) => d.status === "offline" || d.status === "auth_failed",
-          )
-        : rows,
-  );
-
-  const selectedDevice = $derived(
-    rows.find((device) => device.id === selectedDeviceId),
-  );
-  const detailsPanelOpen = $derived(
-    Boolean(selectedDevice) && !adoptionPanelOpen,
-  );
-  const anyPanelOpen = $derived(adoptionPanelOpen || detailsPanelOpen);
-  const selectedDeviceJobs = $derived(
-    selectedDevice
-      ? getJobsForDevice($jobsState.jobs, selectedDevice.id).slice(0, 5)
-      : [],
-  );
-  const selectedDeviceRunningJobs = $derived(
-    selectedDeviceJobs.filter((job) => isRunningJob(job)),
-  );
-  const selectedDeviceProvisioned = $derived(
-    Boolean(
-      selectedDevice?.adopted &&
-        (selectedDevice.adoptionState === "fully_managed" ||
-          selectedDevice.adoptionMode === "managed"),
-    ),
-  );
-  const selectedDeviceCanReset = $derived(
-    selectedDevice?.adoptionMode === "managed" &&
-      selectedDevice?.status === "online",
-  );
-  const selectedDeviceStatusKnownOffline = $derived(
-    selectedDevice?.status === "offline" ||
-      selectedDevice?.status === "auth_failed" ||
-      selectedDevice?.status === "blocked",
-  );
-
-  function deviceHref(deviceId: string) {
-    return `${basePath}/devices?device=${encodeURIComponent(deviceId)}`;
-  }
-
-  function platformParam(platform: string | undefined) {
-    return platform === "switchos" ? "switchos" : "routeros";
-  }
-
-  function adoptHref(device: {
-    ipAddress: string;
-    platform?: string;
-    name?: string;
-    macAddress?: string;
-    version?: string;
-    model?: string;
-    uplink?: string;
-  }) {
-    const params = new URLSearchParams({
-      adopt: device.ipAddress,
-      platform: platformParam(device.platform),
-    });
-
-    if (device.name) params.set("identity", device.name);
-    if (device.macAddress) params.set("mac", device.macAddress);
-    if (device.version) params.set("version", device.version);
-    if (device.model) params.set("hardware", device.model);
-    if (device.uplink) params.set("interface", device.uplink);
-
-    return `${basePath}/devices?${params.toString()}`;
-  }
-
-  function openDevice(event: MouseEvent, deviceId: string) {
-    const target = event.target as HTMLElement;
-
-    if (target.closest("a, button, input, select, textarea, summary")) {
-      return;
-    }
-
-    void goto(deviceHref(deviceId));
-  }
-
-  function openDeviceFromKeyboard(event: KeyboardEvent, deviceId: string) {
-    if (event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-
-    event.preventDefault();
-    void goto(deviceHref(deviceId));
-  }
-
-  function formatUptime(seconds: number | null | undefined) {
-    if (seconds === undefined || seconds === null) {
-      return "-";
-    }
-
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-
-    return [
-      days ? `${days}d` : "",
-      hours ? `${hours}h` : "",
-      minutes || (!days && !hours) ? `${minutes}m` : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-  }
-
-  function formatDate(value: string | Date | null | undefined) {
-    if (!value) {
-      return "-";
-    }
-
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
-  }
-
-  // Real-time updates via WebSocket
-  try {
-    const bus = useActionSocket();
-    bus.subscribe(
-      ["device.adopted", "device.removed", "device.updated"],
-      (event) => {
-        if (event.type === "device.adopted") {
-          processDeviceAdopted(event.payload);
-        } else if (event.type === "device.removed") {
-          removeDevice(event.payload.deviceId);
-        } else if (
-          event.type === "device.updated" &&
-          event.payload.connectionStatus
-        ) {
-          updateDevice(event.payload.deviceId, {
-            status: event.payload.connectionStatus,
-          });
-        }
-      },
+    let {data, form} = $props();
+    const basePath = $derived(`/manage/${data.site.id}`);
+    const adoptionPanelOpen = $derived(
+        data.adoptionPanel.open ||
+        (form?.action === "adopt" && Boolean(form?.message)),
     );
-  } catch {
-    // ActionSocket not available — real-time updates disabled
-  }
+    const panelHost = $derived(form?.host ?? data.adoptionPanel.host);
+    const panelPlatform = $derived(form?.platform ?? data.adoptionPanel.platform);
+    const panelApiPort = $derived(
+        form?.apiPort ?? (panelPlatform === "switchos" ? 80 : 8728),
+    );
+    const panelSiteName = $derived(form?.siteName ?? data.adoptionPanel.siteName);
+    const panelDiscovery = $derived({
+        identity: form?.discoveryIdentity ?? data.adoptionPanel.discovery.identity,
+        macAddress:
+            form?.discoveryMacAddress ?? data.adoptionPanel.discovery.macAddress,
+        version: form?.discoveryVersion ?? data.adoptionPanel.discovery.version,
+        hardware: form?.discoveryHardware ?? data.adoptionPanel.discovery.hardware,
+        interfaceName:
+            form?.discoveryInterfaceName ??
+            data.adoptionPanel.discovery.interfaceName,
+    });
+    const panelHasDiscoveryContext = $derived(
+        Boolean(
+            panelDiscovery.identity ||
+            panelDiscovery.macAddress ||
+            panelDiscovery.version ||
+            panelDiscovery.hardware ||
+            panelDiscovery.interfaceName,
+        ),
+    );
+    const selectedDeviceId = $derived(data.selectedDeviceId);
 
-  // Normalize status values for StatusBadge
-  type StatusValue =
-    | "online"
-    | "offline"
-    | "auth_failed"
-    | "blocked"
-    | "unknown"
-    | "discovered";
-  function normalizeStatus(status: string): StatusValue {
-    const normalized = status.toLowerCase().replace(/\s+/g, "_");
-    if (
-      [
-        "online",
-        "offline",
-        "auth_failed",
-        "blocked",
-        "unknown",
-        "discovered",
-      ].includes(normalized)
-    ) {
-      return normalized as StatusValue;
-    }
-    return "unknown";
-  }
+    onMount(() => {
+        initializeDiscoveryDeviceSnapshot(data.discoveredDevices);
 
-  function confirmRemove(event: SubmitEvent) {
-    if (!selectedDevice) {
-      event.preventDefault();
-      return;
+        const devices = data.devices.map((device) => {
+            const ifaces = data.deviceInterfaces[device.id] ?? [];
+            const primaryInterface =
+                ifaces.find((i) => i.running === true) ?? ifaces[0];
+            return {
+                id: device.id,
+                type: (device.platform === "switchos" ? "switch" : "router") as
+                    | "router"
+                    | "switch",
+                name: device.name ?? device.identity,
+                identity: device.identity ?? "",
+                status: device.connectionStatus,
+                model: device.model ?? "",
+                version: device.routerOsVersion ?? "",
+                ipAddress: device.host,
+                platform: device.platform,
+                adopted: true,
+                adoptionMode: device.adoptionMode,
+                adoptionState: device.adoptionState,
+                image: data.deviceImages[device.id],
+                interfaces: ifaces,
+                macAddress: primaryInterface?.macAddress ?? "",
+                details: {
+                    identity: device.identity ?? "",
+                    serialNumber: device.serialNumber ?? "",
+                    architecture: device.architecture ?? "",
+                    uptimeSeconds: device.uptimeSeconds ?? undefined,
+                    lastSeenAt: device.lastSeenAt,
+                    lastSyncAt: device.lastSyncAt,
+                    capabilities: device.capabilities,
+                    tags: device.tags,
+                },
+            };
+        });
+
+        const discovered = data.discoveredDevices
+            .filter((device) => device.address)
+            .map((device) => ({
+                id: device.id,
+                identity: device.identity,
+                macAddress: device.macAddress,
+                platform: device.platform,
+                version: device.version,
+                hardware: device.hardware,
+                interfaceName: device.interfaceName,
+                address: device.address,
+            }));
+
+        setDevicesState({
+            devices,
+            interfaces: data.interfaces,
+            deviceInterfaces: data.deviceInterfaces,
+            discoveredDevices: discovered,
+            deviceImages: data.deviceImages,
+        });
+
+        return undefined;
+    });
+
+    const adoptedHosts = $derived(
+        new Set(data.devices.map((device) => device.host)),
+    );
+    const runtimeDiscoveredDevices = $derived(
+        $discoveredDevices.length ? $discoveredDevices : data.discoveredDevices,
+    );
+    const discoveredRows = $derived(
+        runtimeDiscoveredDevices
+            .filter((device) => device.address && !adoptedHosts.has(device.address))
+            .map((device) => ({
+                id: device.id,
+                type: "router",
+                name: device.identity ?? "Discovered MikroTik",
+                identity: device.identity ?? "",
+                status: "Discovered",
+                model: device.hardware ?? device.platform ?? "",
+                version: device.version ?? "",
+                ipAddress: device.address ?? "",
+                platform: device.platform ?? "routeros",
+                adopted: false,
+                adoptionMode: "read_only",
+                adoptionState: "discovered",
+                image: data.deviceImages[device.id],
+                interfaces: [],
+                macAddress: device.macAddress ?? "",
+                discoveryInterfaceName: device.interfaceName ?? "",
+                details: {
+                    identity: device.identity ?? "",
+                    serialNumber: "",
+                    architecture: "",
+                    uptimeSeconds: undefined,
+                    lastSeenAt: undefined,
+                    lastSyncAt: undefined,
+                    capabilities: [],
+                    tags: [],
+                },
+            })),
+    );
+
+    const adoptedRows = $derived(
+        data.devices.map((device) => {
+            const liveDevice = $devicesState.devices.find((d) => d.id === device.id);
+            const ifaces = data.deviceInterfaces[device.id] ?? [];
+            const primaryInterface =
+                ifaces.find((i) => i.running === true) ?? ifaces[0];
+            return {
+                id: device.id,
+                type: device.platform === "switchos" ? "switch" : "router",
+                name: device.name ?? device.identity,
+                identity: device.identity ?? "",
+                status: liveDevice?.status ?? device.connectionStatus,
+                model: device.model ?? "",
+                version: device.routerOsVersion ?? "",
+                ipAddress: device.host,
+                platform: device.platform,
+                adopted: true,
+                adoptionMode: device.adoptionMode,
+                adoptionState: device.adoptionState,
+                image: data.deviceImages[device.id],
+                interfaces: ifaces,
+                macAddress: primaryInterface?.macAddress ?? "",
+                firmware: data.firmwareByDeviceId[device.id] ?? null,
+                details: {
+                    identity: device.identity ?? "",
+                    serialNumber: device.serialNumber ?? "",
+                    architecture: device.architecture ?? "",
+                    uptimeSeconds: device.uptimeSeconds,
+                    lastSeenAt: device.lastSeenAt,
+                    lastSyncAt: device.lastSyncAt,
+                    capabilities: device.capabilities,
+                    tags: device.tags,
+                },
+            };
+        }),
+    );
+
+    const rows = $derived([...adoptedRows, ...discoveredRows]);
+    const adoptedCount = $derived(adoptedRows.length);
+    const discoveredCount = $derived(discoveredRows.length);
+
+    type FilterTab = "all" | "online" | "offline";
+    let filterTab = $state<FilterTab>("all");
+    const filterTabDefs = $derived([
+        {id: "all", label: "All", count: rows.length},
+        {
+            id: "online",
+            label: "Online",
+            count: adoptedRows.filter((d) => d.status === "online").length,
+        },
+        {
+            id: "offline",
+            label: "Offline",
+            count: adoptedRows.filter(
+                (d) => d.status === "offline" || d.status === "auth_failed",
+            ).length,
+        },
+    ]);
+    const visibleRows = $derived(
+        filterTab === "online"
+            ? adoptedRows.filter((d) => d.status === "online")
+            : filterTab === "offline"
+                ? adoptedRows.filter(
+                    (d) => d.status === "offline" || d.status === "auth_failed",
+                )
+                : rows,
+    );
+
+    const selectedDevice = $derived(
+        rows.find((device) => device.id === selectedDeviceId),
+    );
+    const detailsPanelOpen = $derived(
+        Boolean(selectedDevice) && !adoptionPanelOpen,
+    );
+    const anyPanelOpen = $derived(adoptionPanelOpen || detailsPanelOpen);
+    const selectedDeviceJobs = $derived(
+        selectedDevice
+            ? getJobsForDevice($jobsState.jobs, selectedDevice.id).slice(0, 5)
+            : [],
+    );
+    const selectedDeviceRunningJobs = $derived(
+        selectedDeviceJobs.filter((job) => isRunningJob(job)),
+    );
+    const selectedDeviceProvisioned = $derived(
+        Boolean(
+            selectedDevice?.adopted &&
+            (selectedDevice.adoptionState === "fully_managed" ||
+                selectedDevice.adoptionMode === "managed"),
+        ),
+    );
+    const selectedDeviceCanReset = $derived(
+        selectedDevice?.adoptionMode === "managed" &&
+        selectedDevice?.status === "online",
+    );
+    const selectedDeviceStatusKnownOffline = $derived(
+        selectedDevice?.status === "offline" ||
+        selectedDevice?.status === "auth_failed" ||
+        selectedDevice?.status === "blocked",
+    );
+
+    function deviceHref(deviceId: string) {
+        return `${basePath}/devices?device=${encodeURIComponent(deviceId)}`;
     }
 
-    let suffix: string;
-    if (selectedDeviceCanReset) {
-      suffix = " This will erase the device configuration and reboot it.";
-    } else if (selectedDeviceStatusKnownOffline) {
-      suffix = " The device is offline — it will not be factory reset.";
-    } else if (selectedDevice.status === "unknown") {
-      suffix = " Device status is unknown — it will only be removed from the controller.";
-    } else {
-      suffix = " The device is not fully managed — it will only be removed from the controller.";
+    function platformParam(platform: string | undefined) {
+        return platform === "switchos" ? "switchos" : "routeros";
     }
 
-    if (!confirm(`${selectedDeviceCanReset ? "Factory reset" : "Remove"} ${selectedDevice.name} from the controller?${suffix}`)) {
-      event.preventDefault();
+    function adoptHref(device: {
+        ipAddress: string;
+        platform?: string;
+        name?: string;
+        macAddress?: string;
+        version?: string;
+        model?: string;
+        uplink?: string;
+    }) {
+        const params = new URLSearchParams({
+            adopt: device.ipAddress,
+            platform: platformParam(device.platform),
+        });
+
+        if (device.name) params.set("identity", device.name);
+        if (device.macAddress) params.set("mac", device.macAddress);
+        if (device.version) params.set("version", device.version);
+        if (device.model) params.set("hardware", device.model);
+        if (device.uplink) params.set("interface", device.uplink);
+
+        return `${basePath}/devices?${params.toString()}`;
     }
-  }
+
+    function openDevice(event: MouseEvent, deviceId: string) {
+        const target = event.target as HTMLElement;
+
+        if (target.closest("a, button, input, select, textarea, summary")) {
+            return;
+        }
+
+        void goto(deviceHref(deviceId));
+    }
+
+    function openDeviceFromKeyboard(event: KeyboardEvent, deviceId: string) {
+        if (event.key !== "Enter" && event.key !== " ") {
+            return;
+        }
+
+        event.preventDefault();
+        void goto(deviceHref(deviceId));
+    }
+
+    function formatUptime(seconds: number | null | undefined) {
+        if (seconds === undefined || seconds === null) {
+            return "-";
+        }
+
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+
+        return [
+            days ? `${days}d` : "",
+            hours ? `${hours}h` : "",
+            minutes || (!days && !hours) ? `${minutes}m` : "",
+        ]
+            .filter(Boolean)
+            .join(" ");
+    }
+
+    function formatDate(value: string | Date | null | undefined) {
+        if (!value) {
+            return "-";
+        }
+
+        return new Intl.DateTimeFormat(undefined, {
+            dateStyle: "medium",
+            timeStyle: "short",
+        }).format(new Date(value));
+    }
+
+    // Real-time updates via WebSocket
+    try {
+        const bus = useActionSocket();
+        bus.subscribe(
+            ["device.adopted", "device.removed", "device.updated"],
+            (event) => {
+                if (event.type === "device.adopted") {
+                    processDeviceAdopted(event.payload);
+                } else if (event.type === "device.removed") {
+                    removeDevice(event.payload.deviceId);
+                } else if (
+                    event.type === "device.updated" &&
+                    event.payload.connectionStatus
+                ) {
+                    updateDevice(event.payload.deviceId, {
+                        status: event.payload.connectionStatus,
+                    });
+                }
+            },
+        );
+    } catch {
+        // ActionSocket not available — real-time updates disabled
+    }
+
+    // Normalize status values for StatusBadge
+    type StatusValue =
+        | "online"
+        | "offline"
+        | "auth_failed"
+        | "blocked"
+        | "unknown"
+        | "discovered";
+
+    function normalizeStatus(status: string): StatusValue {
+        const normalized = status.toLowerCase().replace(/\s+/g, "_");
+        if (
+            [
+                "online",
+                "offline",
+                "auth_failed",
+                "blocked",
+                "unknown",
+                "discovered",
+            ].includes(normalized)
+        ) {
+            return normalized as StatusValue;
+        }
+        return "unknown";
+    }
+
+    function confirmRemove(event: SubmitEvent) {
+        if (!selectedDevice) {
+            event.preventDefault();
+            return;
+        }
+
+        let suffix: string;
+        if (selectedDeviceCanReset) {
+            suffix = " This will erase the device configuration and reboot it.";
+        } else if (selectedDeviceStatusKnownOffline) {
+            suffix = " The device is offline — it will not be factory reset.";
+        } else if (selectedDevice.status === "unknown") {
+            suffix = " Device status is unknown — it will only be removed from the controller.";
+        } else {
+            suffix = " The device is not fully managed — it will only be removed from the controller.";
+        }
+
+        if (!confirm(`${selectedDeviceCanReset ? "Factory reset" : "Remove"} ${selectedDevice.name} from the controller?${suffix}`)) {
+            event.preventDefault();
+        }
+    }
 </script>
 
 {#snippet devicesActions()}
-  <div class="devices-toolbar">
-    <input
-      class="search-input"
-      type="search"
-      placeholder="Search"
-      aria-label="Search devices"
-    />
-    <a
-      class="adopt-btn"
-      href={`${basePath}/devices?adopt=`}
-      aria-label="Adopt device"
-      title="Adopt device"
-    >
-      <Icon name="plus" size={16} />
-      Adopt
-    </a>
-  </div>
+    <div class="devices-toolbar">
+        <input
+                class="search-input"
+                type="search"
+                placeholder="Search"
+                aria-label="Search devices"
+        />
+        <a
+                class="adopt-btn"
+                href={`${basePath}/devices?adopt=`}
+                aria-label="Adopt device"
+                title="Adopt device"
+        >
+            <Icon name="plus" size={16}/>
+            Adopt
+        </a>
+    </div>
 {/snippet}
 
-<Page>
-  <PageHeader
-    title="Devices"
-    subtitle={`${adoptedCount} adopted · ${discoveredCount} discovered`}
-    actions={devicesActions}
-  />
+<Page title="Devices" description={`${adoptedCount} adopted · ${discoveredCount} discovered`}>
 
-  <Tabs
-    tabs={filterTabDefs}
-    activeTab={filterTab}
-    variant="pills"
-    ariaLabel="Device filters"
-    onTabChange={(id) => (filterTab = id as FilterTab)}
-  />
+    <Tabs
+        tabs={filterTabDefs}
+        activeTab={filterTab}
+        variant="pills"
+        ariaLabel="Device filters"
+        onTabChange={(id) => (filterTab = id as FilterTab)}
+/>
 
-  <div class="devices-table-wrap" class:panel-open={anyPanelOpen}>
-    {#if $devicesState.loading}
-      <TableSkeleton columns={7} rows={6} />
-    {:else if visibleRows.length}
-      <table class="devices-table">
-        <thead>
-          <tr>
-            <th class="col-state" style="width: 16px;"></th>
-            <th class="col-type" style="width: 36px;"></th>
-            <th class="col-name">Name</th>
-            <th class="col-status">Status</th>
-            <th class="col-model">Model</th>
-            <th class="col-version">Version</th>
-            <th class="col-ip">IP Address</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each visibleRows as device}
-            <tr
-              class="device-row"
-              class:selected={device.id === selectedDeviceId}
-              role="button"
-              tabindex="0"
-              aria-label={device.adopted
+    <div class="devices-table-wrap" class:panel-open={anyPanelOpen}>
+        {#if $devicesState.loading}
+            <TableSkeleton columns={7} rows={6}/>
+        {:else if visibleRows.length}
+            <table class="devices-table">
+                <thead>
+                <tr>
+                    <th class="col-state" style="width: 16px;"></th>
+                    <th class="col-type" style="width: 36px;"></th>
+                    <th class="col-name">Name</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-model">Model</th>
+                    <th class="col-version">Version</th>
+                    <th class="col-ip">IP Address</th>
+                </tr>
+                </thead>
+                <tbody>
+                {#each visibleRows as device}
+                    <tr
+                            class="device-row"
+                            class:selected={device.id === selectedDeviceId}
+                            role="button"
+                            tabindex="0"
+                            aria-label={device.adopted
                 ? `Open ${device.name} details`
                 : `Adopt ${device.name}`}
-              onclick={(event) => openDevice(event, device.id)}
-              onkeydown={(event) => openDeviceFromKeyboard(event, device.id)}
-            >
-              <td class="col-state">
+                            onclick={(event) => openDevice(event, device.id)}
+                            onkeydown={(event) => openDeviceFromKeyboard(event, device.id)}
+                    >
+                        <td class="col-state">
                 <span
-                  class="device-dot"
-                  class:online={device.status === "online"}
-                  class:offline={device.status === "offline"}
-                  class:error={device.status === "auth_failed" ||
+                        class="device-dot"
+                        class:online={device.status === "online"}
+                        class:offline={device.status === "offline"}
+                        class:error={device.status === "auth_failed" ||
                     device.status === "blocked"}
-                  class:discovered={!device.adopted}
+                        class:discovered={!device.adopted}
                 ></span>
-              </td>
-              <td class="col-type">
-                <img
-                  src={device.image.src}
-                  alt=""
-                  width="24"
-                  height="24"
-                  class="device-type-icon"
-                />
-              </td>
-              <td class="col-name">
-                {#if device.adopted && device.identity}
-                  <Tooltip text={device.identity}>
-                    <span class="device-name-text">{device.name}</span>
-                  </Tooltip>
-                {:else}
-                  <span class="device-name-text">{device.name}</span>
-                {/if}
-              </td>
-              <td class="col-status">
-                {#if device.adopted}
-                  <StatusBadge status={normalizeStatus(device.status)} />
-                {:else}
-                  <a class="adopt-status-link" href={adoptHref(device)}>
-                    Adopt device
-                  </a>
-                {/if}
-              </td>
-              <td class="col-model">{device.model || "—"}</td>
-              <td class="col-version">
+                        </td>
+                        <td class="col-type">
+                            <img
+                                    src={device.image.src}
+                                    alt=""
+                                    width="24"
+                                    height="24"
+                                    class="device-type-icon"
+                            />
+                        </td>
+                        <td class="col-name">
+                            {#if device.adopted && device.identity}
+                                <Tooltip text={device.identity}>
+                                    <span class="device-name-text">{device.name}</span>
+                                </Tooltip>
+                            {:else}
+                                <span class="device-name-text">{device.name}</span>
+                            {/if}
+                        </td>
+                        <td class="col-status">
+                            {#if device.adopted}
+                                <StatusBadge status={normalizeStatus(device.status)}/>
+                            {:else}
+                                <a class="adopt-status-link" href={adoptHref(device)}>
+                                    Adopt device
+                                </a>
+                            {/if}
+                        </td>
+                        <td class="col-model">{device.model || "—"}</td>
+                        <td class="col-version">
                 <span class="version-cell">
                   {device.version || "—"}
-                  {#if device.adopted && (device as any).firmware?.updateAvailable}
-                    <Tag label="Update" variant="warning" size="sm" />
+                    {#if device.adopted && (device as any).firmware?.updateAvailable}
+                    <Tag label="Update" variant="warning" size="sm"/>
                   {/if}
                 </span>
-              </td>
-              <td class="col-ip">{device.ipAddress}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    {:else}
-      <EmptyState
-        icon="device-screen"
-        title="No MikroTik Devices Have Been Adopted"
-        description="If devices are missing, make sure they are online and reachable from the controller."
-      >
-        <a class="adopt-link" href={`${basePath}/devices?adopt=`}>
-          <Button variant="primary">Adopt Device</Button>
-        </a>
-      </EmptyState>
-    {/if}
-  </div>
-  <!-- Pending devices (checked in via agent, not yet adopted) -->
-  {#if data.pendingDevices.length > 0}
-    <section class="pending-section">
-      <div class="pending-header">
-        <h2>Pending Adoption <span class="pending-badge">{data.pendingDevices.length}</span></h2>
-        <p>These devices checked in via the agent but haven't been adopted yet.</p>
-      </div>
-      <div class="pending-list">
-        {#each data.pendingDevices as device}
-          <div class="pending-card">
-            <div class="pending-card-info">
-              <strong>{device.identity ?? device.name}</strong>
-              <span class="pending-meta">
-                {device.host} · last seen {device.agentLastCheckinAt ? new Date(device.agentLastCheckinAt).toLocaleString() : "—"}
-              </span>
-            </div>
-            <a href={`${basePath}/devices?adopt=${device.host}&identity=${device.identity ?? ""}`}>
-              <Button size="sm">Adopt</Button>
-            </a>
-          </div>
-        {/each}
-      </div>
-    </section>
-  {/if}
-
-  <!-- Install token generator -->
-  <section class="install-token-section">
-    <div class="install-token-header">
-      <h2>Agent Install Token</h2>
-      <p>Generate a one-time token to register a new device via the agent bootstrap script. Valid for 24 hours.</p>
+                        </td>
+                        <td class="col-ip">{device.ipAddress}</td>
+                    </tr>
+                {/each}
+                </tbody>
+            </table>
+        {:else}
+            <EmptyState
+                    icon="device-screen"
+                    title="No MikroTik Devices Have Been Adopted"
+                    description="If devices are missing, make sure they are online and reachable from the controller."
+            >
+                <a class="adopt-link" href={`${basePath}/devices?adopt=`}>
+                    <Button variant="primary">Adopt Device</Button>
+                </a>
+            </EmptyState>
+        {/if}
     </div>
-    <form method="POST" action="?/generateInstallToken">
-      <Button type="submit" variant="secondary" size="sm">Generate Install Token</Button>
-    </form>
-    {#if form?.installToken}
-      <div class="token-result">
-        <p class="token-hint">Paste this script into the RouterOS terminal on the device:</p>
-        <pre class="token-script">/tool fetch url="{typeof window !== 'undefined' ? `${window.location.origin}/api/v1/services/agent/bootstrap?token=${form.installToken}` : `/api/v1/services/agent/bootstrap?token=${form.installToken}`}" output=file dst-path=agent-bootstrap.rsc
-/import file-name=agent-bootstrap.rsc</pre>
-        <p class="token-expiry">Expires: {form.installTokenExpiresAt ? new Date(form.installTokenExpiresAt).toLocaleString() : ""}</p>
-      </div>
+    <!-- Pending devices (checked in via agent, not yet adopted) -->
+    {#if data.pendingDevices.length > 0}
+        <section class="pending-section">
+            <div class="pending-header">
+                <h2>Pending Adoption <span class="pending-badge">{data.pendingDevices.length}</span></h2>
+                <p>These devices checked in via the agent but haven't been adopted yet.</p>
+            </div>
+            <div class="pending-list">
+                {#each data.pendingDevices as device}
+                    <div class="pending-card">
+                        <div class="pending-card-info">
+                            <strong>{device.identity ?? device.name}</strong>
+                            <span class="pending-meta">
+                {device.host}
+                                · last seen {device.agentLastCheckinAt ? new Date(device.agentLastCheckinAt).toLocaleString() : "—"}
+              </span>
+                        </div>
+                        <a href={`${basePath}/devices?adopt=${device.host}&identity=${device.identity ?? ""}`}>
+                            <Button size="sm">Adopt</Button>
+                        </a>
+                    </div>
+                {/each}
+            </div>
+        </section>
     {/if}
-    {#if data.installTokens.length}
-      <div class="token-list">
-        {#each data.installTokens.slice().reverse() as t}
-          {@const expired = new Date(t.expiresAt) < new Date()}
-          {@const claimed = Boolean(t.claimedAt)}
-          <div class="token-row">
-            <span class="token-prefix">{t.token.slice(0, 8)}…</span>
-            <span class="token-status" class:status-claimed={claimed} class:status-expired={expired && !claimed} class:status-valid={!expired && !claimed}>
+
+    <!-- Install token generator -->
+    <section class="install-token-section">
+        <div class="install-token-header">
+            <h2>Agent Install Token</h2>
+            <p>Generate a one-time token to register a new device via the agent bootstrap script. Valid for 24
+                hours.</p>
+        </div>
+        <form method="POST" action="?/generateInstallToken">
+            <Button type="submit" variant="secondary" size="sm">Generate Install Token</Button>
+        </form>
+        {#if form?.installToken}
+            <div class="token-result">
+                <p class="token-hint">Paste this script into the RouterOS terminal on the device:</p>
+                <pre class="token-script">/tool fetch url="{typeof window !== 'undefined' ? `${window.location.origin}/api/v1/services/agent/bootstrap?token=${form.installToken}` : `/api/v1/services/agent/bootstrap?token=${form.installToken}`}
+                    " output=file dst-path=agent-bootstrap.rsc
+/import file-name=agent-bootstrap.rsc</pre>
+                <p class="token-expiry">
+                    Expires: {form.installTokenExpiresAt ? new Date(form.installTokenExpiresAt).toLocaleString() : ""}</p>
+            </div>
+        {/if}
+        {#if data.installTokens.length}
+            <div class="token-list">
+                {#each data.installTokens.slice().reverse() as t}
+                    {@const expired = new Date(t.expiresAt) < new Date()}
+                    {@const claimed = Boolean(t.claimedAt)}
+                    <div class="token-row">
+                        <span class="token-prefix">{t.token.slice(0, 8)}…</span>
+                        <span class="token-status" class:status-claimed={claimed}
+                              class:status-expired={expired && !claimed} class:status-valid={!expired && !claimed}>
               {claimed ? "Claimed" : expired ? "Expired" : "Valid"}
             </span>
-            <span class="token-date">
+                        <span class="token-date">
               {claimed ? `Claimed ${new Date(t.claimedAt!).toLocaleString()}` : `Expires ${new Date(t.expiresAt).toLocaleString()}`}
             </span>
-          </div>
-        {/each}
-      </div>
-    {/if}
-  </section>
-
-  <SidePanel
-    open={adoptionPanelOpen}
-    title="Adopt device"
-    description="Enter credentials or prepare a bootstrap task."
-    closeHref={`${basePath}/devices`}
-  >
-    <Form action="?/adopt">
-      {#if form?.message}
-        <div class={form?.success ? "status-success" : "error-message"}>
-          {form.message}
-          {#if form?.jobId}
-            <a class="message-link" href={`${basePath}/jobs?job=${form.jobId}`}
-              >View task</a
-            >
-          {/if}
-        </div>
-      {/if}
-
-      <input type="hidden" name="mode" value="credentials" />
-      <input
-        type="hidden"
-        name="discoveryIdentity"
-        value={panelDiscovery.identity}
-      />
-      <input
-        type="hidden"
-        name="discoveryMacAddress"
-        value={panelDiscovery.macAddress}
-      />
-      <input
-        type="hidden"
-        name="discoveryVersion"
-        value={panelDiscovery.version}
-      />
-      <input
-        type="hidden"
-        name="discoveryHardware"
-        value={panelDiscovery.hardware}
-      />
-      <input
-        type="hidden"
-        name="discoveryInterfaceName"
-        value={panelDiscovery.interfaceName}
-      />
-
-      {#if panelHasDiscoveryContext}
-        <div class="discovery-context">
-          <strong>MNDP discovery</strong>
-          {#if panelDiscovery.identity}
-            <div class="info-row">
-              <span>Identity</span>
-              <strong>{panelDiscovery.identity}</strong>
+                    </div>
+                {/each}
             </div>
-          {/if}
-          {#if panelDiscovery.hardware}
-            <div class="info-row">
-              <span>Hardware</span>
-              <strong>{panelDiscovery.hardware}</strong>
-            </div>
-          {/if}
-          {#if panelDiscovery.version}
-            <div class="info-row">
-              <span>Version</span>
-              <strong>{panelDiscovery.version}</strong>
-            </div>
-          {/if}
-          {#if panelDiscovery.macAddress}
-            <div class="info-row">
-              <span>MAC Address</span>
-              <strong>{panelDiscovery.macAddress}</strong>
-            </div>
-          {/if}
-          {#if panelDiscovery.interfaceName}
-            <div class="info-row">
-              <span>Interface</span>
-              <strong>{panelDiscovery.interfaceName}</strong>
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      <Input
-        label="Username"
-        name="username"
-        autocomplete="username"
-        value={form?.username ?? "admin"}
-        required
-      />
-      <Input
-        label="Password"
-        name="password"
-        type="password"
-        autocomplete="current-password"
-      />
-
-      <details class="advanced-settings">
-        <summary>Advanced settings</summary>
-        <div class="advanced-fields">
-          <Input
-            label="Host"
-            name="host"
-            placeholder="192.168.88.1"
-            value={panelHost}
-            required
-          />
-          <Input
-            label="API port"
-            name="apiPort"
-            inputmode="numeric"
-            value={panelApiPort}
-            required
-          />
-          <Input label="Site" name="siteName" value={panelSiteName} required />
-          <Input
-            label="Management CIDRs"
-            name="managementCidrs"
-            placeholder="10.10.0.0/16,100.64.0.0/10"
-            value={form?.managementCidrs ?? ""}
-          />
-          <label class="field">
-            <span>Device OS</span>
-            <select name="platform">
-              <option value="routeros" selected={panelPlatform !== "switchos"}
-                >RouterOS</option
-              >
-              <option value="switchos" selected={panelPlatform === "switchos"}
-                >SwitchOS</option
-              >
-            </select>
-          </label>
-        </div>
-      </details>
-
-      <Button type="submit" variant="primary" fullWidth>Adopt</Button>
-    </Form>
-
-    <Form action="?/adopt" compact ariaLabel="Prepare bootstrap">
-      <input type="hidden" name="mode" value="bootstrap" />
-      <input type="hidden" name="siteName" value={panelSiteName} />
-      <details class="advanced-settings">
-        <summary>Bootstrap fallback</summary>
-        <div class="advanced-fields">
-          <Input
-            label="Management CIDRs"
-            name="managementCidrs"
-            placeholder="10.10.0.0/16,100.64.0.0/10"
-            value={form?.managementCidrs ?? ""}
-          />
-          <Button variant="secondary" type="submit" fullWidth
-            >Prepare Bootstrap Task</Button
-          >
-        </div>
-      </details>
-    </Form>
-  </SidePanel>
-
-  {#if selectedDevice}
-    <SidePanel
-      open={detailsPanelOpen}
-      title={selectedDevice.name}
-      closeHref={`${basePath}/devices`}
-    >
-      <div class="device-details">
-        <div class="device-hero">
-          <img src={selectedDevice.image.src} alt="" width="112" height="76" />
-          <h3>{selectedDevice.name}</h3>
-          <p>{selectedDevice.model || "MikroTik device"}</p>
-          {#if selectedDevice.adopted}
-            <a
-              class="open-device-page"
-              href={`${basePath}/devices/${selectedDevice.id}`}
-              aria-label={`Open ${selectedDevice.name} full device page`}
-            >
-              <Icon name="external-link" size={16} />
-              Open full page
-            </a>
-          {/if}
-        </div>
-
-        <div class="details-card">
-          <InfoRow label="Version" value={selectedDevice.version || undefined} />
-          <InfoRow label="IP Address" value={selectedDevice.ipAddress || undefined} />
-          <InfoRow label="MAC Address" value={selectedDevice.macAddress || undefined} />
-          <InfoRow label="Model" value={selectedDevice.model || undefined} />
-          {#if selectedDevice.adopted}
-            <InfoRow label="Serial" value={selectedDevice.details.serialNumber || undefined} />
-            <InfoRow label="Architecture" value={selectedDevice.details.architecture || undefined} />
-            <InfoRow label="Last Sync" value={formatDate(selectedDevice.details.lastSyncAt)} />
-            {#if selectedDevice.status === 'online'}
-              <InfoRow label="Uptime" value={formatUptime(selectedDevice.details.uptimeSeconds)} />
-            {/if}
-          {/if}
-        </div>
-
-        {#if selectedDevice.adopted && selectedDeviceJobs.length}
-          <div class="details-card">
-            <div class="card-heading">
-              <strong>Tasks</strong>
-              <a class="card-link" href={`${basePath}/jobs`}>View all</a>
-            </div>
-            {#each selectedDeviceJobs as job}
-              {@const currentStep = getCurrentStep(job)}
-              <a class="task-block" href={`${basePath}/jobs?job=${job.id}`}>
-                <div class="task-title">
-                  <strong>{job.type}</strong>
-                  <span class:active={isRunningJob(job)}
-                    >{formatJobStatus(job.status)}</span
-                  >
-                </div>
-                <div
-                  class="task-progress"
-                  aria-label={`${job.progress}% complete`}
-                >
-                  <span style={`width: ${job.progress}%`}></span>
-                </div>
-                <div class="task-meta">
-                  <span>{currentStep?.name ?? "No steps"}</span>
-                  <span>{job.progress}%</span>
-                </div>
-              </a>
-            {/each}
-            {#if selectedDeviceRunningJobs.length}
-              <p class="muted">
-                {selectedDeviceRunningJobs.length} task{selectedDeviceRunningJobs.length ===
-                1
-                  ? ""
-                  : "s"} running now.
-              </p>
-            {/if}
-          </div>
         {/if}
+    </section>
 
-        {#if selectedDevice.adopted && selectedDevice.status === 'online' && selectedDevice.platform === "routeros"}
-          {@const fwData = selectedDevice as any}
-          {@const fw = fwData.firmware}
-          <div class="details-card">
-            <div class="card-heading">
-              <strong>Firmware</strong>
-              {#if fw?.checkedAt}
+    <SidePanel
+            open={adoptionPanelOpen}
+            title="Adopt device"
+            description="Enter credentials or prepare a bootstrap task."
+            closeHref={`${basePath}/devices`}
+    >
+        <Form action="?/adopt">
+            {#if form?.message}
+                <div class={form?.success ? "status-success" : "error-message"}>
+                    {form.message}
+                    {#if form?.jobId}
+                        <a class="message-link" href={`${basePath}/jobs?job=${form.jobId}`}
+                        >View task</a
+                        >
+                    {/if}
+                </div>
+            {/if}
+
+            <input type="hidden" name="mode" value="credentials"/>
+            <input
+                    type="hidden"
+                    name="discoveryIdentity"
+                    value={panelDiscovery.identity}
+            />
+            <input
+                    type="hidden"
+                    name="discoveryMacAddress"
+                    value={panelDiscovery.macAddress}
+            />
+            <input
+                    type="hidden"
+                    name="discoveryVersion"
+                    value={panelDiscovery.version}
+            />
+            <input
+                    type="hidden"
+                    name="discoveryHardware"
+                    value={panelDiscovery.hardware}
+            />
+            <input
+                    type="hidden"
+                    name="discoveryInterfaceName"
+                    value={panelDiscovery.interfaceName}
+            />
+
+            {#if panelHasDiscoveryContext}
+                <div class="discovery-context">
+                    <strong>MNDP discovery</strong>
+                    {#if panelDiscovery.identity}
+                        <div class="info-row">
+                            <span>Identity</span>
+                            <strong>{panelDiscovery.identity}</strong>
+                        </div>
+                    {/if}
+                    {#if panelDiscovery.hardware}
+                        <div class="info-row">
+                            <span>Hardware</span>
+                            <strong>{panelDiscovery.hardware}</strong>
+                        </div>
+                    {/if}
+                    {#if panelDiscovery.version}
+                        <div class="info-row">
+                            <span>Version</span>
+                            <strong>{panelDiscovery.version}</strong>
+                        </div>
+                    {/if}
+                    {#if panelDiscovery.macAddress}
+                        <div class="info-row">
+                            <span>MAC Address</span>
+                            <strong>{panelDiscovery.macAddress}</strong>
+                        </div>
+                    {/if}
+                    {#if panelDiscovery.interfaceName}
+                        <div class="info-row">
+                            <span>Interface</span>
+                            <strong>{panelDiscovery.interfaceName}</strong>
+                        </div>
+                    {/if}
+                </div>
+            {/if}
+
+            <Input
+                    label="Username"
+                    name="username"
+                    autocomplete="username"
+                    value={form?.username ?? "admin"}
+                    required
+            />
+            <Input
+                    label="Password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+            />
+
+            <details class="advanced-settings">
+                <summary>Advanced settings</summary>
+                <div class="advanced-fields">
+                    <Input
+                            label="Host"
+                            name="host"
+                            placeholder="192.168.88.1"
+                            value={panelHost}
+                            required
+                    />
+                    <Input
+                            label="API port"
+                            name="apiPort"
+                            inputmode="numeric"
+                            value={panelApiPort}
+                            required
+                    />
+                    <Input label="Site" name="siteName" value={panelSiteName} required/>
+                    <Input
+                            label="Management CIDRs"
+                            name="managementCidrs"
+                            placeholder="10.10.0.0/16,100.64.0.0/10"
+                            value={form?.managementCidrs ?? ""}
+                    />
+                    <label class="field">
+                        <span>Device OS</span>
+                        <select name="platform">
+                            <option value="routeros" selected={panelPlatform !== "switchos"}
+                            >RouterOS
+                            </option
+                            >
+                            <option value="switchos" selected={panelPlatform === "switchos"}
+                            >SwitchOS
+                            </option
+                            >
+                        </select>
+                    </label>
+                </div>
+            </details>
+
+            <Button type="submit" variant="primary" fullWidth>Adopt</Button>
+        </Form>
+
+        <Form action="?/adopt" compact ariaLabel="Prepare bootstrap">
+            <input type="hidden" name="mode" value="bootstrap"/>
+            <input type="hidden" name="siteName" value={panelSiteName}/>
+            <details class="advanced-settings">
+                <summary>Bootstrap fallback</summary>
+                <div class="advanced-fields">
+                    <Input
+                            label="Management CIDRs"
+                            name="managementCidrs"
+                            placeholder="10.10.0.0/16,100.64.0.0/10"
+                            value={form?.managementCidrs ?? ""}
+                    />
+                    <Button variant="secondary" type="submit" fullWidth
+                    >Prepare Bootstrap Task
+                    </Button
+                    >
+                </div>
+            </details>
+        </Form>
+    </SidePanel>
+
+    {#if selectedDevice}
+        <SidePanel
+                open={detailsPanelOpen}
+                title={selectedDevice.name}
+                closeHref={`${basePath}/devices`}
+        >
+            <div class="device-details">
+                <div class="device-hero">
+                    <img src={selectedDevice.image.src} alt="" width="112" height="76"/>
+                    <h3>{selectedDevice.name}</h3>
+                    <p>{selectedDevice.model || "MikroTik device"}</p>
+                    {#if selectedDevice.adopted}
+                        <a
+                                class="open-device-page"
+                                href={`${basePath}/devices/${selectedDevice.id}`}
+                                aria-label={`Open ${selectedDevice.name} full device page`}
+                        >
+                            <Icon name="external-link" size={16}/>
+                            Open full page
+                        </a>
+                    {/if}
+                </div>
+
+                <div class="details-card">
+                    <InfoRow label="Version" value={selectedDevice.version || undefined}/>
+                    <InfoRow label="IP Address" value={selectedDevice.ipAddress || undefined}/>
+                    <InfoRow label="MAC Address" value={selectedDevice.macAddress || undefined}/>
+                    <InfoRow label="Model" value={selectedDevice.model || undefined}/>
+                    {#if selectedDevice.adopted}
+                        <InfoRow label="Serial" value={selectedDevice.details.serialNumber || undefined}/>
+                        <InfoRow label="Architecture" value={selectedDevice.details.architecture || undefined}/>
+                        <InfoRow label="Last Sync" value={formatDate(selectedDevice.details.lastSyncAt)}/>
+                        {#if selectedDevice.status === 'online'}
+                            <InfoRow label="Uptime" value={formatUptime(selectedDevice.details.uptimeSeconds)}/>
+                        {/if}
+                    {/if}
+                </div>
+
+                {#if selectedDevice.adopted && selectedDeviceJobs.length}
+                    <div class="details-card">
+                        <div class="card-heading">
+                            <strong>Tasks</strong>
+                            <a class="card-link" href={`${basePath}/jobs`}>View all</a>
+                        </div>
+                        {#each selectedDeviceJobs as job}
+                            {@const currentStep = getCurrentStep(job)}
+                            <a class="task-block" href={`${basePath}/jobs?job=${job.id}`}>
+                                <div class="task-title">
+                                    <strong>{job.type}</strong>
+                                    <span class:active={isRunningJob(job)}
+                                    >{formatJobStatus(job.status)}</span
+                                    >
+                                </div>
+                                <div
+                                        class="task-progress"
+                                        aria-label={`${job.progress}% complete`}
+                                >
+                                    <span style={`width: ${job.progress}%`}></span>
+                                </div>
+                                <div class="task-meta">
+                                    <span>{currentStep?.name ?? "No steps"}</span>
+                                    <span>{job.progress}%</span>
+                                </div>
+                            </a>
+                        {/each}
+                        {#if selectedDeviceRunningJobs.length}
+                            <p class="muted">
+                                {selectedDeviceRunningJobs.length} task{selectedDeviceRunningJobs.length ===
+                            1
+                                ? ""
+                                : "s"} running now.
+                            </p>
+                        {/if}
+                    </div>
+                {/if}
+
+                {#if selectedDevice.adopted && selectedDevice.status === 'online' && selectedDevice.platform === "routeros"}
+                    {@const fwData = selectedDevice as any}
+                    {@const fw = fwData.firmware}
+                    <div class="details-card">
+                        <div class="card-heading">
+                            <strong>Firmware</strong>
+                            {#if fw?.checkedAt}
                 <span class="card-meta">Checked {formatDate(fw.checkedAt)}</span
                 >
-              {/if}
-            </div>
-            <InfoRow
-              label="Installed"
-              value={(fw?.currentVersion ?? selectedDevice.version) || undefined}
-            />
-            {#if fw?.latestVersion}
-              <InfoRow label={`Latest (${fw.channel ?? "stable"})`} value={fw.latestVersion} />
-            {/if}
-            {#if form?.action === "firmwareCheck" && form?.message}
-              <div class={form?.success ? "status-success" : "error-message"}>
-                {form.message}
-                {#if form?.jobId}
-                  <a
-                    class="message-link"
-                    href={`${basePath}/jobs?job=${form.jobId}`}>View task</a
-                  >
-                {/if}
-              </div>
-            {/if}
-            {#if form?.action === "firmwareUpgrade" && form?.message}
-              <div class={form?.success ? "status-success" : "error-message"}>
-                {form.message}
-                {#if form?.jobId}
-                  <a
-                    class="message-link"
-                    href={`${basePath}/jobs?job=${form.jobId}`}>View task</a
-                  >
-                {/if}
-              </div>
-            {/if}
-            <div class="fw-actions">
-              <form method="POST" action="?/firmwareCheck">
-                <input
-                  type="hidden"
-                  name="deviceId"
-                  value={selectedDevice.id}
-                />
-                <Button variant="secondary" size="sm">Check for updates</Button>
-              </form>
-              {#if fw?.updateAvailable}
-                <form method="POST" action="?/firmwareUpgrade">
-                  <input
-                    type="hidden"
-                    name="deviceId"
-                    value={selectedDevice.id}
-                  />
-                  <Button
-                    variant="warning"
-                    fullWidth
-                    onclick={(e) => {
+                            {/if}
+                        </div>
+                        <InfoRow
+                                label="Installed"
+                                value={(fw?.currentVersion ?? selectedDevice.version) || undefined}
+                        />
+                        {#if fw?.latestVersion}
+                            <InfoRow label={`Latest (${fw.channel ?? "stable"})`} value={fw.latestVersion}/>
+                        {/if}
+                        {#if form?.action === "firmwareCheck" && form?.message}
+                            <div class={form?.success ? "status-success" : "error-message"}>
+                                {form.message}
+                                {#if form?.jobId}
+                                    <a
+                                            class="message-link"
+                                            href={`${basePath}/jobs?job=${form.jobId}`}>View task</a
+                                    >
+                                {/if}
+                            </div>
+                        {/if}
+                        {#if form?.action === "firmwareUpgrade" && form?.message}
+                            <div class={form?.success ? "status-success" : "error-message"}>
+                                {form.message}
+                                {#if form?.jobId}
+                                    <a
+                                            class="message-link"
+                                            href={`${basePath}/jobs?job=${form.jobId}`}>View task</a
+                                    >
+                                {/if}
+                            </div>
+                        {/if}
+                        <div class="fw-actions">
+                            <form method="POST" action="?/firmwareCheck">
+                                <input
+                                        type="hidden"
+                                        name="deviceId"
+                                        value={selectedDevice.id}
+                                />
+                                <Button variant="secondary" size="sm">Check for updates</Button>
+                            </form>
+                            {#if fw?.updateAvailable}
+                                <form method="POST" action="?/firmwareUpgrade">
+                                    <input
+                                            type="hidden"
+                                            name="deviceId"
+                                            value={selectedDevice.id}
+                                    />
+                                    <Button
+                                            variant="warning"
+                                            fullWidth
+                                            onclick={(e) => {
                       if (
                         !confirm(
                           `Upgrade ${selectedDevice.name} to ${fw.latestVersion}? Device will reboot.`,
@@ -907,101 +911,101 @@
                       )
                         e.preventDefault();
                     }}
-                  >
-                    Upgrade to {fw.latestVersion}
-                  </Button>
-                </form>
-              {/if}
-            </div>
-          </div>
-        {/if}
-
-        {#if selectedDevice.adopted && selectedDevice.status === 'online' && !selectedDeviceProvisioned}
-          <div class="details-card">
-            <div class="card-heading">
-              <strong>Provisioning</strong>
-              <a class="card-link" href={`${basePath}/jobs`}>Tasks</a>
-            </div>
-            {#if form?.action === "provision" && form?.message}
-              <div class={form?.success ? "status-success" : "error-message"}>
-                {form.message}
-                {#if form?.jobId}
-                  <a
-                    class="message-link"
-                    href={`${basePath}/jobs?job=${form.jobId}`}>View task</a
-                  >
+                                    >
+                                        Upgrade to {fw.latestVersion}
+                                    </Button>
+                                </form>
+                            {/if}
+                        </div>
+                    </div>
                 {/if}
-              </div>
-            {/if}
-            <form
-              class="remove-form"
-              method="POST"
-              action="?/provision"
-              aria-label={`Provision ${selectedDevice.name}`}
-            >
-              <input type="hidden" name="deviceId" value={selectedDevice.id} />
-              <Button variant="primary" fullWidth>Provision</Button>
-            </form>
-          </div>
-        {/if}
 
-        {#if selectedDevice.adopted}
-          <div class="details-card danger-card">
-            <div class="card-heading">
-              <strong>Remove device</strong>
-            </div>
-            <p class="muted">
-              {selectedDeviceCanReset
-                ? "Factory reset and remove from the controller inventory."
-                : selectedDeviceStatusKnownOffline
-                  ? "Device is offline — will be removed without factory reset."
-                  : selectedDevice.status === "unknown"
-                    ? "Status unknown — will be removed without factory reset."
-                    : "Will be removed from the controller inventory."}
-            </p>
-            {#if form?.action === "remove" && form?.message}
-              <div class={form?.success ? "status-success" : "error-message"}>
-                {form.message}
-              </div>
-            {/if}
-            <form
-              class="remove-form"
-              method="POST"
-              action="?/remove"
-              aria-label={`Remove ${selectedDevice.name}`}
-              onsubmit={confirmRemove}
-            >
-              <input type="hidden" name="deviceId" value={selectedDevice.id} />
-              <Button variant="danger" fullWidth type="submit">
-                {selectedDeviceCanReset ? "Reset & Remove" : "Remove from controller"}
-              </Button>
-            </form>
-          </div>
-        {/if}
+                {#if selectedDevice.adopted && selectedDevice.status === 'online' && !selectedDeviceProvisioned}
+                    <div class="details-card">
+                        <div class="card-heading">
+                            <strong>Provisioning</strong>
+                            <a class="card-link" href={`${basePath}/jobs`}>Tasks</a>
+                        </div>
+                        {#if form?.action === "provision" && form?.message}
+                            <div class={form?.success ? "status-success" : "error-message"}>
+                                {form.message}
+                                {#if form?.jobId}
+                                    <a
+                                            class="message-link"
+                                            href={`${basePath}/jobs?job=${form.jobId}`}>View task</a
+                                    >
+                                {/if}
+                            </div>
+                        {/if}
+                        <form
+                                class="remove-form"
+                                method="POST"
+                                action="?/provision"
+                                aria-label={`Provision ${selectedDevice.name}`}
+                        >
+                            <input type="hidden" name="deviceId" value={selectedDevice.id}/>
+                            <Button variant="primary" fullWidth>Provision</Button>
+                        </form>
+                    </div>
+                {/if}
 
-        {#if selectedDevice.adopted && selectedDevice.interfaces.length}
-          <div class="details-card">
-            <div class="card-heading">
-              <strong>Interfaces</strong>
-              <span>{selectedDevice.interfaces.length}</span>
+                {#if selectedDevice.adopted}
+                    <div class="details-card danger-card">
+                        <div class="card-heading">
+                            <strong>Remove device</strong>
+                        </div>
+                        <p class="muted">
+                            {selectedDeviceCanReset
+                                ? "Factory reset and remove from the controller inventory."
+                                : selectedDeviceStatusKnownOffline
+                                    ? "Device is offline — will be removed without factory reset."
+                                    : selectedDevice.status === "unknown"
+                                        ? "Status unknown — will be removed without factory reset."
+                                        : "Will be removed from the controller inventory."}
+                        </p>
+                        {#if form?.action === "remove" && form?.message}
+                            <div class={form?.success ? "status-success" : "error-message"}>
+                                {form.message}
+                            </div>
+                        {/if}
+                        <form
+                                class="remove-form"
+                                method="POST"
+                                action="?/remove"
+                                aria-label={`Remove ${selectedDevice.name}`}
+                                onsubmit={confirmRemove}
+                        >
+                            <input type="hidden" name="deviceId" value={selectedDevice.id}/>
+                            <Button variant="danger" fullWidth type="submit">
+                                {selectedDeviceCanReset ? "Reset & Remove" : "Remove from controller"}
+                            </Button>
+                        </form>
+                    </div>
+                {/if}
+
+                {#if selectedDevice.adopted && selectedDevice.interfaces.length}
+                    <div class="details-card">
+                        <div class="card-heading">
+                            <strong>Interfaces</strong>
+                            <span>{selectedDevice.interfaces.length}</span>
+                        </div>
+                        <DevicePortLayout
+                                model={selectedDevice.model || selectedDevice.name}
+                                interfaces={selectedDevice.interfaces}
+                                variant="compact"
+                        />
+                    </div>
+                {:else if !selectedDevice.adopted}
+                    <a
+                            class="adopt-submit detail-action"
+                            href={adoptHref(selectedDevice)}
+                    >
+                        Adopt
+                    </a>
+                {/if}
             </div>
-            <DevicePortLayout
-              model={selectedDevice.model || selectedDevice.name}
-              interfaces={selectedDevice.interfaces}
-              variant="compact"
-            />
-          </div>
-        {:else if !selectedDevice.adopted}
-          <a
-            class="adopt-submit detail-action"
-            href={adoptHref(selectedDevice)}
-          >
-            Adopt
-          </a>
-        {/if}
-      </div>
-    </SidePanel>
-  {/if}
+        </SidePanel>
+    {/if}
 </Page>
 
 <style lang="scss">
@@ -1080,7 +1084,10 @@
     flex-direction: column;
     gap: 2px;
 
-    strong { font-size: 13px; color: #30373d; }
+    strong {
+      font-size: 13px;
+      color: #30373d;
+    }
   }
 
   .pending-meta {

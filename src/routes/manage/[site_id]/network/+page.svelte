@@ -3,7 +3,7 @@
   import { page } from "$app/state";
   import { Page, PageHeader, TabLayout } from "$lib/client/components/layout";
   import { Alert, Button, Card, EnumBadge, Input, StatusPill } from "$lib/client/components/primitives";
-  import type { IconName } from "$lib/client/components/primitives/icons";
+  import type { IconName } from "$lib/client/primitives/icons";
 
   type NetworkTab = "firewall" | "vlans" | "tunnels";
   type TabItem<T extends string = string> = { id: T; label: string; icon?: IconName };

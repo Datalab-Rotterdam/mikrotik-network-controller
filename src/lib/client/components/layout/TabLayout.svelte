@@ -1,6 +1,6 @@
 <script lang="ts" generics="T extends string">
 	import type { Snippet } from 'svelte';
-	import Icon from '../primitives/Icon.svelte';
+	import Icon from '$lib/client/primitives/Icon.svelte';
 	import type { IconName } from '../primitives/icons';
 
 	type TabItem<T extends string = string> = {

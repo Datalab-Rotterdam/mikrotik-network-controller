@@ -1,11 +1,9 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import Form from "$lib/client/components/primitives/Form.svelte";
-  import Input from "$lib/client/components/primitives/Input.svelte";
-  import Select from "$lib/client/components/primitives/Select.svelte";
-  import Checkbox from "$lib/client/components/primitives/Checkbox.svelte";
-  import Button from "$lib/client/components/primitives/Button.svelte";
-  import Flexbox from "$lib/client/components/layout/Flexbox.svelte";
+  import Form from "$lib/client-lib/components/form/Form.svelte";
+  import Input from "$lib/client-lib/components/form/Input.svelte";
+  import Button from "$lib/client-lib/components/layout/Button.svelte";
+  import Flexbox from "$lib/client-lib/components/layout/Flexbox.svelte";
 
   const countries = [
     { value: "Netherlands", label: "Netherlands" },
@@ -26,13 +24,13 @@
   </div>
 
   <Form
-    compact
+    class="setup-form"
     method="GET"
     action="./advanced-access"
-    ariaLabel="Name controller"
+    aria-label="Name controller"
   >
     <Input
-      compact
+      type="text"
       label="Controller name"
       name="controllerName"
       autocomplete="organization"
@@ -41,23 +39,23 @@
       placeholder="e.g. Office, Branch-1"
     />
 
-    <Select
+    <Input
+      type="select"
       name="country"
       label="Country / region"
       options={countries}
       value={selectedCountry ?? ""}
       placeholder="Select country"
       required
-      compact
     />
 
-    <Checkbox name="acceptedTerms" value="yes" required compact>
+    <Input name="acceptedTerms" type="checkbox" required variant="checkbox">
       I agree to the <a
         href="https://www.mozilla.org/en-US/MPL/2.0/"
         target="_blank"
         rel="noreferrer">license</a
       >.
-    </Checkbox>
+    </Input>
 
     <Flexbox class="setup-actions" justify="flex-end">
       <Button variant="primary" type="submit" size="sm">Next</Button>
@@ -84,8 +82,13 @@
     text-decoration: underline;
   }
 
-  .setup-actions {
+  :global(.setup-actions) {
     margin-top: 24px;
+  }
+
+  :global(.setup-form) {
+    display: grid;
+    gap: 12px;
   }
 
   @media (min-width: 760px) {
@@ -94,11 +97,11 @@
       margin: 0;
     }
 
-    .setup-actions {
+    :global(.setup-actions) {
       position: fixed;
       right: 32px;
       bottom: 24px;
-      left: calc(40vw + 64px);
+      left: calc(33.333vw + clamp(48px, 5vw, 80px));
       margin-top: 0;
     }
   }

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import TerminalPane from '$lib/client/components/ui/TerminalPane.svelte';
-	import Icon from '$lib/client/components/primitives/Icon.svelte';
+	import Icon from '$lib/client/primitives/Icon.svelte';
 
 	let { data } = $props();
 

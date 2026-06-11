@@ -1,6 +1,7 @@
 <script lang="ts">
+  import Col from "$lib/client-lib/components/grid/Col.svelte";
+  import Row from "$lib/client-lib/components/grid/Row.svelte";
   import type { Snippet } from "svelte";
-  import { Grid } from "$lib/client/components/layout";
   import favicon from "$lib/assets/favicon.svg";
 
   let { children }: { children: Snippet } = $props();
@@ -15,19 +16,19 @@
     <img src={favicon} alt="" width="34" height="37" />
   </a>
 
-  <Grid gap="0" class="setup-shell">
-    <div class="setup-visual">
+  <Row gutters={false} class="setup-shell">
+    <Col md={4} animate={false} class="setup-visual">
       <img
         class="setup-product-image"
         src="/images/ethernet_routers_600.webp"
         alt="MikroTik routers and switches"
       />
-    </div>
+    </Col>
 
-    <div class="setup-workspace">
+    <Col md={8} animate={false} class="setup-workspace">
       {@render children()}
-    </div>
-  </Grid>
+    </Col>
+  </Row>
 </main>
 
 <style lang="scss">
@@ -52,15 +53,15 @@
     height: auto;
   }
 
-  .setup-shell {
+  :global(.setup-shell) {
     width: 100%;
   }
 
-  .setup-visual {
+  :global(.setup-visual) {
     display: none;
   }
 
-  .setup-workspace {
+  :global(.setup-workspace) {
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -80,22 +81,24 @@
 
     :global(.setup-shell) {
       min-height: 100vh;
-      grid-template-columns: 1fr 2fr;
-      justify-items: start;
+      align-items: stretch;
     }
 
-    .setup-workspace {
+    :global(.setup-workspace) {
+      display: flex !important;
       align-items: flex-start;
       justify-content: center;
       min-height: 100vh;
       min-width: 0;
+      text-align: left;
       padding: 40px 24px;
     }
 
-    .setup-visual {
-      display: flex;
+    :global(.setup-visual) {
+      display: flex !important;
       align-items: center;
       justify-content: center;
+      min-height: 100vh;
       overflow: hidden;
       background: linear-gradient(180deg, #ffffff 0%, #f8f9f9 100%);
       border-right: 1px solid #eef0f2;
@@ -110,7 +113,7 @@
       filter: drop-shadow(0 24px 28px rgba(14, 14, 16, 0.12));
     }
 
-    .setup-workspace {
+    :global(.setup-workspace) {
       padding: 80px clamp(48px, 5vw, 80px) 24px;
     }
   }

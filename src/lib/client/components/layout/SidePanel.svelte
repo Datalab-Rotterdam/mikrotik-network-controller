@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import Icon from '../primitives/Icon.svelte';
+	import Icon from '$lib/client/primitives/Icon.svelte';
 
 	let {
 		children,

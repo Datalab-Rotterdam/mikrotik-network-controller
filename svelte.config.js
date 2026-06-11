@@ -1,9 +1,10 @@
 import adapter from '@sveltejs/adapter-node';
 import {vitePreprocess} from "@sveltejs/vite-plugin-svelte";
+import {ClientLib} from "./src/lib/client-lib/plugins/svelte.js";
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
-    preprocess: [vitePreprocess()],
+    preprocess: [ClientLib, vitePreprocess()],
     compilerOptions: {
         // Force runes mode for the project, except for libraries. Can be removed in svelte 6.
         runes: ({filename}) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true)

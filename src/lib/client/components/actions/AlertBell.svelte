@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { useActionSocket } from '$lib/client/actions/use-action-socket';
 	import type { ActionEvent } from '$lib/shared/action-events';
-	import Icon from '$lib/client/components/primitives/Icon.svelte';
+	import Icon from '$lib/client/primitives/Icon.svelte';
 
 	let {
 		alertsHref,

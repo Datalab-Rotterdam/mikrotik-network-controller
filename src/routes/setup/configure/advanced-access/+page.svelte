@@ -1,10 +1,10 @@
 <script lang="ts">
-  import Form from "$lib/client/components/primitives/Form.svelte";
-  import Input from "$lib/client/components/primitives/Input.svelte";
-  import Alert from "$lib/client/components/primitives/Alert.svelte";
-  import Button from "$lib/client/components/primitives/Button.svelte";
-  import Flexbox from "$lib/client/components/layout/Flexbox.svelte";
   import { goto } from "$app/navigation";
+  import Form from "$lib/client-lib/components/form/Form.svelte";
+  import Input from "$lib/client-lib/components/form/Input.svelte";
+  import Button from "$lib/client-lib/components/layout/Button.svelte";
+  import Flexbox from "$lib/client-lib/components/layout/Flexbox.svelte";
+  import Message from "$lib/client-lib/components/utils/Message.svelte";
 
   let { data, form } = $props();
 
@@ -20,25 +20,24 @@
     <p>Set up your administrator credentials to secure the controller.</p>
   </div>
 
-  <Form compact ariaLabel="Create administrator">
+  <Form class="setup-form" aria-label="Create administrator">
     {#if form?.message}
-      <Alert variant="error">{form.message}</Alert>
+      <Message type="danger" message={form.message} />
     {/if}
 
-    <Input name="controllerName" type="hidden" value={controllerName} />
-    <Input name="country" type="hidden" value={country} />
+    <input name="controllerName" type="hidden" value={controllerName} />
+    <input name="country" type="hidden" value={country} />
 
     <Input
-      compact
+      type="email"
       label="Email"
       name="email"
-      type="email"
       autocomplete="email"
       value={form?.email ?? ""}
       required
     />
     <Input
-      compact
+      type="text"
       label="Display name"
       name="displayName"
       autocomplete="name"
@@ -46,26 +45,34 @@
       required
     />
     <Input
-      compact
+      type="password"
       label="Password"
       name="password"
-      type="password"
       autocomplete="new-password"
       minlength={12}
       required
     />
     <Input
-      compact
+      type="password"
       label="Confirm password"
       name="confirmPassword"
-      type="password"
       autocomplete="new-password"
       minlength={12}
       required
     />
 
     <Flexbox class="setup-actions" justify="space-between">
-      <Button variant="primary" type="submit" transparent onclick={() => goto(`/setup/configure/controller-name?controllerName=${encodeURIComponent(controllerName)}&country=${encodeURIComponent(country)}`)} size="sm">← Back</Button>
+      <Button
+        variant="primary"
+        transparent
+        onclick={() =>
+          goto(
+            `/setup/configure/controller-name?controllerName=${encodeURIComponent(controllerName)}&country=${encodeURIComponent(country)}`,
+          )}
+        size="sm"
+      >
+        Back
+      </Button>
 
       <Button variant="primary" type="submit" size="sm">Finish setup</Button>
     </Flexbox>
@@ -77,7 +84,8 @@
     display: grid;
     gap: 28px;
     width: min(100%, 350px);
-    margin: 0 auto;
+    margin: 0;
+    justify-self: start;
   }
 
   .setup-copy {
@@ -85,15 +93,9 @@
     gap: 10px;
   }
 
-  .back-link {
-    margin-top: 16px;
-    color: var(--color-muted);
-    font-size: 13px;
-    text-decoration: none;
-
-    &:hover {
-      color: var(--color-brand);
-    }
+  :global(.setup-form) {
+    display: grid;
+    gap: 12px;
   }
 
   @media (min-width: 760px) {
@@ -102,11 +104,11 @@
       margin: 0;
     }
 
-    .setup-actions {
+    :global(.setup-actions) {
       position: fixed;
       right: 32px;
       bottom: 24px;
-      left: calc(40vw + 64px);
+      left: calc(33.333vw + clamp(48px, 5vw, 80px));
       margin-top: 0;
     }
   }

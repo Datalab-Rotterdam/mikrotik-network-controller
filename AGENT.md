@@ -34,6 +34,7 @@ Follow the existing SvelteKit structure and ownership boundaries.
 
 - `src/lib/assets`: static/importable assets used through SvelteKit imports.
 - `src/lib/client/*`: application UI, client components, stores, and client-side helpers.
+- `src/lib/client-lib/*`: generic UI component. DONT EDIT This to include application specific functionality
 - `src/lib/server/*`: server-only configuration, repositories, services, security, context, utilities, and database access.
 - `src/routes`: SvelteKit routes, pages, layouts, actions, loads, and HTTP handlers.
 

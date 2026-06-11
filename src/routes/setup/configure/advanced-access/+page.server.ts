@@ -5,8 +5,9 @@ import { SiteRepository } from '$lib/server/repositories/site.repository';
 
 export const load = ({ url }) => {
 	const controllerName = url.searchParams.get('controllerName')?.trim();
+	const acceptedTerms = url.searchParams.get('acceptedTerms');
 
-	if (!controllerName || url.searchParams.get('acceptedTerms') !== 'yes') {
+	if (!controllerName || !['yes', 'true'].includes(acceptedTerms ?? '')) {
 		throw redirect(303, '/setup/configure/controller-name');
 	}
 

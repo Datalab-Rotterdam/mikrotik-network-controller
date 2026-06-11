@@ -10,14 +10,14 @@
   } from "$lib/client/stores/jobs";
   import { enhance } from "$app/forms";
   import Button from "$lib/client/components/primitives/Button.svelte";
-  import Icon from "$lib/client/components/primitives/Icon.svelte";
+  import Icon from "$lib/client/primitives/Icon.svelte";
   import {PageHeader} from "$lib/client/components/layout/Page";
   import { Page } from "$lib/client/components/layout";
   import DevicePortLayout from "$lib/client/components/ui/DevicePortLayout.svelte";
   import TabLayout from "$lib/client/components/layout/TabLayout.svelte";
   import TrafficSparkline from "$lib/client/components/ui/TrafficSparkline.svelte";
   import type { JobStatus } from "$lib/shared/action-events";
-  import type { IconName } from "$lib/client/components/primitives/icons";
+  import type { IconName } from "$lib/client/primitives/icons";
 
   type DeviceTab =
     | "overview"
